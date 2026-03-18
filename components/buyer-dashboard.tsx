@@ -1,6 +1,7 @@
 "use client"
 
 import { useRole } from "@/lib/role-context"
+import { VendorPage } from "@/components/vendor-page"
 import {
   Home,
   Search,
@@ -91,10 +92,16 @@ export function BuyerDashboard() {
   const [activeTab, setActiveTab] = useState("home")
   const [searchQuery, setSearchQuery] = useState("")
   const [aiExpanded, setAiExpanded] = useState(false)
+  const [selectedVendor, setSelectedVendor] = useState<typeof vendors[0] | null>(null)
 
   const handleSuggestionTap = (s: string) => {
     setSearchQuery(s)
     setAiExpanded(false)
+  }
+
+  // Show vendor page if a vendor is selected
+  if (selectedVendor) {
+    return <VendorPage vendor={selectedVendor} onBack={() => setSelectedVendor(null)} />
   }
 
   return (
@@ -276,9 +283,10 @@ export function BuyerDashboard() {
           </div>
           <div className="flex flex-col gap-3">
             {vendors.map((vendor) => (
-              <div
+              <button
                 key={vendor.id}
-                className="flex items-center gap-4 p-4 bg-card border border-border rounded-2xl shadow-sm hover:border-primary/30 hover:shadow-md transition-all"
+                onClick={() => setSelectedVendor(vendor)}
+                className="flex items-center gap-4 p-4 bg-card border border-border rounded-2xl shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left"
               >
                 {/* Avatar */}
                 <div className={`w-14 h-14 rounded-2xl ${vendor.bgColor} flex items-center justify-center flex-shrink-0`}>
@@ -308,7 +316,7 @@ export function BuyerDashboard() {
                 </div>
 
                 <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-              </div>
+              </button>
             ))}
           </div>
         </section>
