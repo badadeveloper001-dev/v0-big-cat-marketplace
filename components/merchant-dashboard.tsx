@@ -62,12 +62,12 @@ export function MerchantDashboard() {
       <main className="flex-1 overflow-auto pb-20">
         {/* Welcome Banner */}
         <div className="px-4 py-4">
-          <div className="bg-gradient-to-br from-primary/20 to-secondary p-4 rounded-xl border border-primary/30">
-            <p className="text-sm text-muted-foreground">Welcome back,</p>
-            <h2 className="text-xl font-bold text-foreground">Acme Store</h2>
+          <div className="bg-primary p-4 rounded-2xl">
+            <p className="text-sm text-primary-foreground/80">Welcome back,</p>
+            <h2 className="text-xl font-bold text-primary-foreground">Acme Store</h2>
             <div className="flex items-center gap-2 mt-2">
-              <TrendingUp className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary">Sales are up 12% this week</span>
+              <TrendingUp className="w-4 h-4 text-primary-foreground/80" />
+              <span className="text-sm text-primary-foreground/90">Sales are up 12% this week</span>
             </div>
           </div>
         </div>
