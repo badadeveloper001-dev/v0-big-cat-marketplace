@@ -1,12 +1,15 @@
 "use client"
 
 import { useRole } from "@/lib/role-context"
+import { VendorPage } from "@/components/vendor-page"
+import { ChatInterface } from "@/components/chat-interface"
 import {
   Home,
   Search,
   ShoppingBag,
   User,
   Bell,
+  MessageSquare,
   ArrowLeft,
   Mic,
   Sparkles,
@@ -91,10 +94,16 @@ export function BuyerDashboard() {
   const [activeTab, setActiveTab] = useState("home")
   const [searchQuery, setSearchQuery] = useState("")
   const [aiExpanded, setAiExpanded] = useState(false)
+  const [selectedVendor, setSelectedVendor] = useState<typeof vendors[0] | null>(null)
 
   const handleSuggestionTap = (s: string) => {
     setSearchQuery(s)
     setAiExpanded(false)
+  }
+
+  // Show vendor page if a vendor is selected
+  if (selectedVendor) {
+    return <VendorPage vendor={selectedVendor} onBack={() => setSelectedVendor(null)} />
   }
 
   return (
@@ -121,8 +130,10 @@ export function BuyerDashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto pb-20">
+      <main className="flex-1 overflow-auto pb-32">
         {/* AI Assistant Hero Section */}
+        {activeTab === "home" && (
+        <>
         <section className="px-4 pt-5 pb-4">
           <div className="bg-primary rounded-3xl p-5 shadow-lg shadow-primary/20">
             <div className="flex items-center gap-3 mb-4">
@@ -276,9 +287,10 @@ export function BuyerDashboard() {
           </div>
           <div className="flex flex-col gap-3">
             {vendors.map((vendor) => (
-              <div
+              <button
                 key={vendor.id}
-                className="flex items-center gap-4 p-4 bg-card border border-border rounded-2xl shadow-sm hover:border-primary/30 hover:shadow-md transition-all"
+                onClick={() => setSelectedVendor(vendor)}
+                className="flex items-center gap-4 p-4 bg-card border border-border rounded-2xl shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left"
               >
                 {/* Avatar */}
                 <div className={`w-14 h-14 rounded-2xl ${vendor.bgColor} flex items-center justify-center flex-shrink-0`}>
@@ -308,7 +320,7 @@ export function BuyerDashboard() {
                 </div>
 
                 <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-              </div>
+              </button>
             ))}
           </div>
         </section>
@@ -347,32 +359,85 @@ export function BuyerDashboard() {
             ))}
           </div>
         </section>
+        </>
+        )}
+
+        {/* Chat Tab */}
+        {activeTab === "chat" && (
+          <ChatInterface />
+        )}
+
+        {/* Orders Tab */}
+        {activeTab === "orders" && (
+          <div className="p-6 text-center">
+            <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <h3 className="font-semibold text-foreground mb-1">No Orders Yet</h3>
+            <p className="text-sm text-muted-foreground">Your orders will appear here</p>
+          </div>
+        )}
+
+        {/* Profile Tab */}
+        {activeTab === "profile" && (
+          <div className="p-6 text-center">
+            <User className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <h3 className="font-semibold text-foreground mb-1">Profile</h3>
+            <p className="text-sm text-muted-foreground">Your profile information</p>
+          </div>
+        )}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-2 py-2 shadow-lg">
-        <div className="flex items-center justify-around">
-          {[
-            { id: "home", icon: Home, label: "Home" },
-            { id: "search", icon: Search, label: "Search" },
-            { id: "orders", icon: ShoppingBag, label: "Orders" },
-            { id: "profile", icon: User, label: "Profile" },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center gap-1 px-5 py-2 rounded-xl transition-all ${
-                activeTab === item.id
-                  ? "text-primary bg-primary/10"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="text-xs font-medium">{item.label}</span>
-            </button>
-          ))}
+        {/* Bottom Navigation */}
+        <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around px-2 py-3 max-w-2xl mx-auto">
+          <button
+            onClick={() => setActiveTab("home")}
+            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors ${
+              activeTab === "home"
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Home className="w-6 h-6" />
+            <span className="text-xs font-medium">Home</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("chat")}
+            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors relative ${
+              activeTab === "chat"
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <div className="relative">
+              <MessageSquare className="w-6 h-6" />
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center font-bold">
+                3
+              </span>
+            </div>
+            <span className="text-xs font-medium">Messages</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("orders")}
+            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors ${
+              activeTab === "orders"
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ShoppingBag className="w-6 h-6" />
+            <span className="text-xs font-medium">Orders</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("profile")}
+            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors ${
+              activeTab === "profile"
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <User className="w-6 h-6" />
+            <span className="text-xs font-medium">Profile</span>
+          </button>
         </div>
-      </nav>
     </div>
   )
 }
