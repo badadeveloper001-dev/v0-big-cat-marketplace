@@ -7,7 +7,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Nexus Market',
+  title: 'BigCat Marketplace',
   description: 'Your modern marketplace platform',
   generator: 'v0.app',
   icons: {
