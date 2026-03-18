@@ -89,14 +89,14 @@ export function AdminDashboard() {
       <main className="flex-1 overflow-auto pb-20">
         {/* Admin Badge */}
         <div className="px-4 py-4">
-          <div className="bg-gradient-to-br from-primary/10 to-secondary p-4 rounded-xl border border-primary/20">
+          <div className="bg-primary p-4 rounded-2xl">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/20">
-                <Shield className="w-5 h-5 text-primary" />
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary-foreground/20">
+                <Shield className="w-5 h-5 text-primary-foreground" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Administrator</p>
-                <h2 className="font-bold text-foreground">System Overview</h2>
+                <p className="text-sm text-primary-foreground/80">Administrator</p>
+                <h2 className="font-bold text-primary-foreground">System Overview</h2>
               </div>
             </div>
           </div>

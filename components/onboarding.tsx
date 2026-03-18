@@ -28,11 +28,11 @@ export function Onboarding() {
   const { setRole } = useRole()
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-sans">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-primary mb-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-4 shadow-md shadow-primary/30">
             <span className="text-primary-foreground font-bold text-xl">N</span>
           </div>
           <h1 className="text-2xl font-bold text-foreground text-balance">
@@ -49,9 +49,9 @@ export function Onboarding() {
             <button
               key={role.id}
               onClick={() => setRole(role.id)}
-              className="group flex items-center gap-4 p-4 bg-card border border-border rounded-xl hover:border-primary/50 hover:bg-secondary/50 transition-all duration-200"
+              className="group flex items-center gap-4 p-4 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-sm transition-all duration-200 shadow-sm"
             >
-              <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-secondary text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-secondary text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                 <role.icon className="w-5 h-5" />
               </div>
               <div className="flex-1 text-left">
