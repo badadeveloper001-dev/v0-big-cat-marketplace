@@ -133,7 +133,7 @@ export function BuyerDashboard() {
       <main className="flex-1 overflow-auto pb-32">
         {/* AI Assistant Hero Section */}
         {activeTab === "home" && (
-        <>
+          <>
         <section className="px-4 pt-5 pb-4">
           <div className="bg-primary rounded-3xl p-5 shadow-lg shadow-primary/20">
             <div className="flex items-center gap-3 mb-4">
@@ -142,7 +142,7 @@ export function BuyerDashboard() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="font-bold text-primary-foreground text-lg">Nexus AI</h2>
+                  <h2 className="font-bold text-primary-foreground text-lg">BigCat AI</h2>
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-foreground/20 text-xs font-medium text-primary-foreground">
                     <Zap className="w-3 h-3" /> Smart
                   </span>
@@ -198,7 +198,7 @@ export function BuyerDashboard() {
                     <Sparkles className="w-5 h-5 text-primary-foreground" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">Nexus AI</h3>
+                    <h3 className="font-semibold text-foreground">BigCat AI</h3>
                     <p className="text-xs text-muted-foreground">Ask me anything</p>
                   </div>
                 </div>
@@ -359,7 +359,7 @@ export function BuyerDashboard() {
             ))}
           </div>
         </section>
-        </>
+          </>
         )}
 
         {/* Chat Tab */}
