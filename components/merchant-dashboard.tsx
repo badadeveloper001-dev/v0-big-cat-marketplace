@@ -56,9 +56,9 @@ const products = [
 ]
 
 const recentOrders = [
-  { id: "NX-3847", customer: "John D.", amount: 149.99, status: "pending", time: "2m ago" },
-  { id: "NX-3846", customer: "Sarah M.", amount: 299.99, status: "shipped", time: "1h ago" },
-  { id: "NX-3845", customer: "Mike R.", amount: 449.99, status: "delivered", time: "3h ago" },
+  { id: "BC-3847", customer: "John D.", amount: 149.99, status: "pending", time: "2m ago" },
+  { id: "BC-3846", customer: "Sarah M.", amount: 299.99, status: "shipped", time: "1h ago" },
+  { id: "BC-3845", customer: "Mike R.", amount: 449.99, status: "delivered", time: "3h ago" },
 ]
 
 const aiInsights = [

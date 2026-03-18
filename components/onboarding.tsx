@@ -33,10 +33,10 @@ export function Onboarding() {
         {/* Logo */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-4 shadow-md shadow-primary/30">
-            <span className="text-primary-foreground font-bold text-xl">N</span>
+            <span className="text-primary-foreground font-bold text-xl">B</span>
           </div>
           <h1 className="text-2xl font-bold text-foreground text-balance">
-            Welcome to Nexus Market
+            Welcome to BigCat Marketplace
           </h1>
           <p className="text-muted-foreground mt-2 text-pretty">
             Select your role to get started
