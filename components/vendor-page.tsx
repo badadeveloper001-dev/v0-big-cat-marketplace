@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   ArrowLeft,
   Star,
@@ -15,6 +16,7 @@ import {
   Heart,
   Shield,
 } from "lucide-react"
+import { CheckoutDrawer } from "@/components/checkout-drawer"
 
 interface VendorPageProps {
   vendor: {
@@ -91,6 +93,14 @@ const reviews = [
 ]
 
 export function VendorPage({ vendor, onBack }: VendorPageProps) {
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null)
+
+  const handleOrderNow = (product: typeof products[0]) => {
+    setSelectedProduct(product)
+    setCheckoutOpen(true)
+  }
+
   // Determine AI recommendation based on vendor data
   const getAiRecommendation = () => {
     if (vendor.rating >= 4.9) {
@@ -282,6 +292,14 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
                       <span className="text-muted-foreground">{product.sold} sold</span>
                     </div>
                   </div>
+
+                  {/* Order Button */}
+                  <button
+                    onClick={() => handleOrderNow(product)}
+                    className="flex-shrink-0 px-4 py-2 h-fit bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap"
+                  >
+                    Order Now
+                  </button>
                 </div>
               </div>
             ))}
@@ -343,12 +361,25 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
             <MessageCircle className="w-5 h-5" />
             Chat Vendor
           </button>
-          <button className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-primary text-primary-foreground font-semibold rounded-2xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20">
+          <button
+            onClick={() => handleOrderNow(products[0])}
+            className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-primary text-primary-foreground font-semibold rounded-2xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20"
+          >
             <ShoppingBag className="w-5 h-5" />
             Order Now
           </button>
         </div>
       </div>
+
+      {/* Checkout Drawer */}
+      {selectedProduct && (
+        <CheckoutDrawer
+          open={checkoutOpen}
+          onOpenChange={setCheckoutOpen}
+          product={selectedProduct}
+          vendor={vendor}
+        />
+      )}
     </div>
   )
 }
