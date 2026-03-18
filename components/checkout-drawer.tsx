@@ -130,8 +130,13 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[90vh]">
         {/* Header with Close Button */}
-        <div className="flex items-center justify-between px-4 pt-4">
-          <DrawerTitle className="text-lg">Checkout</DrawerTitle>
+        <DrawerHeader className="flex items-center justify-between px-4 pt-4 pb-0">
+          <div>
+            <DrawerTitle className="text-lg">Checkout</DrawerTitle>
+            <DrawerDescription className="sr-only">
+              Complete your order for {product.name} from {vendor.name}
+            </DrawerDescription>
+          </div>
           <button
             onClick={() => onOpenChange(false)}
             className="p-1.5 -mr-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -139,7 +144,7 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+        </DrawerHeader>
 
         {/* Scrollable Content */}
         <div className="overflow-y-auto flex-1 px-4 py-4">
