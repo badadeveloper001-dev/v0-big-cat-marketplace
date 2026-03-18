@@ -133,6 +133,7 @@ export function BuyerDashboard() {
       <main className="flex-1 overflow-auto pb-32">
         {/* AI Assistant Hero Section */}
         {activeTab === "home" && (
+        <>
         <section className="px-4 pt-5 pb-4">
           <div className="bg-primary rounded-3xl p-5 shadow-lg shadow-primary/20">
             <div className="flex items-center gap-3 mb-4">
@@ -358,6 +359,7 @@ export function BuyerDashboard() {
             ))}
           </div>
         </section>
+        </>
         )}
 
         {/* Chat Tab */}
@@ -436,7 +438,6 @@ export function BuyerDashboard() {
             <span className="text-xs font-medium">Profile</span>
           </button>
         </div>
-      </nav>
     </div>
   )
 }
