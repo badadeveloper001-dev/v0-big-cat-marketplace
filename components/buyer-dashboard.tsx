@@ -85,8 +85,8 @@ const vendors = [
 ]
 
 const recentOrders = [
-  { id: "BC-2847", item: "Linen Suit", status: "Delivered", date: "Mar 15", amount: 89.99, icon: "👗" },
-  { id: "BC-2833", item: "Wireless Earbuds", status: "In Transit", date: "Mar 12", amount: 149.99, icon: "💻" },
+  { id: "NX-2847", item: "Linen Suit", status: "Delivered", date: "Mar 15", amount: 89.99, icon: "👗" },
+  { id: "NX-2833", item: "Wireless Earbuds", status: "In Transit", date: "Mar 12", amount: 149.99, icon: "💻" },
 ]
 
 export function BuyerDashboard() {
@@ -142,7 +142,7 @@ export function BuyerDashboard() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="font-bold text-primary-foreground text-lg">BigCat AI</h2>
+                  <h2 className="font-bold text-primary-foreground text-lg">Nexus AI</h2>
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-foreground/20 text-xs font-medium text-primary-foreground">
                     <Zap className="w-3 h-3" /> Smart
                   </span>
@@ -186,8 +186,6 @@ export function BuyerDashboard() {
             </div>
           </div>
         </section>
-        </>
-        )}
 
         {/* AI Expanded Panel Overlay */}
         {aiExpanded && (
@@ -200,7 +198,7 @@ export function BuyerDashboard() {
                     <Sparkles className="w-5 h-5 text-primary-foreground" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">BigCat AI</h3>
+                    <h3 className="font-semibold text-foreground">Nexus AI</h3>
                     <p className="text-xs text-muted-foreground">Ask me anything</p>
                   </div>
                 </div>
