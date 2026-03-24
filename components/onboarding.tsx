@@ -1,31 +1,39 @@
 "use client"
 
-import { useRole, UserRole } from "@/lib/role-context"
+import { useState } from "react"
 import { ShoppingBag, Store, Shield, ArrowRight } from "lucide-react"
+import { BuyerAuth } from "./buyer-auth"
+import { MerchantAuth } from "./merchant-auth"
+
+type AuthType = "buyer" | "merchant" | null
 
 const roles = [
   {
-    id: "buyer" as UserRole,
+    id: "buyer" as AuthType,
     title: "Buyer",
     description: "Browse products, make purchases, and track orders",
     icon: ShoppingBag,
   },
   {
-    id: "merchant" as UserRole,
+    id: "merchant" as AuthType,
     title: "Merchant",
     description: "Sell products, manage inventory, and view analytics",
     icon: Store,
   },
-  {
-    id: "admin" as UserRole,
-    title: "Admin",
-    description: "Manage platform, users, and system settings",
-    icon: Shield,
-  },
 ]
 
 export function Onboarding() {
-  const { setRole } = useRole()
+  const [selectedAuth, setSelectedAuth] = useState<AuthType>(null)
+
+  // Show buyer auth if selected
+  if (selectedAuth === "buyer") {
+    return <BuyerAuth onBack={() => setSelectedAuth(null)} />
+  }
+
+  // Show merchant auth if selected
+  if (selectedAuth === "merchant") {
+    return <MerchantAuth onBack={() => setSelectedAuth(null)} />
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-sans">
@@ -48,7 +56,7 @@ export function Onboarding() {
           {roles.map((role) => (
             <button
               key={role.id}
-              onClick={() => setRole(role.id)}
+              onClick={() => setSelectedAuth(role.id)}
               className="group flex items-center gap-4 p-4 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-sm transition-all duration-200 shadow-sm"
             >
               <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-secondary text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
