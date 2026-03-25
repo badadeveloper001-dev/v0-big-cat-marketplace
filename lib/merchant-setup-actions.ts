@@ -48,7 +48,7 @@ function validateLocation(location: string): boolean {
 }
 
 /**
- * Save merchant setup data - Creates merchant profile on first setup
+ * Save merchant setup data - Updates auth_users with merchant info (bypasses broken merchant_profiles table)
  */
 export async function saveMerchantSetup(
   userId: string,
@@ -59,10 +59,6 @@ export async function saveMerchantSetup(
     // Validate all inputs
     if (!userId) {
       return { success: false, error: 'User ID is required' }
-    }
-
-    if (!smedanId) {
-      return { success: false, error: 'SMEDAN ID is required' }
     }
 
     if (!validateBusinessName(setupData.businessName)) {
@@ -83,55 +79,21 @@ export async function saveMerchantSetup(
 
     const supabase = await createClient()
 
-    // Check if merchant profile exists
-    const { data: existingProfile } = await supabase
-      .from('merchant_profiles')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle()
-
-    let result
-    let error
-
-    if (existingProfile) {
-      // Profile exists, update it
-      const response = await supabase
-        .from('merchant_profiles')
-        .update({
-          business_name: setupData.businessName.trim(),
-          business_description: setupData.businessDescription.trim(),
-          category: setupData.category,
-          location: setupData.location.trim(),
-          logo_url: setupData.logoUrl || null,
-          setup_completed: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId)
-        .select()
-        .maybeSingle()
-
-      result = response.data
-      error = response.error
-    } else {
-      // Profile doesn't exist, create it
-      const response = await supabase
-        .from('merchant_profiles')
-        .insert({
-          user_id: userId,
-          smedan_id: smedanId,
-          business_name: setupData.businessName.trim(),
-          business_description: setupData.businessDescription.trim(),
-          category: setupData.category,
-          location: setupData.location.trim(),
-          logo_url: setupData.logoUrl || null,
-          setup_completed: true,
-        })
-        .select()
-        .maybeSingle()
-
-      result = response.data
-      error = response.error
-    }
+    // Update auth_users with merchant setup info instead of using broken merchant_profiles table
+    const { data: result, error } = await supabase
+      .from('auth_users')
+      .update({
+        smedan_id: smedanId,
+        business_name: setupData.businessName.trim(),
+        business_description: setupData.businessDescription.trim(),
+        business_category: setupData.category,
+        business_location: setupData.location.trim(),
+        logo_url: setupData.logoUrl || null,
+        setup_completed: true,
+      })
+      .eq('id', userId)
+      .select()
+      .single()
 
     if (error) {
       console.error('[v0] Merchant setup error:', error)
@@ -146,7 +108,17 @@ export async function saveMerchantSetup(
     revalidatePath('/')
     return {
       success: true,
-      data: result,
+      data: {
+        id: result.id,
+        user_id: result.id,
+        smedan_id: result.smedan_id,
+        business_name: result.business_name,
+        business_description: result.business_description,
+        category: result.business_category,
+        location: result.business_location,
+        logo_url: result.logo_url,
+        setup_completed: result.setup_completed,
+      },
     }
   } catch (error) {
     console.error('[v0] Unexpected error in saveMerchantSetup:', error)
@@ -157,18 +129,18 @@ export async function saveMerchantSetup(
 /**
  * Get merchant profile for display
  */
-export async function getMerchantProfile(merchantId: string): Promise<SetupResponse> {
+export async function getMerchantProfile(userId: string): Promise<SetupResponse> {
   try {
-    if (!merchantId) {
-      return { success: false, error: 'Merchant ID is required' }
+    if (!userId) {
+      return { success: false, error: 'User ID is required' }
     }
 
     const supabase = await createClient()
 
     const { data: profile, error } = await supabase
-      .from('merchant_profiles')
+      .from('auth_users')
       .select('*')
-      .eq('id', merchantId)
+      .eq('id', userId)
       .single()
 
     if (error || !profile) {
@@ -177,7 +149,17 @@ export async function getMerchantProfile(merchantId: string): Promise<SetupRespo
 
     return {
       success: true,
-      data: profile,
+      data: {
+        id: profile.id,
+        user_id: profile.id,
+        smedan_id: profile.smedan_id,
+        business_name: profile.business_name,
+        business_description: profile.business_description,
+        category: profile.business_category,
+        location: profile.business_location,
+        logo_url: profile.logo_url,
+        setup_completed: profile.setup_completed,
+      },
     }
   } catch (error) {
     console.error('[v0] Unexpected error in getMerchantProfile:', error)
