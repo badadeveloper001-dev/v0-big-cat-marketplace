@@ -1,6 +1,7 @@
 "use client"
 
 import { useRole } from "@/lib/role-context"
+import { logout } from "@/lib/auth-actions"
 import {
   ArrowLeft,
   Bell,
@@ -25,6 +26,7 @@ import {
   Clock,
   CheckCircle2,
   Truck,
+  LogOut,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -68,10 +70,18 @@ const aiInsights = [
 ]
 
 export function MerchantDashboard() {
-  const { setRole } = useRole()
+  const { setRole, setUser } = useRole()
   const [activeTab, setActiveTab] = useState("home")
   const [aiMessage, setAiMessage] = useState("")
   const [currentInsight, setCurrentInsight] = useState(0)
+
+  const handleLogout = async () => {
+    const result = await logout()
+    if (result.success) {
+      setUser(null)
+      setRole(null)
+    }
+  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -106,10 +116,12 @@ export function MerchantDashboard() {
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => setRole(null)}
+            onClick={handleLogout}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Logout"
+            title="Logout"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <LogOut className="w-5 h-5" />
           </button>
           <h1 className="font-semibold text-foreground">Merchant Dashboard</h1>
           <button className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors">

@@ -1,6 +1,7 @@
 "use client"
 
 import { useRole } from "@/lib/role-context"
+import { logout } from "@/lib/auth-actions"
 import { VendorPage } from "@/components/vendor-page"
 import { ChatInterface } from "@/components/chat-interface"
 import {
@@ -20,6 +21,7 @@ import {
   Zap,
   X,
   Send,
+  LogOut,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -90,11 +92,19 @@ const recentOrders = [
 ]
 
 export function BuyerDashboard() {
-  const { setRole } = useRole()
+  const { setRole, setUser } = useRole()
   const [activeTab, setActiveTab] = useState("home")
   const [searchQuery, setSearchQuery] = useState("")
   const [aiExpanded, setAiExpanded] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState<typeof vendors[0] | null>(null)
+
+  const handleLogout = async () => {
+    const result = await logout()
+    if (result.success) {
+      setUser(null)
+      setRole(null)
+    }
+  }
 
   const handleSuggestionTap = (s: string) => {
     setSearchQuery(s)
@@ -112,11 +122,12 @@ export function BuyerDashboard() {
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => setRole(null)}
+            onClick={handleLogout}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Go back"
+            aria-label="Logout"
+            title="Logout"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <LogOut className="w-5 h-5" />
           </button>
           <div className="flex flex-col items-center">
             <span className="text-xs text-muted-foreground leading-none">Good morning</span>

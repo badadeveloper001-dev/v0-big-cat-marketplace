@@ -2,12 +2,15 @@
 
 import { useState } from "react"
 import { useRole } from "@/lib/role-context"
-import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Chrome, Apple, Hash } from "lucide-react"
+import { merchantSignup, emailPasswordLogin } from "@/lib/auth-actions"
+import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Chrome, Apple, Hash, Loader2 } from "lucide-react"
 
 export function MerchantAuth({ onBack }: { onBack: () => void }) {
-  const { setRole } = useRole()
+  const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string>("")
   const [formData, setFormData] = useState({
     email: "",
     phone: "",
@@ -15,10 +18,44 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
     smedanId: "",
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Set role to merchant to proceed to merchant dashboard
-    setRole("merchant")
+    setError("")
+    setLoading(true)
+
+    try {
+      let result
+      
+      if (isSignUp) {
+        result = await merchantSignup(
+          formData.email,
+          formData.phone,
+          formData.password,
+          formData.smedanId
+        )
+      } else {
+        result = await emailPasswordLogin(formData.email, formData.password)
+      }
+
+      if (result.success && result.data) {
+        // Store user data and set role
+        setUser({
+          userId: result.data.userId,
+          email: result.data.email,
+          phone: result.data.phone,
+          role: "merchant",
+          merchantProfile: result.data.merchantProfile,
+        })
+        setRole("merchant")
+      } else {
+        setError(result.error || "An error occurred")
+      }
+    } catch (err) {
+      setError("An unexpected error occurred")
+      console.error("[v0] Auth error:", err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,6 +96,12 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4 mb-6">
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+            )}
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
@@ -148,8 +191,10 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20 mt-6"
+              disabled={loading}
+              className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20 mt-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {isSignUp ? "Create Account" : "Sign In"}
             </button>
           </form>
