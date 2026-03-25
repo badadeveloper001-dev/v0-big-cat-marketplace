@@ -118,6 +118,86 @@ export async function buyerSignup(
 }
 
 /**
+ * Buyer signup with name
+ */
+export async function buyerSignupWithName(
+  email: string,
+  phone: string,
+  password: string,
+  name: string,
+): Promise<AuthResponse> {
+  try {
+    // Validate inputs
+    if (!name || name.trim().length < 2) {
+      return { success: false, error: 'Please enter a valid name' }
+    }
+
+    if (!validateEmail(email)) {
+      return { success: false, error: 'Invalid email address' }
+    }
+
+    if (!validatePhone(phone)) {
+      return { success: false, error: 'Invalid phone number' }
+    }
+
+    const passwordValidation = validatePassword(password)
+    if (!passwordValidation.valid) {
+      return { success: false, error: passwordValidation.message }
+    }
+
+    const supabase = await createClient()
+
+    // Check if email already exists
+    const { data: existingUser } = await supabase
+      .from('auth_users')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .single()
+
+    if (existingUser) {
+      return { success: false, error: 'Email already registered' }
+    }
+
+    // Hash password
+    const passwordHash = hashPassword(password)
+
+    // Create user in auth_users table
+    const { data: newUser, error: createError } = await supabase
+      .from('auth_users')
+      .insert({
+        email: email.toLowerCase(),
+        phone,
+        password_hash: passwordHash,
+        role: 'buyer',
+        full_name: name.trim(),
+      })
+      .select()
+      .single()
+
+    if (createError) {
+      console.error('[v0] Buyer signup error:', createError)
+      return { success: false, error: 'Failed to create account' }
+    }
+
+    // Revalidate and return
+    revalidatePath('/')
+    return {
+      success: true,
+      data: {
+        userId: newUser.id,
+        email: newUser.email,
+        phone: newUser.phone,
+        name: newUser.full_name,
+        role: newUser.role,
+      },
+    }
+  } catch (error) {
+    console.error('[v0] Unexpected error in buyerSignupWithName:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+/**
  * Merchant signup with profile creation
  */
 export async function merchantSignup(
