@@ -102,7 +102,7 @@ export function BuyerDashboard() {
   const [selectedVendor, setSelectedVendor] = useState<typeof vendors[0] | null>(null)
   const [showProducts, setShowProducts] = useState(false)
   const [showCart, setShowCart] = useState(false)
-  const { cart } = useCart()
+  const { items: cartItems, getItemCount } = useCart()
 
   const handleLogout = async () => {
     const result = await logout()
@@ -165,9 +165,9 @@ export function BuyerDashboard() {
               title="View cart"
             >
               <ShoppingBag className="w-5 h-5" />
-              {cart.length > 0 && (
+              {cartItems.length > 0 && (
                 <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full">
-                  {cart.length}
+                  {getItemCount()}
                 </span>
               )}
             </button>
