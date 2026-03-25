@@ -5,16 +5,46 @@ import { useRole } from "@/lib/role-context"
 import { Onboarding } from "./onboarding"
 import { BuyerDashboard } from "./buyer-dashboard"
 import { MerchantDashboard } from "./merchant-dashboard"
+import { MerchantSetup } from "./merchant-setup"
+import { MiniWebsiteProfile } from "./mini-website-profile"
 import { AdminLogin } from "./admin-login"
 import { AdminDashboard } from "./admin-dashboard"
 
 export function MarketplaceApp() {
-  const { role } = useRole()
+  const { role, user } = useRole()
   const [adminAuthenticated, setAdminAuthenticated] = useState(false)
+  const [showMerchantSetup, setShowMerchantSetup] = useState(false)
+  const [merchantProfile, setMerchantProfile] = useState<any>(null)
+  const [showMiniWebsite, setShowMiniWebsite] = useState(false)
 
   // Show onboarding if no role selected
   if (!role) {
     return <Onboarding />
+  }
+
+  // Handle merchant setup flow
+  if (role === "merchant" && user?.merchantProfile?.id) {
+    if (!user.merchantProfile.setup_completed && !showMiniWebsite) {
+      return (
+        <MerchantSetup
+          merchantId={user.merchantProfile.id}
+          onComplete={() => {
+            setShowMiniWebsite(true)
+            setMerchantProfile(user.merchantProfile)
+          }}
+        />
+      )
+    }
+
+    if (showMiniWebsite && merchantProfile) {
+      return (
+        <MiniWebsiteProfile
+          profile={merchantProfile}
+          isOwner={true}
+          onEdit={() => setShowMiniWebsite(false)}
+        />
+      )
+    }
   }
 
   // Show appropriate dashboard based on role
