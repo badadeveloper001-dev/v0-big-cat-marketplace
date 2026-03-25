@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { ArrowLeft, Truck, Zap, MapPin, Package, CreditCard, CheckCircle2 } from "lucide-react"
 import { useCart } from "@/lib/cart-context"
 import { useRole } from "@/lib/role-context"
-import { createOrder, calculateDeliveryFee } from "@/lib/order-actions"
+import { createOrder } from "@/lib/order-actions"
+import { calculateDeliveryFee } from "@/lib/delivery-utils"
 
 interface CheckoutPageProps {
   onBack: () => void
