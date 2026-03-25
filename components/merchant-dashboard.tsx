@@ -2,6 +2,7 @@
 
 import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-actions"
+import { MerchantProducts } from "@/components/merchant-products"
 import {
   ArrowLeft,
   Bell,
@@ -131,8 +132,40 @@ export function MerchantDashboard() {
         </div>
       </header>
 
+      {/* Tab Navigation */}
+      <div className="sticky top-14 z-40 bg-card border-b border-border px-4 flex gap-4">
+        <button
+          onClick={() => setActiveTab("home")}
+          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "home"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Home className="w-4 h-4" />
+            Overview
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab("products")}
+          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "products"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Package className="w-4 h-4" />
+            Products
+          </div>
+        </button>
+      </div>
+
       {/* Main Content */}
       <main className="flex-1 overflow-auto pb-24">
+        {activeTab === "home" ? (
+          <>
         {/* Welcome Section */}
         <div className="px-4 pt-5 pb-4">
           <p className="text-sm text-muted-foreground">Welcome back,</p>
@@ -350,6 +383,10 @@ export function MerchantDashboard() {
             ))}
           </div>
         </section>
+          </>
+        ) : activeTab === "products" ? (
+          <MerchantProducts userId={setUser && "mock-user-id"} />
+        ) : null}
       </main>
 
       {/* Bottom Navigation */}

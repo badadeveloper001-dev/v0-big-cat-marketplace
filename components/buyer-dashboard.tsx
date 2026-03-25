@@ -4,6 +4,9 @@ import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-actions"
 import { VendorPage } from "@/components/vendor-page"
 import { ChatInterface } from "@/components/chat-interface"
+import { ProductsMarketplace } from "@/components/products-marketplace"
+import { CartView } from "@/components/cart-view"
+import { useCart } from "@/lib/cart-context"
 import {
   Home,
   Search,
@@ -97,6 +100,9 @@ export function BuyerDashboard() {
   const [searchQuery, setSearchQuery] = useState("")
   const [aiExpanded, setAiExpanded] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState<typeof vendors[0] | null>(null)
+  const [showProducts, setShowProducts] = useState(false)
+  const [showCart, setShowCart] = useState(false)
+  const { cart } = useCart()
 
   const handleLogout = async () => {
     const result = await logout()
@@ -116,6 +122,16 @@ export function BuyerDashboard() {
     return <VendorPage vendor={selectedVendor} onBack={() => setSelectedVendor(null)} />
   }
 
+  // Show products marketplace if selected
+  if (showProducts) {
+    return <ProductsMarketplace onBack={() => setShowProducts(false)} />
+  }
+
+  // Show cart if selected
+  if (showCart) {
+    return <CartView onBack={() => setShowCart(false)} />
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Compact Header */}
@@ -133,10 +149,29 @@ export function BuyerDashboard() {
             <span className="text-xs text-muted-foreground leading-none">Good morning</span>
             <span className="font-semibold text-foreground text-sm">Alex Johnson</span>
           </div>
-          <button className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors" aria-label="Notifications">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setShowProducts(true)}
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Products"
+              title="Browse products"
+            >
+              <Package className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => setShowCart(true)}
+              className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Shopping cart"
+              title="View cart"
+            >
+              <ShoppingBag className="w-5 h-5" />
+              {cart.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full">
+                  {cart.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
