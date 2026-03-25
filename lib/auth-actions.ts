@@ -272,13 +272,13 @@ export async function merchantSignup(
       return { success: false, error: 'Failed to create account' }
     }
 
-    // Create merchant profile
+    // Create merchant profile with temporary business_name
     const { data: profile, error: profileError } = await supabase
       .from('merchant_profiles')
       .insert({
         user_id: newUser.id,
         smedan_id: smedanId.toUpperCase(),
-        business_name: null, // Will be set during onboarding
+        business_name: 'Pending Setup', // Temporary - will be updated during setup
       })
       .select()
       .single()
@@ -303,7 +303,7 @@ export async function merchantSignup(
           user_id: profile.user_id,
           smedan_id: profile.smedan_id,
           business_name: profile.business_name,
-          setup_completed: profile.setup_completed || false,
+          setup_completed: false,
         },
       },
     }
