@@ -9,6 +9,7 @@ interface User {
   email: string
   role: UserRole
   phone?: string
+  name?: string
   merchantProfile?: any
 }
 

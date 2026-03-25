@@ -40,6 +40,12 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
       }
 
       if (result.success && result.data) {
+        // Check if role is merchant (for login, user might have different role)
+        if (!isSignUp && result.data.role !== "merchant") {
+          setError("This account is not a merchant account. Please use the buyer login.")
+          return
+        }
+        
         if (isSignUp) {
           setSuccessMessage("Account created successfully! Redirecting...")
           setTimeout(() => {

@@ -10,7 +10,7 @@ import { AdminLogin } from "./admin-login"
 import { AdminDashboard } from "./admin-dashboard"
 
 export function MarketplaceApp() {
-  const { role, user, setUser } = useRole()
+  const { role, user, setUser, isLoading } = useRole()
   const [adminAuthenticated, setAdminAuthenticated] = useState(false)
   const [setupComplete, setSetupComplete] = useState(false)
 
@@ -20,6 +20,18 @@ export function MarketplaceApp() {
       setSetupComplete(true)
     }
   }, [user])
+
+  // Show loading state while restoring session
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-primary/20" />
+          <div className="h-4 w-32 bg-muted rounded" />
+        </div>
+      </div>
+    )
+  }
 
   // Show onboarding if no role selected
   if (!role) {

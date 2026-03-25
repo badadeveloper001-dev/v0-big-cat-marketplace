@@ -40,6 +40,12 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
       }
 
       if (result.success && result.data) {
+        // Check if role is buyer (for login, user might have different role)
+        if (!isSignUp && result.data.role !== "buyer") {
+          setError("This account is not a buyer account. Please use the merchant login.")
+          return
+        }
+        
         if (isSignUp) {
           setSuccessMessage("Account created successfully! Redirecting...")
           setTimeout(() => {
@@ -48,6 +54,7 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
               userId: result.data.userId,
               email: result.data.email,
               phone: result.data.phone,
+              name: result.data.name,
               role: "buyer",
             })
             setRole("buyer")
@@ -58,6 +65,7 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
             userId: result.data.userId,
             email: result.data.email,
             phone: result.data.phone,
+            name: result.data.name,
             role: "buyer",
           })
           setRole("buyer")
