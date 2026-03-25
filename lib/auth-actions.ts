@@ -246,7 +246,7 @@ export async function merchantSignup(
     // Hash password
     const passwordHash = hashPassword(password)
 
-    // Create user
+    // Create user with smedan_id stored directly in auth_users
     const { data: newUser, error: createUserError } = await supabase
       .from('auth_users')
       .insert({
@@ -254,6 +254,8 @@ export async function merchantSignup(
         phone,
         password_hash: passwordHash,
         role: 'merchant',
+        smedan_id: smedanId.toUpperCase(),
+        setup_completed: false,
       })
       .select()
       .single()
@@ -272,9 +274,9 @@ export async function merchantSignup(
         phone: newUser.phone,
         role: newUser.role,
         merchantProfile: {
-          id: '', // Will be created during setup
+          id: newUser.id,
           user_id: newUser.id,
-          smedan_id: smedanId.toUpperCase(),
+          smedan_id: newUser.smedan_id,
           business_name: null,
           setup_completed: false,
         },
@@ -321,15 +323,20 @@ export async function emailPasswordLogin(
       return { success: false, error: 'Invalid email or password' }
     }
 
-    // Get merchant profile if user is merchant
+    // Build merchant profile from auth_users fields if merchant
     let merchantProfile = null
     if (user.role === 'merchant') {
-      const { data: profile } = await supabase
-        .from('merchant_profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-      merchantProfile = profile
+      merchantProfile = {
+        id: user.id,
+        user_id: user.id,
+        smedan_id: user.smedan_id || '',
+        business_name: user.business_name || null,
+        business_description: user.business_description || null,
+        category: user.business_category || null,
+        location: user.business_location || null,
+        logo_url: user.logo_url || null,
+        setup_completed: user.setup_completed || false,
+      }
     }
 
     revalidatePath('/')
@@ -340,6 +347,7 @@ export async function emailPasswordLogin(
         email: user.email,
         phone: user.phone,
         role: user.role,
+        name: user.full_name,
         merchantProfile,
       },
     }
@@ -376,15 +384,20 @@ export async function getCurrentUser(): Promise<AuthResponse> {
       return { success: false, error: 'User not found' }
     }
 
-    // Get merchant profile if applicable
+    // Build merchant profile from auth_users fields if merchant
     let merchantProfile = null
     if (authUser.role === 'merchant') {
-      const { data: profile } = await supabase
-        .from('merchant_profiles')
-        .select('*')
-        .eq('user_id', authUser.id)
-        .single()
-      merchantProfile = profile
+      merchantProfile = {
+        id: authUser.id,
+        user_id: authUser.id,
+        smedan_id: authUser.smedan_id || '',
+        business_name: authUser.business_name || null,
+        business_description: authUser.business_description || null,
+        category: authUser.business_category || null,
+        location: authUser.business_location || null,
+        logo_url: authUser.logo_url || null,
+        setup_completed: authUser.setup_completed || false,
+      }
     }
 
     return {
@@ -393,6 +406,7 @@ export async function getCurrentUser(): Promise<AuthResponse> {
         userId: authUser.id,
         email: authUser.email,
         role: authUser.role,
+        name: authUser.full_name,
         merchantProfile,
       },
     }

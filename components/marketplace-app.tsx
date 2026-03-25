@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRole } from "@/lib/role-context"
 import { Onboarding } from "./onboarding"
 import { BuyerDashboard } from "./buyer-dashboard"
@@ -14,13 +14,22 @@ export function MarketplaceApp() {
   const [adminAuthenticated, setAdminAuthenticated] = useState(false)
   const [setupComplete, setSetupComplete] = useState(false)
 
+  // Check if merchant setup is already completed from user data
+  useEffect(() => {
+    if (user?.merchantProfile?.setup_completed) {
+      setSetupComplete(true)
+    }
+  }, [user])
+
   // Show onboarding if no role selected
   if (!role) {
     return <Onboarding />
   }
 
   // Handle merchant setup flow - only show if setup not completed
-  if (role === "merchant" && !user?.merchantProfile?.setup_completed && !setupComplete) {
+  const needsSetup = role === "merchant" && !user?.merchantProfile?.setup_completed && !setupComplete
+  
+  if (needsSetup) {
     return (
       <MerchantSetup
         userId={user?.userId || ""}
