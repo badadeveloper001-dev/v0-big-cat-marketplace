@@ -178,7 +178,8 @@ export async function buyerSignupWithName(
 
     if (createError) {
       console.error('[v0] Buyer signup error:', createError)
-      return { success: false, error: 'Failed to create account' }
+      console.error('[v0] Error details:', createError.message, createError.code)
+      return { success: false, error: `Failed to create account: ${createError.message}` }
     }
 
     // Revalidate and return
