@@ -55,9 +55,9 @@ export function BigcatAdminDashboard() {
   ]
 
   const logisticsData = [
-    { label: "Active Deliveries", value: 245, color: "text-blue-600" },
-    { label: "Completed Deliveries", value: 8,934, color: "text-green-600" },
-    { label: "Pending Deliveries", value: 67, color: "text-yellow-600" },
+    { label: "Active Deliveries", value: "245", color: "text-blue-600" },
+    { label: "Completed Deliveries", value: "8,934", color: "text-green-600" },
+    { label: "Pending Deliveries", value: "67", color: "text-yellow-600" },
   ]
 
   const recentUsers = [
