@@ -96,7 +96,15 @@ export async function saveMerchantSetup(
 
     if (updateError) {
       console.error('[v0] Merchant setup error:', updateError)
-      return { success: false, error: 'Failed to save setup information' }
+      console.error('[v0] Setup error details - Code:', updateError.code, 'Message:', updateError.message)
+      console.error('[v0] Trying to update merchant ID:', merchantId)
+      console.error('[v0] With data:', {
+        business_name: setupData.businessName.trim(),
+        business_description: setupData.businessDescription.trim(),
+        category: setupData.category,
+        location: setupData.location.trim(),
+      })
+      return { success: false, error: `Failed to save setup information: ${updateError.message}` }
     }
 
     revalidatePath('/')
