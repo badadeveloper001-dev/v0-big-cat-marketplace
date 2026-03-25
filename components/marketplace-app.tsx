@@ -6,48 +6,41 @@ import { Onboarding } from "./onboarding"
 import { BuyerDashboard } from "./buyer-dashboard"
 import { MerchantDashboard } from "./merchant-dashboard"
 import { MerchantSetup } from "./merchant-setup"
-import { MiniWebsiteProfile } from "./mini-website-profile"
 import { AdminLogin } from "./admin-login"
 import { AdminDashboard } from "./admin-dashboard"
 
 export function MarketplaceApp() {
-  const { role, user } = useRole()
+  const { role, user, setUser } = useRole()
   const [adminAuthenticated, setAdminAuthenticated] = useState(false)
-  const [showMerchantSetup, setShowMerchantSetup] = useState(false)
-  const [merchantProfile, setMerchantProfile] = useState<any>(null)
-  const [showMiniWebsite, setShowMiniWebsite] = useState(false)
+  const [setupComplete, setSetupComplete] = useState(false)
 
   // Show onboarding if no role selected
   if (!role) {
     return <Onboarding />
   }
 
-  // Handle merchant setup flow
-  if (role === "merchant") {
-    // Show setup page if not completed
-    if (!user?.merchantProfile?.setup_completed && !showMiniWebsite) {
-      return (
-        <MerchantSetup
-          userId={user?.userId}
-          smedanId={user?.merchantProfile?.smedan_id}
-          onComplete={(profile) => {
-            setShowMiniWebsite(true)
-            setMerchantProfile(profile)
-          }}
-        />
-      )
-    }
-
-    // Show mini website profile after setup is complete
-    if (showMiniWebsite && merchantProfile) {
-      return (
-        <MiniWebsiteProfile
-          profile={merchantProfile}
-          isOwner={true}
-          onEdit={() => setShowMiniWebsite(false)}
-        />
-      )
-    }
+  // Handle merchant setup flow - only show if setup not completed
+  if (role === "merchant" && !user?.merchantProfile?.setup_completed && !setupComplete) {
+    return (
+      <MerchantSetup
+        userId={user?.userId || ""}
+        smedanId={user?.merchantProfile?.smedan_id || ""}
+        onComplete={(profile) => {
+          // Update user context with completed profile
+          if (user) {
+            setUser({
+              ...user,
+              merchantProfile: {
+                ...user.merchantProfile,
+                ...profile,
+                setup_completed: true,
+              }
+            })
+          }
+          setSetupComplete(true)
+        }}
+      />
+    )
   }
 
   // Show appropriate dashboard based on role
