@@ -30,8 +30,10 @@ function validatePassword(password: string): { valid: boolean; message?: string 
 }
 
 function validateSmedanId(smedanId: string): boolean {
-  // SMEDAN ID should be alphanumeric, 5-20 characters
-  return /^[A-Z0-9]{5,20}$/.test(smedanId.toUpperCase())
+  // SMEDAN ID validation - accept various formats
+  // Can be alphanumeric with slashes, dashes, etc.
+  const smedanRegex = /^[A-Z0-9\-\/]{5,}$/
+  return smedanRegex.test(smedanId.toUpperCase()) && smedanId.trim().length >= 5
 }
 
 // Hash password using SHA-256 (in production, use bcrypt from 'bcrypt' package for better security)
@@ -293,8 +295,15 @@ export async function merchantSignup(
       data: {
         userId: newUser.id,
         email: newUser.email,
+        phone: newUser.phone,
         role: newUser.role,
-        profileId: profile.id,
+        merchantProfile: {
+          id: profile.id,
+          user_id: profile.user_id,
+          smedan_id: profile.smedan_id,
+          business_name: profile.business_name,
+          setup_completed: profile.setup_completed || false,
+        },
       },
     }
   } catch (error) {

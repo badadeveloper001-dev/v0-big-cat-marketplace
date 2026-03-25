@@ -214,9 +214,9 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
                       name="smedanId"
                       value={formData.smedanId}
                       onChange={handleChange}
-                      placeholder="ABC12345"
+                      placeholder="SME/2024/123456"
                       required={isSignUp}
-                      className="w-full pl-12 pr-4 py-3 bg-secondary/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all uppercase"
+                      className="w-full pl-12 pr-4 py-3 bg-secondary/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
                       aria-label="SMEDAN ID"
                     />
                   </div>
