@@ -241,16 +241,7 @@ export async function merchantSignup(
       return { success: false, error: 'Email already registered' }
     }
 
-    // Check if SMEDAN ID already registered
-    const { data: existingSmedan } = await supabase
-      .from('merchant_profiles')
-      .select('id')
-      .eq('smedan_id', smedanId.toUpperCase())
-      .single()
-
-    if (existingSmedan) {
-      return { success: false, error: 'SMEDAN ID already registered' }
-    }
+    // Skip SMEDAN check during signup - will validate during setup when profile is created
 
     // Hash password
     const passwordHash = hashPassword(password)
