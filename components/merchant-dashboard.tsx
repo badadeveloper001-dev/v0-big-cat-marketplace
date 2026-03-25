@@ -3,6 +3,8 @@
 import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-actions"
 import { MerchantProducts } from "@/components/merchant-products"
+import { MerchantOrders } from "@/components/merchant-orders"
+import { ClipboardList } from "lucide-react"
 import {
   ArrowLeft,
   Bell,
@@ -158,6 +160,19 @@ export function MerchantDashboard() {
           <div className="flex items-center gap-2">
             <Package className="w-4 h-4" />
             Products
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab("orders")}
+          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "orders"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4" />
+            Orders
           </div>
         </button>
       </div>
@@ -386,6 +401,8 @@ export function MerchantDashboard() {
           </>
         ) : activeTab === "products" ? (
           <MerchantProducts userId={setUser && "mock-user-id"} />
+        ) : activeTab === "orders" ? (
+          <MerchantOrders onBack={() => setActiveTab("home")} />
         ) : null}
       </main>
 

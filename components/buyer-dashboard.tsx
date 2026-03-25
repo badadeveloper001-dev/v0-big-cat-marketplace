@@ -6,6 +6,8 @@ import { VendorPage } from "@/components/vendor-page"
 import { ChatInterface } from "@/components/chat-interface"
 import { ProductsMarketplace } from "@/components/products-marketplace"
 import { CartView } from "@/components/cart-view"
+import { CheckoutPage } from "@/components/checkout-page"
+import { BuyerOrders } from "@/components/buyer-orders"
 import { useCart } from "@/lib/cart-context"
 import {
   Home,
@@ -25,6 +27,7 @@ import {
   X,
   Send,
   LogOut,
+  ClipboardList,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -102,6 +105,9 @@ export function BuyerDashboard() {
   const [selectedVendor, setSelectedVendor] = useState<typeof vendors[0] | null>(null)
   const [showProducts, setShowProducts] = useState(false)
   const [showCart, setShowCart] = useState(false)
+  const [showCheckout, setShowCheckout] = useState(false)
+  const [showOrders, setShowOrders] = useState(false)
+  const [orderSuccess, setOrderSuccess] = useState<string | null>(null)
   const { items: cartItems, getItemCount } = useCart()
 
   const handleLogout = async () => {
@@ -129,7 +135,34 @@ export function BuyerDashboard() {
 
   // Show cart if selected
   if (showCart) {
-    return <CartView onBack={() => setShowCart(false)} />
+    return (
+      <CartView 
+        onBack={() => setShowCart(false)} 
+        onCheckout={() => {
+          setShowCart(false)
+          setShowCheckout(true)
+        }}
+      />
+    )
+  }
+
+  // Show checkout page
+  if (showCheckout) {
+    return (
+      <CheckoutPage 
+        onBack={() => setShowCheckout(false)} 
+        onSuccess={(orderId) => {
+          setShowCheckout(false)
+          setOrderSuccess(orderId)
+          setShowOrders(true)
+        }}
+      />
+    )
+  }
+
+  // Show orders page
+  if (showOrders) {
+    return <BuyerOrders onBack={() => setShowOrders(false)} />
   }
 
   return (
@@ -149,7 +182,15 @@ export function BuyerDashboard() {
             <span className="text-xs text-muted-foreground leading-none">Good morning</span>
             <span className="font-semibold text-foreground text-sm">Alex Johnson</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setShowOrders(true)}
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="My Orders"
+              title="My Orders"
+            >
+              <ClipboardList className="w-5 h-5" />
+            </button>
             <button 
               onClick={() => setShowProducts(true)}
               className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
