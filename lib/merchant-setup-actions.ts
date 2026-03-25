@@ -48,16 +48,21 @@ function validateLocation(location: string): boolean {
 }
 
 /**
- * Save merchant setup data
+ * Save merchant setup data - Creates merchant profile on first setup
  */
 export async function saveMerchantSetup(
-  merchantId: string,
+  userId: string,
+  smedanId: string,
   setupData: MerchantSetupData
 ): Promise<SetupResponse> {
   try {
     // Validate all inputs
-    if (!merchantId) {
-      return { success: false, error: 'Merchant ID is required' }
+    if (!userId) {
+      return { success: false, error: 'User ID is required' }
+    }
+
+    if (!smedanId) {
+      return { success: false, error: 'SMEDAN ID is required' }
     }
 
     if (!validateBusinessName(setupData.businessName)) {
@@ -78,39 +83,70 @@ export async function saveMerchantSetup(
 
     const supabase = await createClient()
 
-    // Update merchant profile
-    const { data: updatedProfile, error: updateError } = await supabase
+    // Check if merchant profile exists
+    const { data: existingProfile } = await supabase
       .from('merchant_profiles')
-      .update({
-        business_name: setupData.businessName.trim(),
-        business_description: setupData.businessDescription.trim(),
-        category: setupData.category,
-        location: setupData.location.trim(),
-        logo_url: setupData.logoUrl || null,
-        setup_completed: true,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', merchantId)
-      .select()
-      .single()
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle()
 
-    if (updateError) {
-      console.error('[v0] Merchant setup error:', updateError)
-      console.error('[v0] Setup error details - Code:', updateError.code, 'Message:', updateError.message)
-      console.error('[v0] Trying to update merchant ID:', merchantId)
-      console.error('[v0] With data:', {
-        business_name: setupData.businessName.trim(),
-        business_description: setupData.businessDescription.trim(),
-        category: setupData.category,
-        location: setupData.location.trim(),
-      })
-      return { success: false, error: `Failed to save setup information: ${updateError.message}` }
+    let result
+    let error
+
+    if (existingProfile) {
+      // Profile exists, update it
+      const response = await supabase
+        .from('merchant_profiles')
+        .update({
+          business_name: setupData.businessName.trim(),
+          business_description: setupData.businessDescription.trim(),
+          category: setupData.category,
+          location: setupData.location.trim(),
+          logo_url: setupData.logoUrl || null,
+          setup_completed: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId)
+        .select()
+        .maybeSingle()
+
+      result = response.data
+      error = response.error
+    } else {
+      // Profile doesn't exist, create it
+      const response = await supabase
+        .from('merchant_profiles')
+        .insert({
+          user_id: userId,
+          smedan_id: smedanId,
+          business_name: setupData.businessName.trim(),
+          business_description: setupData.businessDescription.trim(),
+          category: setupData.category,
+          location: setupData.location.trim(),
+          logo_url: setupData.logoUrl || null,
+          setup_completed: true,
+        })
+        .select()
+        .maybeSingle()
+
+      result = response.data
+      error = response.error
+    }
+
+    if (error) {
+      console.error('[v0] Merchant setup error:', error)
+      return { success: false, error: `Failed to save setup information: ${error.message}` }
+    }
+
+    if (!result) {
+      console.error('[v0] No result returned from merchant setup')
+      return { success: false, error: 'Failed to save setup information' }
     }
 
     revalidatePath('/')
     return {
       success: true,
-      data: updatedProfile,
+      data: result,
     }
   } catch (error) {
     console.error('[v0] Unexpected error in saveMerchantSetup:', error)

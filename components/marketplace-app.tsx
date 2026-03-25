@@ -23,19 +23,22 @@ export function MarketplaceApp() {
   }
 
   // Handle merchant setup flow
-  if (role === "merchant" && user?.merchantProfile?.id) {
-    if (!user.merchantProfile.setup_completed && !showMiniWebsite) {
+  if (role === "merchant") {
+    // Show setup page if not completed
+    if (!user?.merchantProfile?.setup_completed && !showMiniWebsite) {
       return (
         <MerchantSetup
-          merchantId={user.merchantProfile.id}
-          onComplete={() => {
+          userId={user?.userId}
+          smedanId={user?.merchantProfile?.smedan_id}
+          onComplete={(profile) => {
             setShowMiniWebsite(true)
-            setMerchantProfile(user.merchantProfile)
+            setMerchantProfile(profile)
           }}
         />
       )
     }
 
+    // Show mini website profile after setup is complete
     if (showMiniWebsite && merchantProfile) {
       return (
         <MiniWebsiteProfile

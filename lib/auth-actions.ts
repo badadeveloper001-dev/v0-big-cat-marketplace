@@ -272,24 +272,6 @@ export async function merchantSignup(
       return { success: false, error: 'Failed to create account' }
     }
 
-    // Create merchant profile with temporary business_name
-    const { data: profile, error: profileError } = await supabase
-      .from('merchant_profiles')
-      .insert({
-        user_id: newUser.id,
-        smedan_id: smedanId.toUpperCase(),
-        business_name: 'Pending Setup', // Temporary - will be updated during setup
-      })
-      .select()
-      .single()
-
-    if (profileError) {
-      console.error('[v0] Merchant profile creation error:', profileError)
-      // Delete user if profile creation fails
-      await supabase.from('auth_users').delete().eq('id', newUser.id)
-      return { success: false, error: 'Failed to create merchant profile' }
-    }
-
     revalidatePath('/')
     return {
       success: true,
@@ -299,10 +281,10 @@ export async function merchantSignup(
         phone: newUser.phone,
         role: newUser.role,
         merchantProfile: {
-          id: profile.id,
-          user_id: profile.user_id,
-          smedan_id: profile.smedan_id,
-          business_name: profile.business_name,
+          id: '', // Will be created during setup
+          user_id: newUser.id,
+          smedan_id: smedanId.toUpperCase(),
+          business_name: null,
           setup_completed: false,
         },
       },

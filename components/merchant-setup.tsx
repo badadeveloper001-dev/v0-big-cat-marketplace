@@ -6,8 +6,9 @@ import { saveMerchantSetup } from "@/lib/merchant-setup-actions"
 import { Store, FileText, MapPin, Tag, Image, Loader2, Check, AlertCircle } from "lucide-react"
 
 interface MerchantSetupProps {
-  merchantId: string
-  onComplete: () => void
+  userId: string
+  smedanId: string
+  onComplete: (profile: any) => void
 }
 
 const CATEGORIES = [
@@ -24,7 +25,7 @@ const CATEGORIES = [
   'Other'
 ]
 
-export function MerchantSetup({ merchantId, onComplete }: MerchantSetupProps) {
+export function MerchantSetup({ userId, smedanId, onComplete }: MerchantSetupProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
   const [success, setSuccess] = useState(false)
@@ -109,7 +110,7 @@ export function MerchantSetup({ merchantId, onComplete }: MerchantSetupProps) {
       }
 
       // For now, use the preview URL as logo (in production, upload to Vercel Blob)
-      const result = await saveMerchantSetup(merchantId, {
+      const result = await saveMerchantSetup(userId, smedanId, {
         businessName: formData.businessName,
         businessDescription: formData.businessDescription,
         category: formData.category,
@@ -120,7 +121,7 @@ export function MerchantSetup({ merchantId, onComplete }: MerchantSetupProps) {
       if (result.success) {
         setSuccess(true)
         setTimeout(() => {
-          onComplete()
+          onComplete(result.data)
         }, 2000)
       } else {
         setError(result.error || "Failed to save setup information")
