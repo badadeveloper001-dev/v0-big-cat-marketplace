@@ -18,6 +18,7 @@ export interface CreateOrderData {
   items: OrderItem[]
   deliveryType: 'normal' | 'express'
   deliveryAddress: string
+  paymentMethod?: 'palmpay' | 'bank' | 'card'
 }
 
 // Create a new order

@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, Truck, Zap, MapPin, Package, CreditCard, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, Truck, Zap, MapPin, Package, CreditCard, CheckCircle2, Wallet, Building2 } from "lucide-react"
 import { useCart } from "@/lib/cart-context"
 import { useRole } from "@/lib/role-context"
 import { createOrder } from "@/lib/order-actions"
 import { calculateDeliveryFee } from "@/lib/delivery-utils"
 import { formatNaira } from "@/lib/currency-utils"
+import { PaymentMethodSelector, type PaymentMethod } from "@/components/payment-method-selector"
 
 interface CheckoutPageProps {
   onBack: () => void
@@ -18,6 +19,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const { user } = useRole()
   const [deliveryType, setDeliveryType] = useState<'normal' | 'express'>('normal')
   const [deliveryAddress, setDeliveryAddress] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('palmpay')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [deliveryFee, setDeliveryFee] = useState(0)
@@ -66,6 +68,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       })),
       deliveryType,
       deliveryAddress: deliveryAddress.trim(),
+      paymentMethod,
     })
 
     setIsSubmitting(false)
@@ -186,6 +189,11 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
               className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl text-foreground placeholder:text-muted-foreground resize-none h-24"
             />
           </div>
+        </section>
+
+        {/* Payment Method Selection */}
+        <section className="p-4 border-b border-border">
+          <PaymentMethodSelector selectedMethod={paymentMethod} onSelect={setPaymentMethod} />
         </section>
 
         {/* Price Breakdown */}

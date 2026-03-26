@@ -4,6 +4,7 @@ import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-actions"
 import { MerchantProducts } from "@/components/merchant-products"
 import { MerchantOrders } from "@/components/merchant-orders"
+import { formatNaira } from "@/lib/currency-utils"
 import { ClipboardList } from "lucide-react"
 import {
   ArrowLeft,
@@ -34,10 +35,10 @@ import {
 import { useState } from "react"
 
 const stats = [
-  { label: "Total Sales", value: "$24,580", change: "+18.2%", trend: "up", icon: DollarSign },
+  { label: "Total Sales", value: "₦24,580", change: "+18.2%", trend: "up", icon: DollarSign },
   { label: "Active Orders", value: "47", change: "+5", trend: "up", icon: ShoppingBag },
   { label: "Token Balance", value: "2,450", change: "-120", trend: "down", icon: Coins },
-  { label: "Escrow Balance", value: "$3,240", change: "+$840", trend: "up", icon: Clock },
+  { label: "Escrow Balance", value: "₦3,240", change: "+₦840", trend: "up", icon: Clock },
 ]
 
 const quickActions = [

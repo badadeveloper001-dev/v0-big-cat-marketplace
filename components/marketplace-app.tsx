@@ -6,6 +6,7 @@ import { Onboarding } from "./onboarding"
 import { BuyerDashboard } from "./buyer-dashboard"
 import { MerchantDashboard } from "./merchant-dashboard"
 import { MerchantSetup } from "./merchant-setup"
+import { MerchantStoreSettings } from "./merchant-store-settings"
 import { AdminLogin } from "./admin-login"
 import { AdminDashboard } from "./admin-dashboard"
 
@@ -13,11 +14,14 @@ export function MarketplaceApp() {
   const { role, user, setUser, isLoading } = useRole()
   const [adminAuthenticated, setAdminAuthenticated] = useState(false)
   const [setupComplete, setSetupComplete] = useState(false)
+  const [storeSettingsComplete, setStoreSettingsComplete] = useState(false)
 
-  // Check if merchant setup is already completed from user data
+  // Check if merchant setup and store settings are already completed
   useEffect(() => {
     if (user?.merchantProfile?.setup_completed) {
       setSetupComplete(true)
+      // Assume store settings are complete if basic setup is complete
+      setStoreSettingsComplete(true)
     }
   }, [user])
 
@@ -59,6 +63,19 @@ export function MarketplaceApp() {
             })
           }
           setSetupComplete(true)
+        }}
+      />
+    )
+  }
+
+  // Handle merchant store settings flow - show after setup but before dashboard
+  const needsStoreSettings = role === "merchant" && setupComplete && !storeSettingsComplete
+  
+  if (needsStoreSettings) {
+    return (
+      <MerchantStoreSettings
+        onComplete={() => {
+          setStoreSettingsComplete(true)
         }}
       />
     )
