@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { getProductById } from '@/lib/product-actions'
-import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck } from 'lucide-react'
+import { formatNaira } from '@/lib/currency-utils'
+import { useCart } from '@/lib/cart-context'
+import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2 } from 'lucide-react'
 
 interface ProductDetailsPageProps {
   productId: string
@@ -14,6 +16,8 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [quantity, setQuantity] = useState(1)
+  const [addedToCart, setAddedToCart] = useState(false)
+  const { addItem } = useCart()
 
   useEffect(() => {
     loadProduct()
@@ -81,7 +85,7 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
             </div>
           </div>
 
-          <p className="text-2xl font-bold text-foreground">${parseFloat(product.price).toFixed(2)}</p>
+          <p className="text-2xl font-bold text-foreground">{formatNaira(product.price)}</p>
         </div>
 
         {/* Description */}
@@ -168,12 +172,36 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
 
         {/* Action Buttons */}
         <div className="space-y-3">
-          <button className="w-full py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-semibold flex items-center justify-center gap-2">
-            <ShoppingCart className="w-5 h-5" />
-            Add to Cart
-          </button>
-          <button className="w-full py-3 bg-secondary text-foreground rounded-lg hover:bg-secondary/80 transition-colors font-semibold">
-            Buy Now
+          <button 
+            onClick={() => {
+              addItem({
+                id: product.id,
+                name: product.name,
+                price: parseFloat(product.price),
+                quantity: quantity,
+                merchant: product.merchant_profiles?.business_name || 'Unknown',
+                merchantId: product.merchant_id,
+              })
+              setAddedToCart(true)
+              setTimeout(() => setAddedToCart(false), 2000)
+            }}
+            className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors ${
+              addedToCart
+                ? 'bg-green-500 text-white'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+            }`}
+          >
+            {addedToCart ? (
+              <>
+                <CheckCircle2 className="w-5 h-5" />
+                Added to Cart ✓
+              </>
+            ) : (
+              <>
+                <ShoppingCart className="w-5 h-5" />
+                Add to Cart
+              </>
+            )}
           </button>
         </div>
       </main>

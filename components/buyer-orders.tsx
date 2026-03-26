@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
 import { getBuyerOrders } from "@/lib/order-actions"
+import { formatNaira } from "@/lib/currency-utils"
 import { useRole } from "@/lib/role-context"
 
 interface BuyerOrdersProps {
@@ -128,7 +129,7 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Total</p>
                       <p className="font-semibold text-foreground">
-                        N{order.grand_total?.toLocaleString()}
+                        {formatNaira(order.grand_total)}
                       </p>
                     </div>
                   </div>

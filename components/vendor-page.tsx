@@ -16,7 +16,8 @@ import {
   Heart,
   Shield,
 } from "lucide-react"
-import { CheckoutDrawer } from "@/components/checkout-drawer"
+import { formatNaira } from "@/lib/currency-utils"
+import { useCart } from "@/lib/cart-context"
 
 interface VendorPageProps {
   vendor: {
@@ -93,12 +94,20 @@ const reviews = [
 ]
 
 export function VendorPage({ vendor, onBack }: VendorPageProps) {
-  const [checkoutOpen, setCheckoutOpen] = useState(false)
-  const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null)
+  const [addedToCart, setAddedToCart] = useState<string | null>(null)
+  const { addItem } = useCart()
 
-  const handleOrderNow = (product: typeof products[0]) => {
-    setSelectedProduct(product)
-    setCheckoutOpen(true)
+  const handleAddToCart = (product: typeof products[0]) => {
+    addItem({
+      id: String(product.id),
+      name: product.name,
+      price: product.price,
+      quantity: 1,
+      merchant: vendor.name,
+      merchantId: String(vendor.id),
+    })
+    setAddedToCart(String(product.id))
+    setTimeout(() => setAddedToCart(null), 2000)
   }
 
   // Determine AI recommendation based on vendor data
@@ -278,9 +287,9 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
                     <p className="text-sm text-muted-foreground mb-2 line-clamp-1">{product.description}</p>
                     
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="font-bold text-foreground">${product.price}</span>
+                      <span className="font-bold text-foreground">{formatNaira(product.price)}</span>
                       {product.originalPrice && (
-                        <span className="text-sm text-muted-foreground line-through">${product.originalPrice}</span>
+                        <span className="text-sm text-muted-foreground line-through">{formatNaira(product.originalPrice)}</span>
                       )}
                     </div>
                     
@@ -293,12 +302,16 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
                     </div>
                   </div>
 
-                  {/* Order Button */}
+                  {/* Add to Cart Button */}
                   <button
-                    onClick={() => handleOrderNow(product)}
-                    className="flex-shrink-0 px-4 py-2 h-fit bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap"
+                    onClick={() => handleAddToCart(product)}
+                    className={`flex-shrink-0 px-4 py-2 h-fit text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
+                      addedToCart === String(product.id)
+                        ? "bg-green-500 text-white"
+                        : "bg-primary text-primary-foreground hover:bg-primary/90"
+                    }`}
                   >
-                    Order Now
+                    {addedToCart === String(product.id) ? "Added ✓" : "Add to Cart"}
                   </button>
                 </div>
               </div>
@@ -361,25 +374,14 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
             <MessageCircle className="w-5 h-5" />
             Chat Vendor
           </button>
-          <button
-            onClick={() => handleOrderNow(products[0])}
-            className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-primary text-primary-foreground font-semibold rounded-2xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20"
-          >
+          <button className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-primary text-primary-foreground font-semibold rounded-2xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20">
             <ShoppingBag className="w-5 h-5" />
-            Order Now
+            Browse More
           </button>
         </div>
       </div>
 
-      {/* Checkout Drawer */}
-      {selectedProduct && (
-        <CheckoutDrawer
-          open={checkoutOpen}
-          onOpenChange={setCheckoutOpen}
-          product={selectedProduct}
-          vendor={vendor}
-        />
-      )}
+      {/* Checkout Drawer - Removed */}
     </div>
   )
 }
