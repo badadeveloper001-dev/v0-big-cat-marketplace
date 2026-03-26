@@ -1,6 +1,7 @@
 'use client'
 
 import { useCart } from '@/lib/cart-context'
+import { formatNaira } from '@/lib/currency-utils'
 import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft } from 'lucide-react'
 
 interface CartViewProps {
@@ -77,7 +78,7 @@ export function CartView({ onCheckout, onBack }: CartViewProps) {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground line-clamp-2">{item.name}</h3>
                       <p className="text-lg font-bold text-foreground mt-1">
-                        ${item.price.toFixed(2)}
+                        {formatNaira(item.price)}
                       </p>
 
                       {/* Quantity Controls */}
@@ -111,7 +112,7 @@ export function CartView({ onCheckout, onBack }: CartViewProps) {
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">Subtotal</p>
                         <p className="text-sm font-bold text-foreground">
-                          ${(item.price * item.quantity).toFixed(2)}
+                          {formatNaira(item.price * item.quantity)}
                         </p>
                       </div>
                     </div>
@@ -129,7 +130,7 @@ export function CartView({ onCheckout, onBack }: CartViewProps) {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="text-foreground">${total.toFixed(2)}</span>
+                <span className="text-foreground">{formatNaira(total)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Shipping</span>
@@ -137,7 +138,7 @@ export function CartView({ onCheckout, onBack }: CartViewProps) {
               </div>
               <div className="border-t border-border pt-2 flex justify-between font-bold">
                 <span className="text-foreground">Total</span>
-                <span className="text-lg text-primary">${total.toFixed(2)}</span>
+                <span className="text-lg text-primary">{formatNaira(total)}</span>
               </div>
             </div>
 

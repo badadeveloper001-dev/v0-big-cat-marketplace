@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getMerchantProducts, createProduct, deleteProduct, updateProduct, requestWeightVerification } from '@/lib/product-actions'
+import { formatNaira } from '@/lib/currency-utils'
 import { Plus, Trash2, Edit2, AlertCircle, Package, Loader2, X, Check } from 'lucide-react'
 
 interface MerchantProductsProps {
@@ -271,7 +272,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                   </p>
                   <div className="flex items-center gap-4 mt-3 flex-wrap">
                     <span className="text-sm font-medium text-foreground">
-                      ${parseFloat(product.price).toFixed(2)}
+                      {formatNaira(product.price)}
                     </span>
                     <span className="text-xs px-2 py-1 bg-secondary rounded-full text-foreground">
                       {product.category}

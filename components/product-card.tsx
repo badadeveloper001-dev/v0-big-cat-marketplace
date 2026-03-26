@@ -1,6 +1,7 @@
 'use client'
 
 import { ShoppingCart, Star, MapPin, Package } from 'lucide-react'
+import { formatNaira } from '@/lib/currency-utils'
 
 interface ProductCardProps {
   id: string
@@ -44,7 +45,7 @@ export function ProductCard({
             {name}
           </h3>
           <p className="text-2xl font-bold text-foreground mt-2">
-            ${price.toFixed(2)}
+            {formatNaira(price)}
           </p>
         </div>
 

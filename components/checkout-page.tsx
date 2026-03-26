@@ -6,6 +6,7 @@ import { useCart } from "@/lib/cart-context"
 import { useRole } from "@/lib/role-context"
 import { createOrder } from "@/lib/order-actions"
 import { calculateDeliveryFee } from "@/lib/delivery-utils"
+import { formatNaira } from "@/lib/currency-utils"
 
 interface CheckoutPageProps {
   onBack: () => void
@@ -120,7 +121,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
                   <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
                 </div>
                 <p className="font-medium text-foreground">
-                  N{(item.price * item.quantity).toLocaleString()}
+                  {formatNaira(item.price * item.quantity)}
                 </p>
               </div>
             ))}
@@ -193,19 +194,19 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Product Total</span>
-              <span className="font-medium text-foreground">N{productTotal.toLocaleString()}</span>
+              <span className="font-medium text-foreground">{formatNaira(productTotal)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Delivery Fee</span>
               <span className="font-medium text-foreground">
-                {deliveryAddress.trim() ? `N${deliveryFee.toLocaleString()}` : '--'}
+                {deliveryAddress.trim() ? formatNaira(deliveryFee) : '--'}
               </span>
             </div>
             <div className="h-px bg-border my-2" />
             <div className="flex justify-between">
               <span className="font-semibold text-foreground">Grand Total</span>
               <span className="font-bold text-primary text-lg">
-                {deliveryAddress.trim() ? `N${grandTotal.toLocaleString()}` : '--'}
+                {deliveryAddress.trim() ? formatNaira(grandTotal) : '--'}
               </span>
             </div>
           </div>
@@ -224,7 +225,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
           <div>
             <p className="text-sm text-muted-foreground">Total to pay</p>
             <p className="text-xl font-bold text-foreground">
-              {deliveryAddress.trim() ? `N${grandTotal.toLocaleString()}` : '--'}
+              {deliveryAddress.trim() ? formatNaira(grandTotal) : '--'}
             </p>
           </div>
           <button
