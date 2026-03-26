@@ -18,7 +18,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { useState, useEffect } from "react"
-import { getAllMerchants, getPlatformStats } from "@/lib/admin-actions"
+import { getMerchants, getPlatformStats } from "@/lib/admin-actions"
 
 export function AdminDashboard() {
   const { setRole } = useRole()
@@ -57,7 +57,7 @@ export function AdminDashboard() {
   const loadApprovals = async () => {
     setLoadingApprovals(true)
     try {
-      const result = await getAllMerchants()
+      const result = await getMerchants()
       if (result.success && result.data) {
         const pending = result.data
           .filter((m: any) => m.approval_status === "pending")

@@ -31,7 +31,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { useState, useEffect } from "react"
-import { getAllMerchants } from "@/lib/admin-actions"
+import { getMerchants } from "@/lib/admin-actions"
 import { getBuyerOrders } from "@/lib/order-actions"
 import { formatNaira } from "@/lib/currency-utils"
 
@@ -76,7 +76,7 @@ export function BuyerDashboard() {
   const loadMerchants = async () => {
     setLoadingMerchants(true)
     try {
-      const result = await getAllMerchants()
+      const result = await getMerchants()
       if (result.success) {
         const merchantsData = result.data.map((m: any) => ({
           id: m.id,
@@ -179,63 +179,8 @@ export function BuyerDashboard() {
     return <BuyerOrders onBack={() => setShowOrders(false)} />
   }
 
-  const displayName = user?.full_name || "Customer"
+  const displayName = user?.name || "Customer"
   const displayMerchants = merchants.slice(0, 3)
-
-  const handleLogout = async () => {
-    const result = await logout()
-    if (result.success) {
-      setUser(null)
-      setRole(null)
-    }
-  }
-
-  const handleSuggestionTap = (s: string) => {
-    setSearchQuery(s)
-    setAiExpanded(false)
-  }
-
-  // Show vendor page if a vendor is selected
-  if (selectedVendor) {
-    return <VendorPage vendor={selectedVendor} onBack={() => setSelectedVendor(null)} />
-  }
-
-  // Show products marketplace if selected
-  if (showProducts) {
-    return <ProductsMarketplace onBack={() => setShowProducts(false)} />
-  }
-
-  // Show cart if selected
-  if (showCart) {
-    return (
-      <CartView 
-        onBack={() => setShowCart(false)} 
-        onCheckout={() => {
-          setShowCart(false)
-          setShowCheckout(true)
-        }}
-      />
-    )
-  }
-
-  // Show checkout page
-  if (showCheckout) {
-    return (
-      <CheckoutPage 
-        onBack={() => setShowCheckout(false)} 
-        onSuccess={(orderId) => {
-          setShowCheckout(false)
-          setOrderSuccess(orderId)
-          setShowOrders(true)
-        }}
-      />
-    )
-  }
-
-  // Show orders page
-  if (showOrders) {
-    return <BuyerOrders onBack={() => setShowOrders(false)} />
-  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">

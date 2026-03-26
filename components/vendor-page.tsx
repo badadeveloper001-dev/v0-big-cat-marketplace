@@ -54,8 +54,8 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
     setLoading(true)
     try {
       const result = await getMerchantProducts(String(vendor.id))
-      if (result.success && result.products) {
-        setProducts(result.products)
+      if (result.success && result.data) {
+        setProducts(result.data)
       }
     } catch (error) {
       console.error("Error loading products:", error)
@@ -67,11 +67,13 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
   const handleAddToCart = (product: any) => {
     addItem({
       id: product.id,
+      productId: product.id,
       name: product.name,
       price: parseFloat(product.price),
       quantity: 1,
-      merchant: vendor.name,
       merchantId: String(vendor.id),
+      merchantName: vendor.name,
+    })
     })
     setAddedToCart(product.id)
     setTimeout(() => setAddedToCart(null), 2000)
