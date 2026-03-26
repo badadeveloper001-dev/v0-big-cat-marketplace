@@ -2,20 +2,88 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, Loader2 } from "lucide-react"
+import { getPlatformStats, getRecentUsers, getRecentOrders, getLogisticsStats } from "@/lib/admin-actions"
+import { formatNaira } from "@/lib/currency-utils"
 
 export function BigcatAdminDashboard() {
   const router = useRouter()
   const [isAuthorized, setIsAuthorized] = useState(false)
+  const [platformStats, setPlatformStats] = useState({
+    totalUsers: 0,
+    totalMerchants: 0,
+    totalOrders: 0,
+    totalRevenue: 0
+  })
+  const [logisticsStats, setLogisticsStats] = useState({
+    activeDeliveries: 0,
+    completedDeliveries: 0,
+    pendingDeliveries: 0
+  })
+  const [recentUsers, setRecentUsers] = useState<any[]>([])
+  const [recentOrders, setRecentOrders] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const adminAccess = sessionStorage.getItem("adminAccess")
     if (adminAccess === "BIGCAT_00") {
       setIsAuthorized(true)
+      loadData()
     } else {
       router.push("/")
     }
   }, [router])
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const [statsResult, logisticsResult, usersResult, ordersResult] = await Promise.all([
+        getPlatformStats(),
+        getLogisticsStats(),
+        getRecentUsers(),
+        getRecentOrders()
+      ])
+
+      if (statsResult.success) {
+        setPlatformStats(statsResult.stats)
+      }
+
+      if (logisticsResult.success) {
+        setLogisticsStats(logisticsResult.stats)
+      }
+
+      if (usersResult.success) {
+        const userData = usersResult.data.map((u: any) => ({
+          id: u.id,
+          name: u.full_name || u.email?.split('@')[0] || 'Unknown',
+          email: u.email,
+          joined: new Date(u.created_at).toLocaleDateString(),
+          type: u.role || 'buyer',
+        }))
+        setRecentUsers(userData)
+      }
+
+      if (ordersResult.success) {
+        const orderData = ordersResult.data.map((o: any) => ({
+          id: o.id,
+          user: o.buyerName || o.buyer_id?.substring(0, 8) || 'Unknown',
+          amount: o.grand_total || 0,
+          status: o.status || 'pending',
+          date: new Date(o.created_at).toLocaleDateString(),
+        }))
+        setRecentOrders(orderData)
+      }
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const interval = setInterval(loadData, 60000) // Refresh every minute
+    return () => clearInterval(interval)
+  }, [])
 
   if (!isAuthorized) {
     return (
@@ -30,48 +98,34 @@ export function BigcatAdminDashboard() {
   const stats = [
     {
       label: "Total Users",
-      value: "2,847",
+      value: platformStats.totalUsers,
       icon: Users,
       color: "bg-blue-100 text-blue-600",
     },
     {
       label: "Total Merchants",
-      value: "342",
+      value: platformStats.totalMerchants,
       icon: Store,
       color: "bg-purple-100 text-purple-600",
     },
     {
       label: "Total Orders",
-      value: "12,456",
+      value: platformStats.totalOrders,
       icon: ShoppingBag,
       color: "bg-green-100 text-green-600",
     },
     {
       label: "Total Revenue",
-      value: "₦4.2M",
+      value: formatNaira(platformStats.totalRevenue),
       icon: TrendingUp,
       color: "bg-orange-100 text-orange-600",
     },
   ]
 
   const logisticsData = [
-    { label: "Active Deliveries", value: "245", color: "text-blue-600" },
-    { label: "Completed Deliveries", value: "8,934", color: "text-green-600" },
-    { label: "Pending Deliveries", value: "67", color: "text-yellow-600" },
-  ]
-
-  const recentUsers = [
-    { id: 1, name: "John Doe", email: "john@example.com", joined: "2 days ago", type: "buyer" },
-    { id: 2, name: "Jane Smith", email: "jane@example.com", joined: "1 week ago", type: "merchant" },
-    { id: 3, name: "Tech Solutions", email: "tech@example.com", joined: "2 weeks ago", type: "merchant" },
-    { id: 4, name: "Alice Johnson", email: "alice@example.com", joined: "3 weeks ago", type: "buyer" },
-  ]
-
-  const recentOrders = [
-    { id: "ORD001", user: "John Doe", amount: 45000, status: "delivered", date: "2024-03-20" },
-    { id: "ORD002", user: "Jane Smith", amount: 32500, status: "processing", date: "2024-03-20" },
-    { id: "ORD003", user: "Tech Solutions", amount: 125000, status: "delivered", date: "2024-03-19" },
-    { id: "ORD004", user: "Fashion Forward", amount: 78000, status: "pending", date: "2024-03-19" },
+    { label: "Active Deliveries", value: logisticsStats.activeDeliveries, color: "text-blue-600" },
+    { label: "Completed Deliveries", value: logisticsStats.completedDeliveries, color: "text-green-600" },
+    { label: "Pending Deliveries", value: logisticsStats.pendingDeliveries, color: "text-yellow-600" },
   ]
 
   return (
@@ -85,10 +139,17 @@ export function BigcatAdminDashboard() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold text-foreground">BigCat Super Admin</h1>
             <p className="text-sm text-muted-foreground">Complete Marketplace Overview</p>
           </div>
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="px-3 py-1 bg-primary text-primary-foreground rounded text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}
+          </button>
         </div>
       </div>
 
@@ -139,13 +200,13 @@ export function BigcatAdminDashboard() {
             <h2 className="font-bold text-lg text-foreground mb-6">Quick Access</h2>
             <div className="flex flex-col gap-3">
               <button className="w-full p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium transition-colors text-left">
-                View All Users
+                View All Users ({platformStats.totalUsers})
               </button>
               <button className="w-full p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-medium transition-colors text-left">
-                View All Merchants
+                View All Merchants ({platformStats.totalMerchants})
               </button>
               <button className="w-full p-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg font-medium transition-colors text-left">
-                View All Orders
+                View All Orders ({platformStats.totalOrders})
               </button>
             </div>
           </div>
@@ -158,25 +219,29 @@ export function BigcatAdminDashboard() {
             <div className="p-6 border-b border-border">
               <h2 className="font-bold text-lg text-foreground">Recent Users</h2>
             </div>
-            <div className="divide-y divide-border">
-              {recentUsers.map((user) => (
-                <div key={user.id} className="p-4 hover:bg-muted/30 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium text-foreground">{user.name}</p>
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{user.joined}</p>
+            <div className="divide-y divide-border max-h-96 overflow-y-auto">
+              {recentUsers.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">No users found</div>
+              ) : (
+                recentUsers.map((user) => (
+                  <div key={user.id} className="p-4 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{user.name}</p>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{user.joined}</p>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                        user.type === "merchant"
+                          ? "bg-purple-100 text-purple-700"
+                          : "bg-blue-100 text-blue-700"
+                      }`}>
+                        {user.type}
+                      </span>
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      user.type === "merchant"
-                        ? "bg-purple-100 text-purple-700"
-                        : "bg-blue-100 text-blue-700"
-                    }`}>
-                      {user.type}
-                    </span>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -186,29 +251,33 @@ export function BigcatAdminDashboard() {
               <h2 className="font-bold text-lg text-foreground">Recent Orders</h2>
             </div>
             <div className="divide-y divide-border max-h-96 overflow-y-auto">
-              {recentOrders.map((order) => (
-                <div key={order.id} className="p-4 hover:bg-muted/30 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium text-foreground">{order.id}</p>
-                      <p className="text-xs text-muted-foreground">{order.user}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{order.date}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-foreground">₦{(order.amount / 1000).toFixed(0)}K</p>
-                      <span className={`text-xs font-semibold px-2 py-1 rounded inline-block mt-1 ${
-                        order.status === "delivered"
-                          ? "bg-green-100 text-green-700"
-                          : order.status === "processing"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}>
-                        {order.status}
-                      </span>
+              {recentOrders.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">No orders found</div>
+              ) : (
+                recentOrders.map((order) => (
+                  <div key={order.id} className="p-4 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{order.id.substring(0, 8)}</p>
+                        <p className="text-xs text-muted-foreground">{order.user}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{order.date}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-foreground">{formatNaira(order.amount)}</p>
+                        <span className={`text-xs font-semibold px-2 py-1 rounded inline-block mt-1 ${
+                          order.status === "delivered"
+                            ? "bg-green-100 text-green-700"
+                            : order.status === "processing"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                          {order.status}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
