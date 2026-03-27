@@ -10,13 +10,15 @@ interface BuyerOrdersProps {
   onBack: () => void
 }
 
-const statusConfig: { [key: string]: { label: string; color: string; icon: any } } = {
-  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700', icon: Clock },
-  paid: { label: 'Paid', color: 'bg-blue-100 text-blue-700', icon: Package },
-  processing: { label: 'Processing', color: 'bg-purple-100 text-purple-700', icon: RefreshCw },
-  shipped: { label: 'Shipped', color: 'bg-indigo-100 text-indigo-700', icon: Truck },
-  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
+const statusConfig: { [key: string]: { label: string; color: string; icon: any; step: number } } = {
+  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700', icon: Clock, step: 1 },
+  paid: { label: 'Paid', color: 'bg-blue-100 text-blue-700', icon: Package, step: 2 },
+  processing: { label: 'Processing', color: 'bg-purple-100 text-purple-700', icon: RefreshCw, step: 3 },
+  shipped: { label: 'Shipped', color: 'bg-indigo-100 text-indigo-700', icon: Truck, step: 4 },
+  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', icon: CheckCircle2, step: 5 },
 }
+
+const orderSteps = ['Pending', 'Paid', 'Processing', 'Shipped', 'Delivered']
 
 export function BuyerOrders({ onBack }: BuyerOrdersProps) {
   const { user } = useRole()
@@ -131,6 +133,48 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
                       <p className="font-semibold text-foreground">
                         {formatNaira(order.grand_total)}
                       </p>
+                    </div>
+                  </div>
+
+                  {/* Order Progress */}
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <p className="text-xs text-muted-foreground mb-3">Order Progress</p>
+                    <div className="flex items-center justify-between">
+                      {orderSteps.map((step, index) => {
+                        const currentStep = statusConfig[order.status]?.step || 1
+                        const isCompleted = index + 1 < currentStep
+                        const isCurrent = index + 1 === currentStep
+                        return (
+                          <div key={step} className="flex flex-col items-center flex-1">
+                            <div className="relative flex items-center w-full">
+                              {index > 0 && (
+                                <div className={`absolute left-0 right-1/2 h-0.5 -translate-y-1/2 top-3 ${
+                                  isCompleted || isCurrent ? 'bg-primary' : 'bg-border'
+                                }`} />
+                              )}
+                              {index < orderSteps.length - 1 && (
+                                <div className={`absolute left-1/2 right-0 h-0.5 -translate-y-1/2 top-3 ${
+                                  isCompleted ? 'bg-primary' : 'bg-border'
+                                }`} />
+                              )}
+                              <div className={`relative z-10 mx-auto w-6 h-6 rounded-full flex items-center justify-center text-xs ${
+                                isCompleted 
+                                  ? 'bg-primary text-primary-foreground' 
+                                  : isCurrent 
+                                    ? 'bg-primary text-primary-foreground ring-4 ring-primary/20' 
+                                    : 'bg-muted text-muted-foreground'
+                              }`}>
+                                {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : index + 1}
+                              </div>
+                            </div>
+                            <span className={`text-xs mt-1.5 ${
+                              isCompleted || isCurrent ? 'text-foreground font-medium' : 'text-muted-foreground'
+                            }`}>
+                              {step.slice(0, 4)}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
 

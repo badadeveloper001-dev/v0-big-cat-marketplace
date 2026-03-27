@@ -58,6 +58,8 @@ export function BuyerDashboard() {
   const [aiExpanded, setAiExpanded] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState<any | null>(null)
   const [showProducts, setShowProducts] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [productSearchQuery, setProductSearchQuery] = useState("")
   const [showCart, setShowCart] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
   const [showOrders, setShowOrders] = useState(false)
@@ -146,7 +148,17 @@ export function BuyerDashboard() {
   }
 
   if (showProducts) {
-    return <ProductsMarketplace onBack={() => setShowProducts(false)} />
+    return (
+      <ProductsMarketplace 
+        onBack={() => {
+          setShowProducts(false)
+          setSelectedCategory(null)
+          setProductSearchQuery("")
+        }}
+        initialCategory={selectedCategory}
+        initialSearch={productSearchQuery}
+      />
+    )
   }
 
   if (showCart) {
@@ -264,6 +276,13 @@ export function BuyerDashboard() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => setAiExpanded(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim()) {
+                      setProductSearchQuery(searchQuery)
+                      setShowProducts(true)
+                      setAiExpanded(false)
+                    }
+                  }}
                   placeholder="Ask anything or search..."
                   className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none text-base"
                 />
@@ -362,7 +381,10 @@ export function BuyerDashboard() {
         <section className="mb-6">
           <div className="flex items-center justify-between px-4 mb-3">
             <h2 className="font-semibold text-foreground text-lg">Categories</h2>
-            <button className="text-sm text-primary font-medium flex items-center gap-0.5">
+            <button 
+              onClick={() => setShowProducts(true)}
+              className="text-sm text-primary font-medium flex items-center gap-0.5"
+            >
               See all <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -370,6 +392,10 @@ export function BuyerDashboard() {
             {categories.map((cat) => (
               <button
                 key={cat.name}
+                onClick={() => {
+                  setSelectedCategory(cat.name)
+                  setShowProducts(true)
+                }}
                 className="flex flex-col items-center gap-2 flex-shrink-0"
               >
                 <div className={`w-16 h-16 rounded-2xl ${cat.color} flex items-center justify-center text-2xl shadow-sm border border-border/50 hover:scale-105 transition-transform`}>

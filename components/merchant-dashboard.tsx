@@ -457,7 +457,7 @@ export function MerchantDashboard() {
         </section>
           </>
         ) : activeTab === "products" ? (
-          <MerchantProducts userId={setUser && "mock-user-id"} />
+          <MerchantProducts userId={user?.userId || ""} />
         ) : activeTab === "orders" ? (
           <MerchantOrders onBack={() => setActiveTab("home")} />
         ) : null}

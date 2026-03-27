@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getAllProducts } from '@/lib/product-actions'
-import { Search, Filter, X } from 'lucide-react'
+import { Search, Filter, X, ArrowLeft } from 'lucide-react'
 import { ProductCard, ProductGrid } from './product-card'
 
 const CATEGORIES = [
@@ -21,14 +21,17 @@ const CATEGORIES = [
 
 interface ProductsMarketplaceProps {
   onProductClick?: (productId: string) => void
+  onBack?: () => void
+  initialCategory?: string | null
+  initialSearch?: string
 }
 
-export function ProductsMarketplace({ onProductClick }: ProductsMarketplaceProps) {
+export function ProductsMarketplace({ onProductClick, onBack, initialCategory, initialSearch }: ProductsMarketplaceProps) {
   const [products, setProducts] = useState<any[]>([])
   const [filteredProducts, setFilteredProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('')
+  const [searchQuery, setSearchQuery] = useState(initialSearch || '')
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory || '')
   const [showFilters, setShowFilters] = useState(false)
 
   // Load all products on mount
@@ -80,9 +83,26 @@ export function ProductsMarketplace({ onProductClick }: ProductsMarketplaceProps
   const hasActiveFilters = searchQuery || selectedCategory
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      {onBack && (
+        <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={onBack}
+              className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="font-semibold text-foreground">Products</h1>
+            <div className="w-9" />
+          </div>
+        </header>
+      )}
+
       {/* Search Bar */}
-      <div className="sticky top-0 z-40 bg-background px-4 py-4 border-b border-border">
+      <div className="sticky top-14 z-40 bg-background px-4 py-4 border-b border-border">
         <div className="flex gap-3">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -200,6 +220,7 @@ export function ProductsMarketplace({ onProductClick }: ProductsMarketplaceProps
             name: p.name,
             price: p.price,
             category: p.category,
+            image: p.images?.[0] || null,
             merchant: {
               id: p.merchant_profiles?.id || '',
               business_name: p.merchant_profiles?.business_name || 'Unknown',

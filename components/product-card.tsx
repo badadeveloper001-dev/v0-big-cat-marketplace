@@ -2,12 +2,14 @@
 
 import { ShoppingCart, Star, MapPin, Package } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
+import Image from 'next/image'
 
 interface ProductCardProps {
   id: string
   name: string
   price: number
   category: string
+  image?: string | null
   merchant: {
     id: string
     business_name: string
@@ -22,6 +24,7 @@ export function ProductCard({
   name,
   price,
   category,
+  image,
   merchant,
   onClick,
 }: ProductCardProps) {
@@ -30,12 +33,22 @@ export function ProductCard({
       onClick={onClick}
       className="group bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer"
     >
-      {/* Product Image Placeholder */}
+      {/* Product Image */}
       <div className="aspect-square bg-gradient-to-br from-secondary to-secondary/50 flex items-center justify-center overflow-hidden relative">
-        <div className="flex flex-col items-center justify-center text-muted-foreground group-hover:scale-110 transition-transform">
-          <Package className="w-12 h-12 opacity-50" />
-          <span className="text-xs mt-2 text-center px-2">{category}</span>
-        </div>
+        {image ? (
+          <Image
+            src={image}
+            alt={name}
+            fill
+            className="object-cover group-hover:scale-105 transition-transform"
+            sizes="(max-width: 768px) 50vw, 33vw"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center text-muted-foreground group-hover:scale-110 transition-transform">
+            <Package className="w-12 h-12 opacity-50" />
+            <span className="text-xs mt-2 text-center px-2">{category}</span>
+          </div>
+        )}
       </div>
 
       {/* Product Info */}

@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react'
 import { getMerchantProducts, createProduct, deleteProduct, updateProduct, requestWeightVerification } from '@/lib/product-actions'
 import { formatNaira } from '@/lib/currency-utils'
-import { Plus, Trash2, Edit2, AlertCircle, Package, Loader2, X, Check } from 'lucide-react'
+import { Plus, Trash2, Edit2, AlertCircle, Package, Loader2, X, Check, ImageIcon } from 'lucide-react'
+import { ImageUpload, ProductImage } from './image-upload'
+import Image from 'next/image'
 
 interface MerchantProductsProps {
   merchantId: string
@@ -35,6 +37,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
     price: '',
     category: 'Electronics',
     weight: '',
+    images: [] as string[],
   })
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -80,11 +83,12 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
       price: parseFloat(formData.price),
       category: formData.category,
       weight: formData.weight ? parseFloat(formData.weight) : undefined,
+      images: formData.images,
     })
 
     if (result.success) {
       setSuccess('Product created successfully!')
-      setFormData({ name: '', description: '', price: '', category: 'Electronics', weight: '' })
+      setFormData({ name: '', description: '', price: '', category: 'Electronics', weight: '', images: [] })
       setShowAddForm(false)
       loadProducts()
     } else {
@@ -168,6 +172,18 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
           </div>
 
           <form onSubmit={handleAddProduct} className="space-y-4">
+            {/* Product Images */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Product Images
+              </label>
+              <ImageUpload
+                images={formData.images}
+                onImagesChange={(images) => setFormData({ ...formData, images })}
+                maxImages={4}
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Product Name
@@ -263,9 +279,26 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
             {products.map((product) => (
               <div
                 key={product.id}
-                className="bg-card border border-border rounded-lg p-4 flex items-start justify-between"
+                className="bg-card border border-border rounded-lg p-4 flex items-start gap-4"
               >
-                <div className="flex-1">
+                {/* Product Image */}
+                <div className="w-20 h-20 rounded-lg overflow-hidden bg-secondary flex-shrink-0">
+                  {product.images && product.images[0] ? (
+                    <Image
+                      src={product.images[0]}
+                      alt={product.name}
+                      width={80}
+                      height={80}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-foreground">{product.name}</h4>
                   <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                     {product.description}

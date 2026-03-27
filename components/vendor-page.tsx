@@ -17,7 +17,9 @@ import {
   Shield,
   Loader2,
   Package,
+  ImageIcon,
 } from "lucide-react"
+import Image from "next/image"
 import { formatNaira } from "@/lib/currency-utils"
 import { useCart } from "@/lib/cart-context"
 import { getMerchantProducts } from "@/lib/product-actions"
@@ -39,6 +41,40 @@ interface VendorPageProps {
   }
   onBack: () => void
 }
+
+const portfolioImages = [
+  { id: 1, label: "Formal Wear" },
+  { id: 2, label: "Dresses" },
+  { id: 3, label: "Casual" },
+  { id: 4, label: "Accessories" },
+]
+
+const reviews = [
+  {
+    id: 1,
+    name: "Adaeze O.",
+    date: "2 days ago",
+    rating: 5,
+    comment: "Excellent service and quality products! Will definitely order again.",
+    verified: true,
+  },
+  {
+    id: 2,
+    name: "Chidi M.",
+    date: "1 week ago",
+    rating: 4,
+    comment: "Good quality, fast delivery. The packaging was also very nice.",
+    verified: true,
+  },
+  {
+    id: 3,
+    name: "Funke A.",
+    date: "2 weeks ago",
+    rating: 5,
+    comment: "This vendor is amazing! Very responsive and professional.",
+    verified: false,
+  },
+]
 
 export function VendorPage({ vendor, onBack }: VendorPageProps) {
   const [addedToCart, setAddedToCart] = useState<string | null>(null)
@@ -252,8 +288,18 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
                   className="bg-card border border-border rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all"
                 >
                   <div className="flex gap-4">
-                    <div className="w-20 h-20 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
-                      <span className="text-3xl">📦</span>
+                    <div className="w-20 h-20 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {product.images && product.images[0] ? (
+                        <Image
+                          src={product.images[0]}
+                          alt={product.name}
+                          width={80}
+                          height={80}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                      )}
                     </div>
                     
                     <div className="flex-1 min-w-0">
