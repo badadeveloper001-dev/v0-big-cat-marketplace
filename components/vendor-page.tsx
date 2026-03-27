@@ -74,7 +74,6 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
       merchantId: String(vendor.id),
       merchantName: vendor.name,
     })
-    })
     setAddedToCart(product.id)
     setTimeout(() => setAddedToCart(null), 2000)
   }
