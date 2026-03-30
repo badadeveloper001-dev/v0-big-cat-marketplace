@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react'
 import { getProductById } from '@/lib/product-actions'
 import { formatNaira } from '@/lib/currency-utils'
 import { useCart } from '@/lib/cart-context'
-import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2, ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react'
+import { ProductReviews, StarRating } from './product-reviews'
+import Image from 'next/image'
 
 interface ProductDetailsPageProps {
   productId: string
@@ -17,6 +19,7 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
   const [error, setError] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [addedToCart, setAddedToCart] = useState(false)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const { addItem } = useCart()
 
   useEffect(() => {
@@ -69,9 +72,54 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {/* Product Image */}
-        <div className="aspect-square bg-gradient-to-br from-secondary to-secondary/50 rounded-xl flex items-center justify-center">
-          <Package className="w-24 h-24 text-muted-foreground opacity-50" />
+        {/* Product Image Gallery */}
+        <div className="relative">
+          <div className="aspect-square bg-gradient-to-br from-secondary to-secondary/50 rounded-xl overflow-hidden relative">
+            {product.images && product.images.length > 0 ? (
+              <Image
+                src={product.images[currentImageIndex]}
+                alt={product.name}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <ImageIcon className="w-24 h-24 text-muted-foreground opacity-50" />
+              </div>
+            )}
+          </div>
+          
+          {/* Image Navigation */}
+          {product.images && product.images.length > 1 && (
+            <>
+              <button
+                onClick={() => setCurrentImageIndex((i) => (i === 0 ? product.images.length - 1 : i - 1))}
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-background/80 backdrop-blur-sm rounded-full flex items-center justify-center text-foreground hover:bg-background transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setCurrentImageIndex((i) => (i === product.images.length - 1 ? 0 : i + 1))}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-background/80 backdrop-blur-sm rounded-full flex items-center justify-center text-foreground hover:bg-background transition-colors"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+              
+              {/* Image Dots */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {product.images.map((_: string, i: number) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentImageIndex(i)}
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      i === currentImageIndex ? 'bg-primary' : 'bg-background/60'
+                    }`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Product Info */}
@@ -85,7 +133,12 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
             </div>
           </div>
 
-          <p className="text-2xl font-bold text-foreground">{formatNaira(product.price)}</p>
+          <div className="flex items-center gap-4">
+            <p className="text-2xl font-bold text-foreground">{formatNaira(product.price)}</p>
+            {product.average_rating > 0 && (
+              <StarRating rating={product.average_rating} reviews={product.review_count} />
+            )}
+          </div>
         </div>
 
         {/* Description */}
@@ -170,17 +223,24 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
           </div>
         </div>
 
+        {/* Reviews Section */}
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">Customer Reviews</h2>
+          <ProductReviews productId={product.id} productName={product.name} />
+        </div>
+
         {/* Action Buttons */}
         <div className="space-y-3">
           <button 
             onClick={() => {
               addItem({
                 id: product.id,
+                productId: product.id,
                 name: product.name,
                 price: parseFloat(product.price),
                 quantity: quantity,
-                merchant: product.merchant_profiles?.business_name || 'Unknown',
                 merchantId: product.merchant_id,
+                merchantName: product.merchant_profiles?.business_name || 'Unknown',
               })
               setAddedToCart(true)
               setTimeout(() => setAddedToCart(false), 2000)
