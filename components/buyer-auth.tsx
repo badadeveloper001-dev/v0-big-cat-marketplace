@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRole } from "@/lib/role-context"
-import { buyerSignupWithName, emailPasswordLogin } from "@/lib/auth-actions"
+import { buyerSignupWithName, emailPasswordLogin, requestPasswordReset, resetPassword } from "@/lib/auth-actions"
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, User, Chrome, Apple, Loader2, CheckCircle2 } from "lucide-react"
 
 export function BuyerAuth({ onBack }: { onBack: () => void }) {
@@ -12,6 +12,10 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
   const [successMessage, setSuccessMessage] = useState<string>("")
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [resetStep, setResetStep] = useState<"email" | "code" | "newPassword">("email")
+  const [resetToken, setResetToken] = useState("")
+  const [newPassword, setNewPassword] = useState("")
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -86,6 +90,196 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
       ...formData,
       [e.target.name]: e.target.value,
     })
+  }
+
+  const handleRequestReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    const result = await requestPasswordReset(formData.email)
+    
+    if (result.success) {
+      setSuccessMessage("Check your email for the reset code")
+      setResetStep("code")
+      // For demo purposes, show the token
+      if (result.data?.resetToken) {
+        setSuccessMessage(`Reset code: ${result.data.resetToken} (In production, this would be sent via email)`)
+      }
+    } else {
+      setError(result.error || "Failed to send reset code")
+    }
+    setLoading(false)
+  }
+
+  const handleVerifyAndReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    const result = await resetPassword(formData.email, resetToken, newPassword)
+    
+    if (result.success) {
+      setSuccessMessage("Password reset successfully! You can now sign in.")
+      setShowForgotPassword(false)
+      setResetStep("email")
+      setResetToken("")
+      setNewPassword("")
+    } else {
+      setError(result.error || "Failed to reset password")
+    }
+    setLoading(false)
+  }
+
+  // Forgot Password Modal
+  if (showForgotPassword) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30 flex flex-col font-sans">
+        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border px-4 py-3">
+          <button
+            onClick={() => {
+              setShowForgotPassword(false)
+              setResetStep("email")
+              setError("")
+              setSuccessMessage("")
+            }}
+            className="p-2 -ml-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all rounded-lg"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-sm">
+            <div className="bg-card rounded-3xl shadow-2xl border border-border/50 p-8">
+              <div className="text-center mb-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-5 shadow-lg shadow-primary/25">
+                  <Lock className="w-8 h-8 text-primary-foreground" />
+                </div>
+                <h1 className="text-2xl font-bold text-foreground mb-2">
+                  {resetStep === "email" && "Reset Password"}
+                  {resetStep === "code" && "Enter Reset Code"}
+                  {resetStep === "newPassword" && "New Password"}
+                </h1>
+                <p className="text-muted-foreground text-sm">
+                  {resetStep === "email" && "Enter your email to receive a reset code"}
+                  {resetStep === "code" && "Enter the 6-digit code sent to your email"}
+                  {resetStep === "newPassword" && "Create your new password"}
+                </p>
+              </div>
+
+              {error && (
+                <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-xl">
+                  <p className="text-sm text-destructive font-medium">{error}</p>
+                </div>
+              )}
+
+              {successMessage && (
+                <div className="mb-6 p-4 bg-success/10 border border-success/30 rounded-xl">
+                  <p className="text-sm text-success font-medium">{successMessage}</p>
+                </div>
+              )}
+
+              {resetStep === "email" && (
+                <form onSubmit={handleRequestReset} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-foreground">Email Address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        placeholder="you@example.com"
+                        required
+                        className="w-full pl-12 pr-4 py-3 bg-secondary/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Send Reset Code
+                  </button>
+                </form>
+              )}
+
+              {resetStep === "code" && (
+                <form onSubmit={(e) => { e.preventDefault(); setResetStep("newPassword"); }} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-foreground">Reset Code</label>
+                    <input
+                      type="text"
+                      value={resetToken}
+                      onChange={(e) => setResetToken(e.target.value)}
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      required
+                      className="w-full px-4 py-3 bg-secondary/50 border border-border rounded-xl text-foreground text-center text-2xl tracking-widest placeholder:text-muted-foreground placeholder:text-base placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={resetToken.length !== 6}
+                    className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all disabled:opacity-60"
+                  >
+                    Verify Code
+                  </button>
+                </form>
+              )}
+
+              {resetStep === "newPassword" && (
+                <form onSubmit={handleVerifyAndReset} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-foreground">New Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Enter new password"
+                        required
+                        className="w-full pl-12 pr-12 py-3 bg-secondary/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Must be 8+ characters with uppercase and number
+                    </p>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || newPassword.length < 8}
+                    className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Reset Password
+                  </button>
+                </form>
+              )}
+
+              <button
+                onClick={() => setShowForgotPassword(false)}
+                className="w-full mt-4 py-2 text-muted-foreground text-sm hover:text-foreground transition-colors"
+              >
+                Back to Sign In
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -227,6 +421,19 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
+                {!isSignUp && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword(true)
+                      setError("")
+                      setSuccessMessage("")
+                    }}
+                    className="text-sm text-primary hover:underline mt-1"
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
 
               {/* Submit Button */}

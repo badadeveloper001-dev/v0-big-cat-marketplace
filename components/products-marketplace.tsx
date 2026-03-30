@@ -33,6 +33,8 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
   const [searchQuery, setSearchQuery] = useState(initialSearch || '')
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || '')
   const [showFilters, setShowFilters] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 12
 
   // Load all products on mount
   useEffect(() => {
@@ -42,6 +44,7 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
   // Filter products when search query or category changes
   useEffect(() => {
     filterProducts()
+    setCurrentPage(1) // Reset to first page when filters change
   }, [searchQuery, selectedCategory, products])
 
   const loadProducts = async () => {
@@ -74,6 +77,11 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
 
     setFilteredProducts(filtered)
   }
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const paginatedProducts = filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE)
 
   const handleClearFilters = () => {
     setSearchQuery('')
@@ -213,9 +221,9 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
       </div>
 
       {/* Products Grid */}
-      <div className="px-4 pb-20">
+      <div className="px-4 pb-6">
         <ProductGrid
-          products={filteredProducts.map((p) => ({
+          products={paginatedProducts.map((p) => ({
             id: p.id,
             name: p.name,
             price: p.price,
@@ -232,6 +240,63 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
           loading={loading}
         />
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="px-4 pb-20 flex items-center justify-center gap-2">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Previous
+          </button>
+          
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum
+              if (totalPages <= 5) {
+                pageNum = i + 1
+              } else if (currentPage <= 3) {
+                pageNum = i + 1
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i
+              } else {
+                pageNum = currentPage - 2 + i
+              }
+              
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors ${
+                    currentPage === pageNum
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              )
+            })}
+          </div>
+          
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Next
+          </button>
+        </div>
+      )}
+
+      {/* Results info */}
+      {!loading && filteredProducts.length > 0 && (
+        <div className="px-4 pb-4 text-center text-sm text-muted-foreground">
+          Showing {startIndex + 1}-{Math.min(startIndex + ITEMS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length} products
+        </div>
+      )}
     </div>
   )
 }

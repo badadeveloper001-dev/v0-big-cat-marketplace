@@ -417,6 +417,129 @@ export async function getCurrentUser(): Promise<AuthResponse> {
 }
 
 /**
+ * Request password reset - generates a reset token
+ */
+export async function requestPasswordReset(email: string): Promise<AuthResponse> {
+  try {
+    if (!validateEmail(email)) {
+      return { success: false, error: 'Invalid email address' }
+    }
+
+    const supabase = await createClient()
+
+    // Check if user exists
+    const { data: user } = await supabase
+      .from('auth_users')
+      .select('id, email')
+      .eq('email', email.toLowerCase())
+      .single()
+
+    if (!user) {
+      // Return success even if user doesn't exist to prevent email enumeration
+      return { success: true }
+    }
+
+    // Generate a simple reset token (6 digits for simplicity)
+    const resetToken = Math.floor(100000 + Math.random() * 900000).toString()
+    const tokenExpiry = new Date(Date.now() + 30 * 60 * 1000) // 30 minutes
+
+    // Store token in database
+    const { error } = await supabase
+      .from('auth_users')
+      .update({
+        reset_token: resetToken,
+        reset_token_expires: tokenExpiry.toISOString(),
+      })
+      .eq('id', user.id)
+
+    if (error) {
+      console.error('[v0] Error storing reset token:', error)
+      return { success: false, error: 'Failed to process request' }
+    }
+
+    // In production, send email with reset token
+    // For now, we'll return the token (in real app, this would be sent via email)
+    console.log(`[v0] Password reset token for ${email}: ${resetToken}`)
+    
+    return { 
+      success: true, 
+      data: { 
+        message: 'If an account exists with this email, you will receive reset instructions.',
+        // Remove this in production - only for demo purposes
+        resetToken 
+      } 
+    }
+  } catch (error) {
+    console.error('[v0] Unexpected error in requestPasswordReset:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Verify reset token and update password
+ */
+export async function resetPassword(
+  email: string,
+  token: string,
+  newPassword: string
+): Promise<AuthResponse> {
+  try {
+    if (!validateEmail(email)) {
+      return { success: false, error: 'Invalid email address' }
+    }
+
+    const passwordValidation = validatePassword(newPassword)
+    if (!passwordValidation.valid) {
+      return { success: false, error: passwordValidation.message }
+    }
+
+    const supabase = await createClient()
+
+    // Find user with valid token
+    const { data: user } = await supabase
+      .from('auth_users')
+      .select('id, reset_token, reset_token_expires')
+      .eq('email', email.toLowerCase())
+      .single()
+
+    if (!user) {
+      return { success: false, error: 'Invalid email or token' }
+    }
+
+    // Verify token
+    if (user.reset_token !== token) {
+      return { success: false, error: 'Invalid reset code' }
+    }
+
+    // Check expiry
+    if (new Date(user.reset_token_expires) < new Date()) {
+      return { success: false, error: 'Reset code has expired. Please request a new one.' }
+    }
+
+    // Update password and clear reset token
+    const newPasswordHash = hashPassword(newPassword)
+    const { error } = await supabase
+      .from('auth_users')
+      .update({
+        password_hash: newPasswordHash,
+        reset_token: null,
+        reset_token_expires: null,
+      })
+      .eq('id', user.id)
+
+    if (error) {
+      console.error('[v0] Error updating password:', error)
+      return { success: false, error: 'Failed to update password' }
+    }
+
+    return { success: true, data: { message: 'Password updated successfully' } }
+  } catch (error) {
+    console.error('[v0] Unexpected error in resetPassword:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+/**
  * Logout
  */
 export async function logout(): Promise<AuthResponse> {
