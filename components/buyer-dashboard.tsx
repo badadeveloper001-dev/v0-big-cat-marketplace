@@ -8,6 +8,7 @@ import { ProductsMarketplace } from "@/components/products-marketplace"
 import { CartView } from "@/components/cart-view"
 import { CheckoutPage } from "@/components/checkout-page"
 import { BuyerOrders } from "@/components/buyer-orders"
+import { ProductDetailsPage } from "@/components/product-details-page"
 import { useCart } from "@/lib/cart-context"
 import {
   Home,
@@ -71,6 +72,8 @@ export function BuyerDashboard() {
   const [loadingMerchants, setLoadingMerchants] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showChat, setShowChat] = useState(false)
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
 
   useEffect(() => {
     loadMerchants()
@@ -145,8 +148,53 @@ export function BuyerDashboard() {
     setAiExpanded(false)
   }
 
+  if (selectedProductId) {
+    return (
+      <ProductDetailsPage 
+        productId={selectedProductId} 
+        onBack={() => setSelectedProductId(null)} 
+      />
+    )
+  }
+
+  if (showChat) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setShowChat(false)}
+              className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="font-semibold text-foreground">Messages</h1>
+            <div className="w-9" />
+          </div>
+        </header>
+        <div className="flex-1">
+          <ChatInterface />
+        </div>
+      </div>
+    )
+  }
+
   if (selectedVendor) {
-    return <VendorPage vendor={selectedVendor} onBack={() => setSelectedVendor(null)} />
+    return (
+      <VendorPage 
+        vendor={selectedVendor} 
+        onBack={() => setSelectedVendor(null)}
+        onChatVendor={() => {
+          setSelectedVendor(null)
+          setShowChat(true)
+        }}
+        onBrowseMore={() => {
+          setSelectedVendor(null)
+          setShowProducts(true)
+        }}
+      />
+    )
   }
 
   if (showProducts) {
@@ -156,6 +204,10 @@ export function BuyerDashboard() {
           setShowProducts(false)
           setSelectedCategory(null)
           setProductSearchQuery("")
+        }}
+        onProductClick={(productId) => {
+          setShowProducts(false)
+          setSelectedProductId(productId)
         }}
         initialCategory={selectedCategory}
         initialSearch={productSearchQuery}
@@ -555,19 +607,70 @@ export function BuyerDashboard() {
 
         {/* Orders Tab */}
         {activeTab === "orders" && (
-          <div className="p-6 text-center">
-            <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-            <h3 className="font-semibold text-foreground mb-1">No Orders Yet</h3>
-            <p className="text-sm text-muted-foreground">Your orders will appear here</p>
-          </div>
+          <BuyerOrders onBack={() => setActiveTab("home")} />
         )}
 
         {/* Profile Tab */}
         {activeTab === "profile" && (
-          <div className="p-6 text-center">
-            <User className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-            <h3 className="font-semibold text-foreground mb-1">Profile</h3>
-            <p className="text-sm text-muted-foreground">Your profile information</p>
+          <div className="p-4 space-y-4">
+            {/* Profile Header */}
+            <div className="bg-card border border-border rounded-2xl p-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl font-bold text-primary">
+                  {(user?.name || "U").charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <h2 className="text-xl font-bold text-foreground">{user?.name || "User"}</h2>
+              <p className="text-sm text-muted-foreground">{user?.email || "No email"}</p>
+            </div>
+
+            {/* Profile Options */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <h3 className="font-semibold text-foreground p-4 border-b border-border">Account</h3>
+              <div className="divide-y divide-border">
+                {[
+                  { label: "Edit Profile", value: "Update your info" },
+                  { label: "Saved Addresses", value: "Manage addresses" },
+                  { label: "Payment Methods", value: "Add/remove cards" },
+                  { label: "Notifications", value: "Manage alerts" },
+                ].map((item) => (
+                  <button 
+                    key={item.label} 
+                    onClick={() => setShowNotifications(item.label === "Notifications")}
+                    className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors"
+                  >
+                    <span className="text-sm text-foreground">{item.label}</span>
+                    <span className="text-sm text-muted-foreground">{item.value}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Support */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <h3 className="font-semibold text-foreground p-4 border-b border-border">Support</h3>
+              <div className="divide-y divide-border">
+                {[
+                  { label: "Help Center", value: "FAQs & guides" },
+                  { label: "Contact Us", value: "Get help" },
+                  { label: "Terms of Service", value: "Legal" },
+                  { label: "Privacy Policy", value: "Your data" },
+                ].map((item) => (
+                  <button key={item.label} className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
+                    <span className="text-sm text-foreground">{item.label}</span>
+                    <span className="text-sm text-muted-foreground">{item.value}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Logout */}
+            <button 
+              onClick={handleLogout}
+              className="w-full py-4 bg-destructive/10 text-destructive rounded-2xl font-semibold hover:bg-destructive/20 transition-colors"
+            >
+              Log Out
+            </button>
           </div>
         )}
       </main>

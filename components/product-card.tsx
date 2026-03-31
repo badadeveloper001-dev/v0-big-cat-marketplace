@@ -1,7 +1,9 @@
 'use client'
 
-import { ShoppingCart, Star, MapPin, Package } from 'lucide-react'
+import { useState } from 'react'
+import { ShoppingCart, Star, MapPin, Package, Check } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
+import { useCart } from '@/lib/cart-context'
 import Image from 'next/image'
 
 interface ProductCardProps {
@@ -28,6 +30,24 @@ export function ProductCard({
   merchant,
   onClick,
 }: ProductCardProps) {
+  const [addedToCart, setAddedToCart] = useState(false)
+  const { addItem } = useCart()
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent card click when clicking button
+    addItem({
+      id,
+      productId: id,
+      name,
+      price,
+      quantity: 1,
+      merchantId: merchant.id,
+      merchantName: merchant.business_name,
+    })
+    setAddedToCart(true)
+    setTimeout(() => setAddedToCart(false), 2000)
+  }
+
   return (
     <div
       onClick={onClick}
@@ -81,9 +101,25 @@ export function ProductCard({
         </div>
 
         {/* Add to Cart Button */}
-        <button className="w-full py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium text-sm flex items-center justify-center gap-2">
-          <ShoppingCart className="w-4 h-4" />
-          Add to Cart
+        <button 
+          onClick={handleAddToCart}
+          className={`w-full py-2 rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2 ${
+            addedToCart 
+              ? 'bg-green-500 text-white' 
+              : 'bg-primary text-primary-foreground hover:bg-primary/90'
+          }`}
+        >
+          {addedToCart ? (
+            <>
+              <Check className="w-4 h-4" />
+              Added!
+            </>
+          ) : (
+            <>
+              <ShoppingCart className="w-4 h-4" />
+              Add to Cart
+            </>
+          )}
         </button>
       </div>
     </div>

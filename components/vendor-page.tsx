@@ -40,6 +40,9 @@ interface VendorPageProps {
     description: string
   }
   onBack: () => void
+  onChatVendor?: () => void
+  onBrowseMore?: () => void
+  onViewProduct?: (productId: string) => void
 }
 
 const portfolioImages = [
@@ -76,7 +79,7 @@ const reviews = [
   },
 ]
 
-export function VendorPage({ vendor, onBack }: VendorPageProps) {
+export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewProduct }: VendorPageProps) {
   const [addedToCart, setAddedToCart] = useState<string | null>(null)
   const { addItem } = useCart()
   const [products, setProducts] = useState<any[]>([])
@@ -239,7 +242,10 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
         <section className="mb-6">
           <div className="flex items-center justify-between px-4 mb-3">
             <h2 className="font-semibold text-foreground text-lg">Portfolio</h2>
-            <button className="text-sm text-primary font-medium flex items-center gap-0.5">
+            <button 
+              onClick={onBrowseMore}
+              className="text-sm text-primary font-medium flex items-center gap-0.5"
+            >
               View all <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -266,7 +272,10 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
         <section className="px-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-foreground text-lg">Products & Services</h2>
-            <button className="text-sm text-primary font-medium flex items-center gap-0.5">
+            <button 
+              onClick={onBrowseMore}
+              className="text-sm text-primary font-medium flex items-center gap-0.5"
+            >
               See all <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -340,7 +349,10 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
         <section className="px-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-foreground text-lg">Reviews</h2>
-            <button className="text-sm text-primary font-medium flex items-center gap-0.5">
+            <button 
+              onClick={onBrowseMore}
+              className="text-sm text-primary font-medium flex items-center gap-0.5"
+            >
               See all <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -387,11 +399,17 @@ export function VendorPage({ vendor, onBack }: VendorPageProps) {
       {/* Sticky CTA Footer */}
       <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border px-4 py-4 shadow-lg">
         <div className="flex gap-3">
-          <button className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-secondary text-foreground font-semibold rounded-2xl hover:bg-secondary/80 transition-colors shadow-sm">
+          <button 
+            onClick={onChatVendor}
+            className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-secondary text-foreground font-semibold rounded-2xl hover:bg-secondary/80 transition-colors shadow-sm"
+          >
             <MessageCircle className="w-5 h-5" />
             Chat Vendor
           </button>
-          <button className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-primary text-primary-foreground font-semibold rounded-2xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20">
+          <button 
+            onClick={onBrowseMore}
+            className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-primary text-primary-foreground font-semibold rounded-2xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20"
+          >
             <ShoppingBag className="w-5 h-5" />
             Browse More
           </button>
