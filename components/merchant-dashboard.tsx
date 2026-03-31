@@ -36,6 +36,7 @@ import {
 import { useState, useEffect } from "react"
 import { getMerchantProducts } from "@/lib/product-actions"
 import { getMerchantOrders } from "@/lib/order-actions"
+import { NotificationsPanel } from "./notifications-panel"
 
 export function MerchantDashboard() {
   const { setRole, setUser, user } = useRole()
@@ -50,6 +51,8 @@ export function MerchantDashboard() {
   const [loadingStats, setLoadingStats] = useState(true)
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [showTokenDialog, setShowTokenDialog] = useState(false)
 
   useEffect(() => {
     if (user?.userId) {
@@ -110,10 +113,10 @@ export function MerchantDashboard() {
   }
 
   const quickActions = [
-    { label: "Add Product", icon: Plus, primary: true },
-    { label: "View Orders", icon: ShoppingBag, primary: false },
-    { label: "Analytics", icon: BarChart3, primary: false },
-    { label: "AI BizPilot", icon: Sparkles, primary: false, highlight: true },
+    { label: "Add Product", icon: Plus, primary: true, action: () => setActiveTab("products") },
+    { label: "View Orders", icon: ShoppingBag, primary: false, action: () => setActiveTab("orders") },
+    { label: "Analytics", icon: BarChart3, primary: false, action: () => setActiveTab("analytics") },
+    { label: "AI BizPilot", icon: Sparkles, primary: false, highlight: true, action: () => {} },
   ]
 
   const aiInsights = [
@@ -158,6 +161,56 @@ export function MerchantDashboard() {
   }
 
   return (
+    <>
+    <NotificationsPanel 
+      isOpen={showNotifications} 
+      onClose={() => setShowNotifications(false)} 
+    />
+    
+    {/* Token Purchase Dialog */}
+    {showTokenDialog && (
+      <div className="fixed inset-0 z-[60] bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm shadow-xl">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-chart-4/10 flex items-center justify-center mb-4">
+              <Coins className="w-8 h-8 text-chart-4" />
+            </div>
+            <h2 className="text-xl font-bold text-foreground mb-2">Buy Tokens</h2>
+            <p className="text-sm text-muted-foreground">Boost your store visibility</p>
+          </div>
+          
+          <div className="space-y-3 mb-6">
+            {[
+              { tokens: 100, price: 1000 },
+              { tokens: 500, price: 4500 },
+              { tokens: 1000, price: 8000 },
+            ].map((pack) => (
+              <button
+                key={pack.tokens}
+                className="w-full flex items-center justify-between p-4 bg-secondary rounded-xl hover:bg-secondary/80 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Coins className="w-5 h-5 text-chart-4" />
+                  <span className="font-semibold text-foreground">{pack.tokens} Tokens</span>
+                </div>
+                <span className="text-primary font-bold">{formatNaira(pack.price)}</span>
+              </button>
+            ))}
+          </div>
+          
+          <p className="text-xs text-center text-muted-foreground mb-4">
+            Tokens can be used to boost product visibility and unlock premium features.
+          </p>
+          
+          <button
+            onClick={() => setShowTokenDialog(false)}
+            className="w-full py-3 bg-muted text-foreground rounded-xl font-medium"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    )}
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
@@ -171,7 +224,10 @@ export function MerchantDashboard() {
             <LogOut className="w-5 h-5" />
           </button>
           <h1 className="font-semibold text-foreground">Merchant Dashboard</h1>
-          <button className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors">
+          <button 
+            onClick={() => setShowNotifications(true)}
+            className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors"
+          >
             <Bell className="w-5 h-5" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
           </button>
@@ -273,6 +329,7 @@ export function MerchantDashboard() {
             {quickActions.map((action) => (
               <button
                 key={action.label}
+                onClick={action.action}
                 className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all ${
                   action.primary 
                     ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" 
@@ -355,7 +412,10 @@ export function MerchantDashboard() {
                   <p className="text-xl font-bold text-foreground">{stats[2]?.value || "0"}</p>
                 </div>
               </div>
-              <button className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-xl shadow-sm shadow-primary/20">
+              <button 
+                onClick={() => setShowTokenDialog(true)}
+                className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-xl shadow-sm shadow-primary/20"
+              >
                 Buy Tokens
               </button>
             </div>
@@ -369,7 +429,7 @@ export function MerchantDashboard() {
         <section className="px-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-foreground">Products</h3>
-            <button className="text-xs text-primary font-medium">View All</button>
+            <button onClick={() => setActiveTab("products")} className="text-xs text-primary font-medium">View All</button>
           </div>
           {loadingProducts ? (
             <div className="flex items-center justify-center py-8">
@@ -414,7 +474,7 @@ export function MerchantDashboard() {
         <section className="px-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-foreground">Recent Orders</h3>
-            <button className="text-xs text-primary font-medium">View All</button>
+            <button onClick={() => setActiveTab("orders")} className="text-xs text-primary font-medium">View All</button>
           </div>
           {loadingOrders ? (
             <div className="flex items-center justify-center py-8">
@@ -460,6 +520,125 @@ export function MerchantDashboard() {
           <MerchantProducts userId={user?.userId || ""} />
         ) : activeTab === "orders" ? (
           <MerchantOrders onBack={() => setActiveTab("home")} />
+        ) : activeTab === "analytics" ? (
+          <div className="px-4 py-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <BarChart3 className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold text-foreground mb-2">Analytics Dashboard</h2>
+              <p className="text-sm text-muted-foreground">Track your business performance</p>
+            </div>
+            
+            {/* Sales Overview */}
+            <div className="bg-card border border-border rounded-2xl p-4 mb-4">
+              <h3 className="font-semibold text-foreground mb-4">Sales Overview</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-3 bg-primary/5 rounded-xl">
+                  <p className="text-2xl font-bold text-primary">{formatNaira(0)}</p>
+                  <p className="text-xs text-muted-foreground">This Week</p>
+                </div>
+                <div className="text-center p-3 bg-primary/5 rounded-xl">
+                  <p className="text-2xl font-bold text-primary">{formatNaira(0)}</p>
+                  <p className="text-xs text-muted-foreground">This Month</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Performance Metrics */}
+            <div className="bg-card border border-border rounded-2xl p-4 mb-4">
+              <h3 className="font-semibold text-foreground mb-4">Performance Metrics</h3>
+              <div className="space-y-3">
+                {[
+                  { label: "Products Views", value: "0", change: "+0%" },
+                  { label: "Conversion Rate", value: "0%", change: "+0%" },
+                  { label: "Average Order Value", value: formatNaira(0), change: "+0%" },
+                  { label: "Customer Retention", value: "0%", change: "+0%" },
+                ].map((metric) => (
+                  <div key={metric.label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <span className="text-sm text-muted-foreground">{metric.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">{metric.value}</span>
+                      <span className="text-xs text-primary">{metric.change}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-xs text-center text-muted-foreground">
+              Analytics data updates daily. Start selling to see your metrics!
+            </p>
+          </div>
+        ) : activeTab === "settings" ? (
+          <div className="px-4 py-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <Settings className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold text-foreground mb-2">Store Settings</h2>
+              <p className="text-sm text-muted-foreground">Manage your store preferences</p>
+            </div>
+            
+            {/* Profile Settings */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
+              <h3 className="font-semibold text-foreground p-4 border-b border-border">Profile</h3>
+              <div className="divide-y divide-border">
+                {[
+                  { label: "Business Name", value: user?.name || "Not set" },
+                  { label: "Email", value: user?.email || "Not set" },
+                  { label: "Phone", value: user?.phone || "Not set" },
+                ].map((item) => (
+                  <button key={item.label} className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
+                    <span className="text-sm text-muted-foreground">{item.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-foreground">{item.value}</span>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Store Settings */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
+              <h3 className="font-semibold text-foreground p-4 border-b border-border">Store</h3>
+              <div className="divide-y divide-border">
+                {[
+                  { label: "Store Logo", value: "Change" },
+                  { label: "Business Description", value: "Edit" },
+                  { label: "Location", value: "Update" },
+                  { label: "Business Hours", value: "Set" },
+                ].map((item) => (
+                  <button key={item.label} className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
+                    <span className="text-sm text-muted-foreground">{item.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-primary">{item.value}</span>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Account Actions */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <h3 className="font-semibold text-foreground p-4 border-b border-border">Account</h3>
+              <div className="divide-y divide-border">
+                <button className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
+                  <span className="text-sm text-muted-foreground">Change Password</span>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-between p-4 hover:bg-destructive/10 transition-colors"
+                >
+                  <span className="text-sm text-destructive">Log Out</span>
+                  <LogOut className="w-4 h-4 text-destructive" />
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
       </main>
 
@@ -489,5 +668,6 @@ export function MerchantDashboard() {
         </div>
       </nav>
     </div>
+    </>
   )
 }

@@ -34,6 +34,7 @@ import { useState, useEffect } from "react"
 import { getMerchants } from "@/lib/admin-actions"
 import { getBuyerOrders } from "@/lib/order-actions"
 import { formatNaira } from "@/lib/currency-utils"
+import { NotificationsPanel } from "./notifications-panel"
 
 const categories = [
   { name: "Fashion", icon: "👗", color: "bg-rose-50" },
@@ -69,6 +70,7 @@ export function BuyerDashboard() {
   const [recentOrders, setRecentOrders] = useState<any[]>([])
   const [loadingMerchants, setLoadingMerchants] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
+  const [showNotifications, setShowNotifications] = useState(false)
 
   useEffect(() => {
     loadMerchants()
@@ -195,6 +197,11 @@ export function BuyerDashboard() {
   const displayMerchants = merchants.slice(0, 3)
 
   return (
+    <>
+    <NotificationsPanel 
+      isOpen={showNotifications} 
+      onClose={() => setShowNotifications(false)} 
+    />
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Compact Header */}
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
@@ -212,6 +219,15 @@ export function BuyerDashboard() {
             <span className="font-semibold text-foreground text-sm">{displayName}</span>
           </div>
           <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setShowNotifications(true)}
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
+            </button>
             <button 
               onClick={() => setShowOrders(true)}
               className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -364,11 +380,27 @@ export function BuyerDashboard() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchQuery.trim()) {
+                        setProductSearchQuery(searchQuery)
+                        setShowProducts(true)
+                        setAiExpanded(false)
+                      }
+                    }}
                     placeholder="Type your question..."
                     className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
                     autoFocus
                   />
-                  <button className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors">
+                  <button 
+                    onClick={() => {
+                      if (searchQuery.trim()) {
+                        setProductSearchQuery(searchQuery)
+                        setShowProducts(true)
+                        setAiExpanded(false)
+                      }
+                    }}
+                    className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
+                  >
                     <Send className="w-5 h-5" />
                   </button>
                 </div>
@@ -411,7 +443,10 @@ export function BuyerDashboard() {
         <section className="px-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-foreground text-lg">Featured Vendors</h2>
-            <button className="text-sm text-primary font-medium flex items-center gap-0.5">
+            <button 
+              onClick={() => setShowProducts(true)}
+              className="text-sm text-primary font-medium flex items-center gap-0.5"
+            >
               See all <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -469,7 +504,10 @@ export function BuyerDashboard() {
               <Package className="w-5 h-5 text-primary" />
               Recent Orders
             </h2>
-            <button className="text-sm text-primary font-medium flex items-center gap-0.5">
+            <button 
+              onClick={() => setShowOrders(true)}
+              className="text-sm text-primary font-medium flex items-center gap-0.5"
+            >
               View all <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -587,5 +625,6 @@ export function BuyerDashboard() {
           </button>
         </div>
     </div>
+    </>
   )
 }

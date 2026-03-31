@@ -18,7 +18,8 @@ import {
   Loader2,
 } from "lucide-react"
 import { useState, useEffect } from "react"
-import { getMerchants, getPlatformStats } from "@/lib/admin-actions"
+import { getMerchants, getPlatformStats, approveMerchant, rejectMerchant, getRecentUsers, getRecentOrders } from "@/lib/admin-actions"
+import { NotificationsPanel } from "./notifications-panel"
 
 export function AdminDashboard() {
   const { setRole } = useRole()
@@ -28,10 +29,18 @@ export function AdminDashboard() {
   const [recentActivity, setRecentActivity] = useState<any[]>([])
   const [loadingStats, setLoadingStats] = useState(true)
   const [loadingApprovals, setLoadingApprovals] = useState(true)
+  const [processingApproval, setProcessingApproval] = useState<string | null>(null)
+  const [users, setUsers] = useState<any[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(true)
+  const [allMerchants, setAllMerchants] = useState<any[]>([])
+  const [loadingMerchants, setLoadingMerchants] = useState(true)
+  const [showNotifications, setShowNotifications] = useState(false)
 
   useEffect(() => {
     loadStats()
     loadApprovals()
+    loadUsers()
+    loadAllMerchants()
   }, [])
 
   const loadStats = async () => {
@@ -60,11 +69,11 @@ export function AdminDashboard() {
       const result = await getMerchants()
       if (result.success && result.data) {
         const pending = result.data
-          .filter((m: any) => m.approval_status === "pending")
-          .slice(0, 3)
+          .filter((m: any) => !m.setup_completed)
+          .slice(0, 5)
           .map((m: any) => ({
             id: m.id,
-            name: m.business_name || m.full_name,
+            name: m.business_name || m.full_name || "Unknown",
             type: "Merchant",
             date: new Date(m.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
           }))
@@ -74,6 +83,66 @@ export function AdminDashboard() {
       console.error("Error loading approvals:", error)
     } finally {
       setLoadingApprovals(false)
+    }
+  }
+
+  const loadUsers = async () => {
+    setLoadingUsers(true)
+    try {
+      const result = await getRecentUsers()
+      if (result.success && result.data) {
+        setUsers(result.data)
+      }
+    } catch (error) {
+      console.error("Error loading users:", error)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  const loadAllMerchants = async () => {
+    setLoadingMerchants(true)
+    try {
+      const result = await getMerchants()
+      if (result.success && result.data) {
+        setAllMerchants(result.data)
+      }
+    } catch (error) {
+      console.error("Error loading merchants:", error)
+    } finally {
+      setLoadingMerchants(false)
+    }
+  }
+
+  const handleApprove = async (merchantId: string) => {
+    setProcessingApproval(merchantId)
+    try {
+      const result = await approveMerchant(merchantId)
+      if (result.success) {
+        setPendingApprovals(prev => prev.filter(m => m.id !== merchantId))
+        loadStats()
+        loadAllMerchants()
+      }
+    } catch (error) {
+      console.error("Error approving merchant:", error)
+    } finally {
+      setProcessingApproval(null)
+    }
+  }
+
+  const handleReject = async (merchantId: string) => {
+    setProcessingApproval(merchantId)
+    try {
+      const result = await rejectMerchant(merchantId)
+      if (result.success) {
+        setPendingApprovals(prev => prev.filter(m => m.id !== merchantId))
+        loadStats()
+        loadAllMerchants()
+      }
+    } catch (error) {
+      console.error("Error rejecting merchant:", error)
+    } finally {
+      setProcessingApproval(null)
     }
   }
 
@@ -88,6 +157,11 @@ export function AdminDashboard() {
   ]
 
   return (
+    <>
+    <NotificationsPanel 
+      isOpen={showNotifications} 
+      onClose={() => setShowNotifications(false)} 
+    />
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
@@ -99,7 +173,10 @@ export function AdminDashboard() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="font-semibold text-foreground">Admin Dashboard</h1>
-          <button className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground">
+          <button 
+            onClick={() => setShowNotifications(true)}
+            className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground"
+          >
             <Bell className="w-5 h-5" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
           </button>
@@ -108,6 +185,8 @@ export function AdminDashboard() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto pb-20">
+        {activeTab === "home" ? (
+          <>
         {/* Admin Badge */}
         <div className="px-4 py-4">
           <div className="bg-primary p-4 rounded-2xl">
@@ -191,10 +270,22 @@ export function AdminDashboard() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="p-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors">
-                      <CheckCircle className="w-4 h-4" />
+                    <button 
+                      onClick={() => handleApprove(item.id)}
+                      disabled={processingApproval === item.id}
+                      className="p-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors disabled:opacity-50"
+                    >
+                      {processingApproval === item.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4" />
+                      )}
                     </button>
-                    <button className="p-2 rounded-lg bg-destructive/20 text-destructive hover:bg-destructive/30 transition-colors">
+                    <button 
+                      onClick={() => handleReject(item.id)}
+                      disabled={processingApproval === item.id}
+                      className="p-2 rounded-lg bg-destructive/20 text-destructive hover:bg-destructive/30 transition-colors disabled:opacity-50"
+                    >
                       <XCircle className="w-4 h-4" />
                     </button>
                   </div>
@@ -248,6 +339,163 @@ export function AdminDashboard() {
             ))}
           </div>
         </section>
+          </>
+        ) : activeTab === "users" ? (
+          <div className="px-4 py-6">
+            <h2 className="text-xl font-bold text-foreground mb-4">User Management</h2>
+            {loadingUsers ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+              </div>
+            ) : users.length === 0 ? (
+              <div className="p-8 text-center">
+                <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No users found</p>
+              </div>
+            ) : (
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                {users.map((user, index) => (
+                  <div
+                    key={user.id}
+                    className={`flex items-center justify-between p-4 ${
+                      index !== users.length - 1 ? "border-b border-border" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-sm font-semibold text-primary">
+                          {(user.full_name || user.email || "U").charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{user.full_name || "Unnamed"}</p>
+                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                      </div>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      user.role === "merchant" ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"
+                    }`}>
+                      {user.role}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activeTab === "merchants" ? (
+          <div className="px-4 py-6">
+            <h2 className="text-xl font-bold text-foreground mb-4">Merchant Management</h2>
+            {loadingMerchants ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+              </div>
+            ) : allMerchants.length === 0 ? (
+              <div className="p-8 text-center">
+                <Store className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No merchants found</p>
+              </div>
+            ) : (
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                {allMerchants.map((merchant, index) => (
+                  <div
+                    key={merchant.id}
+                    className={`flex items-center justify-between p-4 ${
+                      index !== allMerchants.length - 1 ? "border-b border-border" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Store className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{merchant.business_name || merchant.full_name || "Unnamed"}</p>
+                        <p className="text-sm text-muted-foreground">{merchant.business_category || "General"}</p>
+                      </div>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      merchant.setup_completed ? "bg-primary/20 text-primary" : "bg-chart-4/20 text-chart-4"
+                    }`}>
+                      {merchant.setup_completed ? "Active" : "Pending"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activeTab === "security" ? (
+          <div className="px-4 py-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <Shield className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold text-foreground mb-2">Security Center</h2>
+              <p className="text-sm text-muted-foreground">Monitor platform security</p>
+            </div>
+            
+            <div className="bg-card border border-border rounded-2xl p-4 mb-4">
+              <h3 className="font-semibold text-foreground mb-4">Security Status</h3>
+              <div className="space-y-3">
+                {[
+                  { label: "SSL Certificate", status: "Active", ok: true },
+                  { label: "Database Encryption", status: "Enabled", ok: true },
+                  { label: "2FA Enforcement", status: "Optional", ok: true },
+                  { label: "Last Security Scan", status: "Today", ok: true },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <span className="text-sm text-muted-foreground">{item.label}</span>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className={`w-4 h-4 ${item.ok ? "text-primary" : "text-destructive"}`} />
+                      <span className="text-sm font-medium text-foreground">{item.status}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : activeTab === "settings" ? (
+          <div className="px-4 py-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <Settings className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold text-foreground mb-2">Platform Settings</h2>
+              <p className="text-sm text-muted-foreground">Configure system preferences</p>
+            </div>
+            
+            <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
+              <h3 className="font-semibold text-foreground p-4 border-b border-border">General</h3>
+              <div className="divide-y divide-border">
+                {[
+                  { label: "Platform Name", value: "BigCat Marketplace" },
+                  { label: "Support Email", value: "support@bigcat.ng" },
+                  { label: "Currency", value: "NGN (₦)" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between p-4">
+                    <span className="text-sm text-muted-foreground">{item.label}</span>
+                    <span className="text-sm text-foreground">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <h3 className="font-semibold text-foreground p-4 border-b border-border">Actions</h3>
+              <div className="divide-y divide-border">
+                <button className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
+                  <span className="text-sm text-muted-foreground">Export Data</span>
+                  <span className="text-sm text-primary">Download</span>
+                </button>
+                <button 
+                  onClick={() => setRole(null)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-destructive/10 transition-colors"
+                >
+                  <span className="text-sm text-destructive">Exit Admin Mode</span>
+                  <ArrowLeft className="w-4 h-4 text-destructive" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </main>
 
       {/* Bottom Navigation */}
@@ -274,5 +522,6 @@ export function AdminDashboard() {
         </div>
       </nav>
     </div>
+    </>
   )
 }
