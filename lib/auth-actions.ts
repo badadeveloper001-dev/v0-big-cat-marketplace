@@ -41,10 +41,173 @@ function hashPassword(password: string): string {
   return createHash('sha256').update(password).digest('hex')
 }
 
-interface AuthResponse {
-  success: boolean
-  error?: string
-  data?: any
+/**
+ * Generate and send OTP for email verification
+ */
+export async function generateOTP(email: string): Promise<AuthResponse> {
+  try {
+    if (!validateEmail(email)) {
+      return { success: false, error: 'Invalid email address' }
+    }
+
+    const supabase = await createClient()
+
+    // Check if email already registered
+    const { data: existingUser } = await supabase
+      .from('auth_users')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .single()
+
+    if (existingUser) {
+      return { success: false, error: 'Email already registered' }
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString()
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+
+    // Store OTP in database
+    const { error: insertError } = await supabase
+      .from('otp_verification')
+      .insert({
+        email: email.toLowerCase(),
+        otp_code: otp,
+        expires_at: expiresAt.toISOString(),
+        attempts: 0,
+      })
+
+    if (insertError) {
+      console.error('[v0] Error storing OTP:', insertError)
+      return { success: false, error: 'Failed to generate OTP' }
+    }
+
+    // In production, send via email service (SendGrid, etc.)
+    // For demo, return OTP in response
+    console.log(`[v0] OTP for ${email}: ${otp}`)
+
+    return {
+      success: true,
+      data: {
+        message: 'OTP sent to your email',
+        // Remove in production - demo only
+        otp: process.env.NODE_ENV === 'development' ? otp : undefined,
+      },
+    }
+  } catch (error) {
+    console.error('[v0] Unexpected error in generateOTP:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Verify OTP code
+ */
+export async function verifyOTP(email: string, otpCode: string): Promise<AuthResponse> {
+  try {
+    if (!validateEmail(email)) {
+      return { success: false, error: 'Invalid email address' }
+    }
+
+    if (!otpCode || otpCode.length !== 6) {
+      return { success: false, error: 'Invalid OTP format' }
+    }
+
+    const supabase = await createClient()
+
+    // Find OTP record
+    const { data: otpRecord, error: fetchError } = await supabase
+      .from('otp_verification')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .eq('otp_code', otpCode)
+      .single()
+
+    if (fetchError || !otpRecord) {
+      // Increment attempts
+      await supabase
+        .from('otp_verification')
+        .update({ attempts: (otpRecord?.attempts || 0) + 1 })
+        .eq('email', email.toLowerCase())
+
+      return { success: false, error: 'Invalid OTP code' }
+    }
+
+    // Check if expired
+    if (new Date(otpRecord.expires_at) < new Date()) {
+      return { success: false, error: 'OTP has expired. Please request a new one.' }
+    }
+
+    // Check if max attempts exceeded (5 attempts)
+    if (otpRecord.attempts >= 5) {
+      return { success: false, error: 'Too many failed attempts. Please request a new OTP.' }
+    }
+
+    // Mark as verified
+    const { error: updateError } = await supabase
+      .from('otp_verification')
+      .update({ verified_at: new Date().toISOString() })
+      .eq('id', otpRecord.id)
+
+    if (updateError) {
+      return { success: false, error: 'Failed to verify OTP' }
+    }
+
+    return { success: true, data: { message: 'Email verified successfully' } }
+  } catch (error) {
+    console.error('[v0] Unexpected error in verifyOTP:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Resend OTP code
+ */
+export async function resendOTP(email: string): Promise<AuthResponse> {
+  try {
+    if (!validateEmail(email)) {
+      return { success: false, error: 'Invalid email address' }
+    }
+
+    const supabase = await createClient()
+
+    // Delete old OTP records for this email
+    await supabase
+      .from('otp_verification')
+      .delete()
+      .eq('email', email.toLowerCase())
+
+    // Generate new OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString()
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
+
+    const { error } = await supabase
+      .from('otp_verification')
+      .insert({
+        email: email.toLowerCase(),
+        otp_code: otp,
+        expires_at: expiresAt.toISOString(),
+        attempts: 0,
+      })
+
+    if (error) {
+      return { success: false, error: 'Failed to resend OTP' }
+    }
+
+    console.log(`[v0] OTP for ${email}: ${otp}`)
+
+    return {
+      success: true,
+      data: {
+        message: 'OTP sent to your email',
+        // Remove in production
+        otp: process.env.NODE_ENV === 'development' ? otp : undefined,
+      },
+    }
+  } catch (error) {
+    console.error('[v0] Unexpected error in resendOTP:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
 }
 
 /**

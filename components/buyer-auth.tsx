@@ -2,12 +2,14 @@
 
 import { useState } from "react"
 import { useRole } from "@/lib/role-context"
-import { buyerSignupWithName, emailPasswordLogin, requestPasswordReset, resetPassword } from "@/lib/auth-actions"
+import { buyerSignupWithName, emailPasswordLogin, requestPasswordReset, resetPassword, generateOTP, verifyOTP, resendOTP } from "@/lib/auth-actions"
+import { OTPVerification } from "@/components/otp-verification"
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, User, Chrome, Apple, Loader2, CheckCircle2 } from "lucide-react"
 
 export function BuyerAuth({ onBack }: { onBack: () => void }) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
+  const [showOTPVerification, setShowOTPVerification] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
@@ -30,40 +32,27 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
     setLoading(true)
 
     try {
-      let result
-      
       if (isSignUp) {
-        result = await buyerSignupWithName(
-          formData.email,
-          formData.phone,
-          formData.password,
-          formData.name
-        )
-      } else {
-        result = await emailPasswordLogin(formData.email, formData.password)
-      }
-
-      if (result.success && result.data) {
-        // Check if role is buyer (for login, user might have different role)
-        if (!isSignUp && result.data.role !== "buyer") {
-          setError("This account is not a buyer account. Please use the merchant login.")
-          return
-        }
-        
-        if (isSignUp) {
-          setSuccessMessage("Account created successfully! Redirecting...")
-          setTimeout(() => {
-            // Store user data and set role
-            setUser({
-              userId: result.data.userId,
-              email: result.data.email,
-              phone: result.data.phone,
-              name: result.data.name,
-              role: "buyer",
-            })
-            setRole("buyer")
-          }, 1500)
+        // First, generate OTP
+        const otpResult = await generateOTP(formData.email)
+        if (otpResult.success) {
+          setShowOTPVerification(true)
+          if (otpResult.data?.otp) {
+            setSuccessMessage(`Demo OTP: ${otpResult.data.otp}`)
+          }
         } else {
+          setError(otpResult.error || "Failed to generate OTP")
+        }
+      } else {
+        const result = await emailPasswordLogin(formData.email, formData.password)
+
+        if (result.success && result.data) {
+          // Check if role is buyer (for login, user might have different role)
+          if (result.data.role !== "buyer") {
+            setError("This account is not a buyer account. Please use the merchant login.")
+            return
+          }
+          
           // Store user data and set role
           setUser({
             userId: result.data.userId,
@@ -73,13 +62,50 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
             role: "buyer",
           })
           setRole("buyer")
+        } else {
+          setError(result.error || "An error occurred")
         }
-      } else {
-        setError(result.error || "An error occurred")
       }
     } catch (err) {
       setError("An unexpected error occurred")
       console.error("[v0] Auth error:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleOTPVerified = async () => {
+    // After OTP verification, create the account
+    setLoading(true)
+    try {
+      const result = await buyerSignupWithName(
+        formData.email,
+        formData.phone,
+        formData.password,
+        formData.name
+      )
+
+      if (result.success && result.data) {
+        setSuccessMessage("Account created successfully! Redirecting...")
+        setTimeout(() => {
+          // Store user data and set role
+          setUser({
+            userId: result.data.userId,
+            email: result.data.email,
+            phone: result.data.phone,
+            name: result.data.name,
+            role: "buyer",
+          })
+          setRole("buyer")
+        }, 1500)
+      } else {
+        setError(result.error || "Failed to create account")
+        setShowOTPVerification(false)
+      }
+    } catch (err) {
+      setError("An unexpected error occurred")
+      console.error("[v0] Auth error:", err)
+      setShowOTPVerification(false)
     } finally {
       setLoading(false)
     }
@@ -129,6 +155,23 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
       setError(result.error || "Failed to reset password")
     }
     setLoading(false)
+  }
+
+  // Show OTP Verification screen
+  if (showOTPVerification) {
+    return (
+      <OTPVerification
+        email={formData.email}
+        onVerifySuccess={handleOTPVerified}
+        onBack={() => {
+          setShowOTPVerification(false)
+          setError("")
+          setSuccessMessage("")
+        }}
+        onResend={() => resendOTP(formData.email)}
+        onVerify={(otp) => verifyOTP(formData.email, otp)}
+      />
+    )
   }
 
   // Forgot Password Modal
