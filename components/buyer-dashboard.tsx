@@ -11,6 +11,7 @@ import { BuyerOrders } from "@/components/buyer-orders"
 import { ProductDetailsPage } from "@/components/product-details-page"
 import { ProfilePage } from "@/components/profile-page"
 import { SettingsPage } from "@/components/settings-page"
+import { PaymentMethodsPage } from "@/components/payment-methods-page"
 import { useCart } from "@/lib/cart-context"
 import {
   Home,
@@ -78,6 +79,7 @@ export function BuyerDashboard() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false)
 
   useEffect(() => {
     loadMerchants()
@@ -158,6 +160,10 @@ export function BuyerDashboard() {
 
   if (showSettings) {
     return <SettingsPage onBack={() => setShowSettings(false)} />
+  }
+
+  if (showPaymentMethods) {
+    return <PaymentMethodsPage onBack={() => setShowPaymentMethods(false)} />
   }
 
   if (selectedProductId) {
@@ -642,8 +648,7 @@ export function BuyerDashboard() {
               <div className="divide-y divide-border">
                 {[
                   { label: "Edit Profile", value: "Update your info", action: () => setShowProfile(true) },
-                  { label: "Saved Addresses", value: "Manage addresses" },
-                  { label: "Payment Methods", value: "Add/remove cards" },
+                  { label: "Payment Methods", value: "Add/remove cards", action: () => setShowPaymentMethods(true) },
                   { label: "Settings", value: "App settings", action: () => setShowSettings(true) },
                 ].map((item) => (
                   <button 

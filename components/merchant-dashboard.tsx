@@ -6,6 +6,7 @@ import { MerchantProducts } from "@/components/merchant-products"
 import { MerchantOrders } from "@/components/merchant-orders"
 import { ProfilePage } from "@/components/profile-page"
 import { SettingsPage } from "@/components/settings-page"
+import { PaymentMethodsPage } from "@/components/payment-methods-page"
 import { formatNaira } from "@/lib/currency-utils"
 import { ClipboardList } from "lucide-react"
 import {
@@ -57,6 +58,7 @@ export function MerchantDashboard() {
   const [showTokenDialog, setShowTokenDialog] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false)
 
   useEffect(() => {
     if (user?.userId) {
@@ -170,6 +172,10 @@ export function MerchantDashboard() {
 
   if (showSettings) {
     return <SettingsPage onBack={() => setShowSettings(false)} />
+  }
+
+  if (showPaymentMethods) {
+    return <PaymentMethodsPage onBack={() => setShowPaymentMethods(false)} />
   }
 
   return (

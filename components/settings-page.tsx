@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRole } from '@/lib/role-context'
-import { changePassword, updateEmail, updateNotificationPreferences } from '@/lib/user-actions'
-import { ArrowLeft, Lock, Mail, Bell, Loader2, Check, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { changePassword, updateEmail, updateNotificationPreferences, deleteAccount } from '@/lib/user-actions'
+import { ArrowLeft, Lock, Mail, Bell, Loader2, Check, AlertCircle, Eye, EyeOff, Trash2 } from 'lucide-react'
 
 interface SettingsMessage {
   type: 'success' | 'error'
@@ -11,15 +11,18 @@ interface SettingsMessage {
 }
 
 export function SettingsPage({ onBack }: { onBack: () => void }) {
-  const { user } = useRole()
-  const [activeTab, setActiveTab] = useState<'password' | 'email' | 'notifications'>('password')
+  const { user, setRole, setUser } = useRole()
+  const [activeTab, setActiveTab] = useState<'password' | 'email' | 'notifications' | 'delete'>('password')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<SettingsMessage | null>(null)
-  const [showPasswords, setShowPasswords] = useState<{ current: boolean; new: boolean; confirm: boolean }>({
+  const [showPasswords, setShowPasswords] = useState<{ current: boolean; new: boolean; confirm: boolean; delete: boolean }>({
     current: false,
     new: false,
     confirm: false,
+    delete: false,
   })
+  const [deletePassword, setDeletePassword] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Password form state
   const [passwordForm, setPasswordForm] = useState({
@@ -131,6 +134,39 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
     }
   }
 
+  // Handle account deletion
+  const handleDeleteAccount = async () => {
+    if (!confirmDelete) {
+      setMessage({ type: 'error', text: 'Please confirm you want to delete your account' })
+      return
+    }
+
+    if (!deletePassword) {
+      setMessage({ type: 'error', text: 'Please enter your password to confirm' })
+      return
+    }
+
+    setLoading(true)
+    try {
+      const result = await deleteAccount(user?.userId || '', deletePassword)
+
+      if (result.success) {
+        setMessage({ type: 'success', text: 'Account deleted successfully. Redirecting...' })
+        setTimeout(() => {
+          setUser(null)
+          setRole(null)
+        }, 2000)
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to delete account' })
+      }
+    } catch (error) {
+      console.error('[v0] Error deleting account:', error)
+      setMessage({ type: 'error', text: 'An error occurred' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -148,11 +184,12 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
       </header>
 
       {/* Tabs */}
-      <div className="flex border-b border-border bg-card sticky top-[57px] z-40">
+      <div className="flex border-b border-border bg-card sticky top-[57px] z-40 overflow-x-auto">
         {[
           { id: 'password', label: 'Password', icon: Lock },
           { id: 'email', label: 'Email', icon: Mail },
-          { id: 'notifications', label: 'Notifications', icon: Bell },
+          { id: 'notifications', label: 'Alerts', icon: Bell },
+          { id: 'delete', label: 'Delete', icon: Trash2 },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -424,6 +461,84 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
                 <>
                   <Check className="w-5 h-5" />
                   Save Preferences
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Delete Account Tab */}
+        {activeTab === 'delete' && (
+          <div className="p-4 space-y-6">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-6 h-6 text-destructive flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-destructive">Delete Account</h3>
+                  <p className="text-sm text-destructive/80 mt-1">
+                    This action cannot be undone. All your data will be permanently removed from our servers.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Enter your password to confirm
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type={showPasswords.delete ? 'text' : 'password'}
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full pl-10 pr-12 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-destructive/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPasswords({ ...showPasswords, delete: !showPasswords.delete })
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPasswords.delete ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={confirmDelete}
+                  onChange={(e) => setConfirmDelete(e.target.checked)}
+                  className="mt-1 w-5 h-5 rounded border-border text-destructive focus:ring-destructive"
+                />
+                <span className="text-sm text-muted-foreground">
+                  I understand that deleting my account is permanent and all my data, including order history, saved items, and payment methods will be removed.
+                </span>
+              </label>
+            </div>
+
+            <button
+              onClick={handleDeleteAccount}
+              disabled={loading || !confirmDelete || !deletePassword}
+              className="w-full py-4 bg-destructive text-destructive-foreground font-semibold rounded-xl hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-5 h-5" />
+                  Delete My Account
                 </>
               )}
             </button>
