@@ -4,6 +4,8 @@ import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-actions"
 import { MerchantProducts } from "@/components/merchant-products"
 import { MerchantOrders } from "@/components/merchant-orders"
+import { ProfilePage } from "@/components/profile-page"
+import { SettingsPage } from "@/components/settings-page"
 import { formatNaira } from "@/lib/currency-utils"
 import { ClipboardList } from "lucide-react"
 import {
@@ -53,6 +55,8 @@ export function MerchantDashboard() {
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showTokenDialog, setShowTokenDialog] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     if (user?.userId) {
@@ -158,6 +162,14 @@ export function MerchantDashboard() {
       case "out": return "text-destructive"
       default: return "text-muted-foreground"
     }
+  }
+
+  if (showProfile) {
+    return <ProfilePage onBack={() => setShowProfile(false)} />
+  }
+
+  if (showSettings) {
+    return <SettingsPage onBack={() => setShowSettings(false)} />
   }
 
   return (
@@ -647,14 +659,14 @@ export function MerchantDashboard() {
         <div className="flex items-center justify-around">
           {[
             { id: "home", icon: Home, label: "Home" },
-            { id: "products", icon: Package, label: "Products" },
-            { id: "orders", icon: ShoppingBag, label: "Orders" },
-            { id: "analytics", icon: BarChart3, label: "Analytics" },
-            { id: "settings", icon: Settings, label: "Settings" },
+            { id: "products", icon: Package, label: "Products", action: () => setActiveTab("products") },
+            { id: "orders", icon: ShoppingBag, label: "Orders", action: () => setActiveTab("orders") },
+            { id: "analytics", icon: BarChart3, label: "Analytics", action: () => setActiveTab("analytics") },
+            { id: "settings", icon: Settings, label: "Settings", action: () => setShowSettings(true) },
           ].map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={item.action}
               className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
                 activeTab === item.id 
                   ? "text-primary bg-primary/10" 

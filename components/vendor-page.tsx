@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { getOrCreateConversation } from "@/lib/message-actions"
+import { useRole } from "@/lib/role-context"
 import {
   ArrowLeft,
   Star,
@@ -80,10 +82,12 @@ const reviews = [
 ]
 
 export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewProduct }: VendorPageProps) {
+  const { user } = useRole()
   const [addedToCart, setAddedToCart] = useState<string | null>(null)
   const { addItem } = useCart()
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [chatLoading, setChatLoading] = useState(false)
 
   useEffect(() => {
     loadProducts()
@@ -100,6 +104,27 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
       console.error("Error loading products:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleChatVendor = async () => {
+    if (!user?.userId) {
+      console.error('[v0] User ID not found')
+      onChatVendor?.()
+      return
+    }
+
+    setChatLoading(true)
+    try {
+      const result = await getOrCreateConversation(user.userId, String(vendor.id))
+      if (result.success) {
+        // Conversation created, now open chat
+        onChatVendor?.()
+      }
+    } catch (error) {
+      console.error('[v0] Error creating conversation:', error)
+    } finally {
+      setChatLoading(false)
     }
   }
 
@@ -400,11 +425,21 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
       <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border px-4 py-4 shadow-lg">
         <div className="flex gap-3">
           <button 
-            onClick={onChatVendor}
-            className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-secondary text-foreground font-semibold rounded-2xl hover:bg-secondary/80 transition-colors shadow-sm"
+            onClick={handleChatVendor}
+            disabled={chatLoading}
+            className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-secondary text-foreground font-semibold rounded-2xl hover:bg-secondary/80 transition-colors shadow-sm disabled:opacity-50"
           >
-            <MessageCircle className="w-5 h-5" />
-            Chat Vendor
+            {chatLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              <>
+                <MessageCircle className="w-5 h-5" />
+                Chat Vendor
+              </>
+            )}
           </button>
           <button 
             onClick={onBrowseMore}

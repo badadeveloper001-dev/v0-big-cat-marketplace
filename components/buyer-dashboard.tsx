@@ -9,6 +9,8 @@ import { CartView } from "@/components/cart-view"
 import { CheckoutPage } from "@/components/checkout-page"
 import { BuyerOrders } from "@/components/buyer-orders"
 import { ProductDetailsPage } from "@/components/product-details-page"
+import { ProfilePage } from "@/components/profile-page"
+import { SettingsPage } from "@/components/settings-page"
 import { useCart } from "@/lib/cart-context"
 import {
   Home,
@@ -74,6 +76,8 @@ export function BuyerDashboard() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [showProfile, setShowProfile] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     loadMerchants()
@@ -146,6 +150,14 @@ export function BuyerDashboard() {
   const handleSuggestionTap = (s: string) => {
     setSearchQuery(s)
     setAiExpanded(false)
+  }
+
+  if (showProfile) {
+    return <ProfilePage onBack={() => setShowProfile(false)} />
+  }
+
+  if (showSettings) {
+    return <SettingsPage onBack={() => setShowSettings(false)} />
   }
 
   if (selectedProductId) {
@@ -629,14 +641,17 @@ export function BuyerDashboard() {
               <h3 className="font-semibold text-foreground p-4 border-b border-border">Account</h3>
               <div className="divide-y divide-border">
                 {[
-                  { label: "Edit Profile", value: "Update your info" },
+                  { label: "Edit Profile", value: "Update your info", action: () => setShowProfile(true) },
                   { label: "Saved Addresses", value: "Manage addresses" },
                   { label: "Payment Methods", value: "Add/remove cards" },
-                  { label: "Notifications", value: "Manage alerts" },
+                  { label: "Settings", value: "App settings", action: () => setShowSettings(true) },
                 ].map((item) => (
                   <button 
                     key={item.label} 
-                    onClick={() => setShowNotifications(item.label === "Notifications")}
+                    onClick={() => {
+                      if (item.action) item.action()
+                      else if (item.label === "Notifications") setShowNotifications(true)
+                    }}
                     className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors"
                   >
                     <span className="text-sm text-foreground">{item.label}</span>
