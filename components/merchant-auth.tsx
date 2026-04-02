@@ -10,6 +10,7 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
   const [showOTPVerification, setShowOTPVerification] = useState(false)
+  const [generatedOtp, setGeneratedOtp] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
@@ -36,10 +37,10 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
         // First, generate OTP
         const otpResult = await generateOTP(formData.email)
         if (otpResult.success) {
-          setShowOTPVerification(true)
           if (otpResult.data?.otp) {
-            setSuccessMessage(`Demo OTP: ${otpResult.data.otp}`)
+            setGeneratedOtp(otpResult.data.otp)
           }
+          setShowOTPVerification(true)
         } else {
           setError(otpResult.error || "Failed to generate OTP")
         }
@@ -164,11 +165,13 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
         onVerifySuccess={handleOTPVerified}
         onBack={() => {
           setShowOTPVerification(false)
+          setGeneratedOtp('')
           setError("")
           setSuccessMessage("")
         }}
         onResend={() => resendOTP(formData.email)}
         onVerify={(otp) => verifyOTP(formData.email, otp)}
+        initialDemoOtp={generatedOtp}
       />
     )
   }

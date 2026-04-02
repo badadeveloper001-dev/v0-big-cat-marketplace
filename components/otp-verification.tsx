@@ -10,6 +10,7 @@ interface OTPVerificationProps {
   onBack: () => void
   onResend: () => Promise<{ success: boolean; error?: string; data?: any }>
   onVerify: (otp: string) => Promise<{ success: boolean; error?: string }>
+  initialDemoOtp?: string
 }
 
 export function OTPVerification({
@@ -18,6 +19,7 @@ export function OTPVerification({
   onBack,
   onResend,
   onVerify,
+  initialDemoOtp,
 }: OTPVerificationProps) {
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
@@ -26,7 +28,7 @@ export function OTPVerification({
   const [timeLeft, setTimeLeft] = useState(300) // 5 minutes
   const [canResend, setCanResend] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
-  const [demoOtp, setDemoOtp] = useState('')
+  const [demoOtp, setDemoOtp] = useState(initialDemoOtp || '')
 
   // Countdown timer
   useEffect(() => {
@@ -149,10 +151,10 @@ export function OTPVerification({
 
             {/* Demo OTP Notice */}
             {demoOtp && (
-              <div className="mb-6 p-4 bg-chart-4/10 border border-chart-4/30 rounded-xl">
-                <p className="text-sm font-semibold text-chart-4 mb-1">Demo OTP:</p>
-                <p className="text-lg font-bold text-chart-4 font-mono tracking-widest">{demoOtp}</p>
-                <p className="text-xs text-muted-foreground mt-2">(Demo only - remove in production)</p>
+              <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                <p className="text-sm font-semibold text-amber-600 mb-1">Demo OTP Code:</p>
+                <p className="text-2xl font-bold text-amber-600 font-mono tracking-[0.3em] text-center">{demoOtp}</p>
+                <p className="text-xs text-muted-foreground mt-2 text-center">(Copy this code to verify - demo only)</p>
               </div>
             )}
 

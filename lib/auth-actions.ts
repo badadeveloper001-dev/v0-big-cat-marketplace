@@ -4,6 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
 
+interface AuthResponse {
+  success: boolean
+  error?: string
+  data?: any
+}
+
 // Validation utilities
 function validateEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -90,8 +96,8 @@ export async function generateOTP(email: string): Promise<AuthResponse> {
       success: true,
       data: {
         message: 'OTP sent to your email',
-        // Remove in production - demo only
-        otp: process.env.NODE_ENV === 'development' ? otp : undefined,
+        // Demo only - always return OTP for testing
+        otp: otp,
       },
     }
   } catch (error) {
@@ -200,8 +206,8 @@ export async function resendOTP(email: string): Promise<AuthResponse> {
       success: true,
       data: {
         message: 'OTP sent to your email',
-        // Remove in production
-        otp: process.env.NODE_ENV === 'development' ? otp : undefined,
+        // Demo only - always return OTP for testing
+        otp: otp,
       },
     }
   } catch (error) {
