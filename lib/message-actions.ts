@@ -44,8 +44,7 @@ export async function getOrCreateConversation(
       .insert({
         buyer_id: buyerId,
         merchant_id: merchantId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        last_message_at: new Date().toISOString(),
       })
       .select()
       .single()
@@ -85,7 +84,7 @@ export async function getUserConversations(userId: string): Promise<MessageRespo
         merchant:merchant_id(id, full_name, email, business_name)
       `)
       .or(`buyer_id.eq.${userId},merchant_id.eq.${userId}`)
-      .order('updated_at', { ascending: false })
+      .order('last_message_at', { ascending: false })
 
     if (error) {
       console.error('[v0] Error fetching conversations:', error)

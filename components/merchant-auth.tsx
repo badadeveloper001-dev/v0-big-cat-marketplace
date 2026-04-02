@@ -2,15 +2,12 @@
 
 import { useState } from "react"
 import { useRole } from "@/lib/role-context"
-import { merchantSignup, emailPasswordLogin, requestPasswordReset, resetPassword, generateOTP, verifyOTP, resendOTP } from "@/lib/auth-actions"
-import { OTPVerification } from "@/components/otp-verification"
+import { merchantSignup, emailPasswordLogin, requestPasswordReset, resetPassword } from "@/lib/auth-actions"
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Chrome, Apple, Hash, Loader2, CheckCircle2, Store } from "lucide-react"
 
 export function MerchantAuth({ onBack }: { onBack: () => void }) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
-  const [showOTPVerification, setShowOTPVerification] = useState(false)
-  const [generatedOtp, setGeneratedOtp] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
@@ -33,63 +30,39 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
     setLoading(true)
 
     try {
+      let result
+      
       if (isSignUp) {
-        // First, generate OTP
-        const otpResult = await generateOTP(formData.email)
-        if (otpResult.success) {
-          if (otpResult.data?.otp) {
-            setGeneratedOtp(otpResult.data.otp)
-          }
-          setShowOTPVerification(true)
-        } else {
-          setError(otpResult.error || "Failed to generate OTP")
-        }
+        result = await merchantSignup(
+          formData.email,
+          formData.phone,
+          formData.password,
+          formData.smedanId
+        )
       } else {
-        const result = await emailPasswordLogin(formData.email, formData.password)
-
-        if (result.success && result.data) {
-          // Check if role is merchant (for login, user might have different role)
-          if (result.data.role !== "merchant") {
-            setError("This account is not a merchant account. Please use the buyer login.")
-            return
-          }
-          
-          // Store user data and set role
-          setUser({
-            userId: result.data.userId,
-            email: result.data.email,
-            phone: result.data.phone,
-            role: "merchant",
-            merchantProfile: result.data.merchantProfile,
-          })
-          setRole("merchant")
-        } else {
-          setError(result.error || "An error occurred")
-        }
+        result = await emailPasswordLogin(formData.email, formData.password)
       }
-    } catch (err) {
-      setError("An unexpected error occurred")
-      console.error("[v0] Auth error:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleOTPVerified = async () => {
-    // After OTP verification, create the account
-    setLoading(true)
-    try {
-      const result = await merchantSignup(
-        formData.email,
-        formData.phone,
-        formData.password,
-        formData.smedanId
-      )
 
       if (result.success && result.data) {
-        setSuccessMessage("Account created successfully! Redirecting...")
-        setTimeout(() => {
-          // Store user data and set role
+        // Check if role is merchant (for login, user might have different role)
+        if (!isSignUp && result.data.role !== "merchant") {
+          setError("This account is not a merchant account. Please use the buyer login.")
+          return
+        }
+        
+        if (isSignUp) {
+          setSuccessMessage("Account created successfully! Redirecting...")
+          setTimeout(() => {
+            setUser({
+              userId: result.data.userId,
+              email: result.data.email,
+              phone: result.data.phone,
+              role: "merchant",
+              merchantProfile: result.data.merchantProfile,
+            })
+            setRole("merchant")
+          }, 1500)
+        } else {
           setUser({
             userId: result.data.userId,
             email: result.data.email,
@@ -98,15 +71,13 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
             merchantProfile: result.data.merchantProfile,
           })
           setRole("merchant")
-        }, 1500)
+        }
       } else {
-        setError(result.error || "Failed to create account")
-        setShowOTPVerification(false)
+        setError(result.error || "An error occurred")
       }
     } catch (err) {
       setError("An unexpected error occurred")
       console.error("[v0] Auth error:", err)
-      setShowOTPVerification(false)
     } finally {
       setLoading(false)
     }
@@ -156,25 +127,6 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
     }
     setLoading(false)
 }
-
-  // Show OTP Verification screen
-  if (showOTPVerification) {
-    return (
-      <OTPVerification
-        email={formData.email}
-        onVerifySuccess={handleOTPVerified}
-        onBack={() => {
-          setShowOTPVerification(false)
-          setGeneratedOtp('')
-          setError("")
-          setSuccessMessage("")
-        }}
-        onResend={() => resendOTP(formData.email)}
-        onVerify={(otp) => verifyOTP(formData.email, otp)}
-        initialDemoOtp={generatedOtp}
-      />
-    )
-  }
 
   // Forgot Password Modal
   if (showForgotPassword) {
