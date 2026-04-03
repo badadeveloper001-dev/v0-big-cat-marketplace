@@ -143,21 +143,42 @@ export async function getBuyerOrders(buyerId: string) {
   try {
     const supabase = await createClient()
     
-    const { data: orders, error } = await supabase
+    // First get orders
+    const { data: orders, error: ordersError } = await supabase
       .from('orders')
-      .select(`
-        *,
-        order_items (*)
-      `)
+      .select('*')
       .eq('buyer_id', buyerId)
       .order('created_at', { ascending: false })
     
-    if (error) {
-      console.error('[v0] Get buyer orders error:', error)
+    if (ordersError) {
+      console.error('[v0] Get buyer orders error:', ordersError)
       return { success: false, error: 'Failed to fetch orders' }
     }
     
-    return { success: true, data: orders }
+    if (!orders || orders.length === 0) {
+      return { success: true, data: [] }
+    }
+    
+    // Then get order items for these orders
+    const orderIds = orders.map(o => o.id)
+    const { data: items, error: itemsError } = await supabase
+      .from('order_items')
+      .select('*')
+      .in('order_id', orderIds)
+    
+    if (itemsError) {
+      console.error('[v0] Get order items error:', itemsError)
+      // Return orders without items if items table doesn't exist yet
+      return { success: true, data: orders.map(o => ({ ...o, order_items: [] })) }
+    }
+    
+    // Combine orders with their items
+    const ordersWithItems = orders.map(order => ({
+      ...order,
+      order_items: (items || []).filter(item => item.order_id === order.id)
+    }))
+    
+    return { success: true, data: ordersWithItems }
   } catch (error) {
     console.error('[v0] Unexpected error in getBuyerOrders:', error)
     return { success: false, error: 'An unexpected error occurred' }
@@ -169,32 +190,44 @@ export async function getMerchantOrders(merchantId: string) {
   try {
     const supabase = await createClient()
     
-    // Get order items for this merchant, then join with orders
-    const { data: orderItems, error } = await supabase
+    // First get order items for this merchant
+    const { data: orderItems, error: itemsError } = await supabase
       .from('order_items')
-      .select(`
-        *,
-        orders (*)
-      `)
+      .select('*')
       .eq('merchant_id', merchantId)
       .order('created_at', { ascending: false })
     
-    if (error) {
-      console.error('[v0] Get merchant orders error:', error)
+    if (itemsError) {
+      console.error('[v0] Get merchant order items error:', itemsError)
+      // If order_items table doesn't exist, return empty
+      return { success: true, data: [] }
+    }
+    
+    if (!orderItems || orderItems.length === 0) {
+      return { success: true, data: [] }
+    }
+    
+    // Get unique order IDs
+    const orderIds = [...new Set(orderItems.map(item => item.order_id))]
+    
+    // Fetch the orders
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('*')
+      .in('id', orderIds)
+    
+    if (ordersError) {
+      console.error('[v0] Get merchant orders error:', ordersError)
       return { success: false, error: 'Failed to fetch orders' }
     }
     
-    // Group by order
+    // Group items by order
     const ordersMap: { [orderId: string]: any } = {}
-    for (const item of orderItems || []) {
-      const orderId = item.order_id
-      if (!ordersMap[orderId]) {
-        ordersMap[orderId] = {
-          ...item.orders,
-          items: [],
-        }
+    for (const order of orders || []) {
+      ordersMap[order.id] = {
+        ...order,
+        items: orderItems.filter(item => item.order_id === order.id),
       }
-      ordersMap[orderId].items.push(item)
     }
     
     return { success: true, data: Object.values(ordersMap) }
