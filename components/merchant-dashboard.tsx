@@ -5,6 +5,7 @@ import { logout } from "@/lib/auth-actions"
 import { MerchantProducts } from "@/components/merchant-products"
 import { MerchantOrders } from "@/components/merchant-orders"
 import { ProfilePage } from "@/components/profile-page"
+import { MerchantProfilePage } from "@/components/merchant-profile-page"
 import { SettingsPage } from "@/components/settings-page"
 import { PaymentMethodsPage } from "@/components/payment-methods-page"
 import { formatNaira } from "@/lib/currency-utils"
@@ -167,7 +168,7 @@ export function MerchantDashboard() {
   }
 
   if (showProfile) {
-    return <ProfilePage onBack={() => setShowProfile(false)} />
+    return <MerchantProfilePage onBack={() => setShowProfile(false)} />
   }
 
   if (showSettings) {
@@ -535,7 +536,7 @@ export function MerchantDashboard() {
         </section>
           </>
         ) : activeTab === "products" ? (
-          <MerchantProducts userId={user?.userId || ""} />
+          <MerchantProducts merchantId={user?.userId || ""} />
         ) : activeTab === "orders" ? (
           <MerchantOrders onBack={() => setActiveTab("home")} />
         ) : activeTab === "analytics" ? (
@@ -598,44 +599,30 @@ export function MerchantDashboard() {
               <p className="text-sm text-muted-foreground">Manage your store preferences</p>
             </div>
             
-            {/* Profile Settings */}
+            {/* Profile & Store Settings */}
             <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
-              <h3 className="font-semibold text-foreground p-4 border-b border-border">Profile</h3>
+              <h3 className="font-semibold text-foreground p-4 border-b border-border">Profile & Store</h3>
               <div className="divide-y divide-border">
-                {[
-                  { label: "Business Name", value: user?.name || "Not set" },
-                  { label: "Email", value: user?.email || "Not set" },
-                  { label: "Phone", value: user?.phone || "Not set" },
-                ].map((item) => (
-                  <button key={item.label} className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
-                    <span className="text-sm text-muted-foreground">{item.label}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-foreground">{item.value}</span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Store Settings */}
-            <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
-              <h3 className="font-semibold text-foreground p-4 border-b border-border">Store</h3>
-              <div className="divide-y divide-border">
-                {[
-                  { label: "Store Logo", value: "Change" },
-                  { label: "Business Description", value: "Edit" },
-                  { label: "Location", value: "Update" },
-                  { label: "Business Hours", value: "Set" },
-                ].map((item) => (
-                  <button key={item.label} className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
-                    <span className="text-sm text-muted-foreground">{item.label}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-primary">{item.value}</span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </button>
-                ))}
+                <button 
+                  onClick={() => setShowProfile(true)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors"
+                >
+                  <span className="text-sm text-muted-foreground">Edit Profile & Store</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-primary">Edit</span>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                </button>
+                <button 
+                  onClick={() => setShowPaymentMethods(true)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors"
+                >
+                  <span className="text-sm text-muted-foreground">Payment Methods</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-primary">Manage</span>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -643,8 +630,11 @@ export function MerchantDashboard() {
             <div className="bg-card border border-border rounded-2xl overflow-hidden">
               <h3 className="font-semibold text-foreground p-4 border-b border-border">Account</h3>
               <div className="divide-y divide-border">
-                <button className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
-                  <span className="text-sm text-muted-foreground">Change Password</span>
+                <button 
+                  onClick={() => setShowSettings(true)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors"
+                >
+                  <span className="text-sm text-muted-foreground">Security Settings</span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </button>
                 <button 

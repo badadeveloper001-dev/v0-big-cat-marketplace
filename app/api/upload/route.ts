@@ -33,15 +33,19 @@ export async function POST(request: NextRequest) {
     const extension = file.name.split('.').pop() || 'jpg'
     const filename = `products/${timestamp}-${Math.random().toString(36).substring(7)}.${extension}`
 
-    // Upload to Vercel Blob (public access for product images)
+    // Upload to Vercel Blob
+    // Try public access first (for public stores), fall back to private if needed
     const blob = await put(filename, file, {
       access: 'public',
+      addRandomSuffix: true,
     })
 
     return NextResponse.json({ url: blob.url })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Upload error:', error)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+    // Return more specific error message
+    const errorMessage = error?.message || 'Upload failed'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
 

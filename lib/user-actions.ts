@@ -47,6 +47,11 @@ export async function updateUserProfile(
     phone?: string
     address?: string
     avatar_url?: string
+    // Business/merchant fields
+    business_name?: string
+    business_description?: string
+    business_category?: string
+    location?: string
   }
 ): Promise<UserUpdateResponse> {
   try {
@@ -66,15 +71,23 @@ export async function updateUserProfile(
 
     const supabase = await createClient()
 
+    // Build update object with only provided fields
+    const updateData: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    }
+
+    if (updates.full_name !== undefined) updateData.full_name = updates.full_name
+    if (updates.phone !== undefined) updateData.phone = updates.phone
+    if (updates.address !== undefined) updateData.address = updates.address
+    if (updates.avatar_url !== undefined) updateData.avatar_url = updates.avatar_url
+    if (updates.business_name !== undefined) updateData.business_name = updates.business_name
+    if (updates.business_description !== undefined) updateData.business_description = updates.business_description
+    if (updates.business_category !== undefined) updateData.business_category = updates.business_category
+    if (updates.location !== undefined) updateData.location = updates.location
+
     const { data: updatedUser, error } = await supabase
       .from('auth_users')
-      .update({
-        full_name: updates.full_name,
-        phone: updates.phone,
-        address: updates.address,
-        avatar_url: updates.avatar_url,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', userId)
       .select()
       .single()
