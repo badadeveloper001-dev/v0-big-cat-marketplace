@@ -78,7 +78,7 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
         })
       }
     } catch (error) {
-      console.error('[v0] Error loading profile:', error)
+      // console.error('[v0] Error loading profile:', error)
       setMessage({ type: 'error', text: 'Failed to load profile' })
     } finally {
       setLoading(false)
@@ -133,7 +133,7 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
         setMessage({ type: 'error', text: result.error || 'Failed to update' })
       }
     } catch (error) {
-      console.error('[v0] Error saving:', error)
+      // console.error('[v0] Error saving:', error)
       setMessage({ type: 'error', text: 'An error occurred' })
     } finally {
       setSaving(false)

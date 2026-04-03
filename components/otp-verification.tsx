@@ -70,7 +70,7 @@ export function OTPVerification({
       }
     } catch (err) {
       setError('An error occurred during verification')
-      console.error('[v0] Verification error:', err)
+      // console.error('[v0] Verification error:', err)
     } finally {
       setLoading(false)
     }
@@ -98,7 +98,7 @@ export function OTPVerification({
       }
     } catch (err) {
       setError('Failed to resend OTP')
-      console.error('[v0] Resend error:', err)
+      // console.error('[v0] Resend error:', err)
     } finally {
       setResendLoading(false)
     }

@@ -79,7 +79,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
         setMessage({ type: 'error', text: result.error || 'Failed to change password' })
       }
     } catch (error) {
-      console.error('[v0] Error changing password:', error)
+      // console.error('[v0] Error changing password:', error)
       setMessage({ type: 'error', text: 'An error occurred' })
     } finally {
       setLoading(false)
@@ -107,7 +107,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
         setMessage({ type: 'error', text: result.error || 'Failed to update email' })
       }
     } catch (error) {
-      console.error('[v0] Error updating email:', error)
+      // console.error('[v0] Error updating email:', error)
       setMessage({ type: 'error', text: 'An error occurred' })
     } finally {
       setLoading(false)
@@ -127,7 +127,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
         setMessage({ type: 'error', text: result.error || 'Failed to update preferences' })
       }
     } catch (error) {
-      console.error('[v0] Error updating notifications:', error)
+      // console.error('[v0] Error updating notifications:', error)
       setMessage({ type: 'error', text: 'An error occurred' })
     } finally {
       setLoading(false)
@@ -160,7 +160,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
         setMessage({ type: 'error', text: result.error || 'Failed to delete account' })
       }
     } catch (error) {
-      console.error('[v0] Error deleting account:', error)
+      // console.error('[v0] Error deleting account:', error)
       setMessage({ type: 'error', text: 'An error occurred' })
     } finally {
       setLoading(false)

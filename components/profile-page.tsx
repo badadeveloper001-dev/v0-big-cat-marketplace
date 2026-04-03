@@ -46,7 +46,7 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
         })
       }
     } catch (error) {
-      console.error('[v0] Error loading profile:', error)
+      // console.error('[v0] Error loading profile:', error)
       setMessage({ type: 'error', text: 'Failed to load profile' })
     } finally {
       setLoading(false)
@@ -75,7 +75,7 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
         setMessage({ type: 'error', text: result.error || 'Failed to update profile' })
       }
     } catch (error) {
-      console.error('[v0] Error saving profile:', error)
+      // console.error('[v0] Error saving profile:', error)
       setMessage({ type: 'error', text: 'An error occurred' })
     } finally {
       setSaving(false)

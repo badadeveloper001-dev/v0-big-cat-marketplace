@@ -50,7 +50,7 @@ export async function getOrCreateConversation(
       .single()
 
     if (error) {
-      console.error('[v0] Error creating conversation:', error)
+      // console.error('[v0] Error creating conversation:', error)
       return { success: false, error: 'Failed to create conversation' }
     }
 
@@ -59,7 +59,7 @@ export async function getOrCreateConversation(
       data: newConversation,
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in getOrCreateConversation:', error)
+    // console.error('[v0] Unexpected error in getOrCreateConversation:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -87,7 +87,7 @@ export async function getUserConversations(userId: string): Promise<MessageRespo
       .order('last_message_at', { ascending: false })
 
     if (error) {
-      console.error('[v0] Error fetching conversations:', error)
+      // console.error('[v0] Error fetching conversations:', error)
       return { success: false, error: 'Failed to fetch conversations' }
     }
 
@@ -96,7 +96,7 @@ export async function getUserConversations(userId: string): Promise<MessageRespo
       data: conversations || [],
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in getUserConversations:', error)
+    // console.error('[v0] Unexpected error in getUserConversations:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -129,7 +129,7 @@ export async function sendMessage(
       .single()
 
     if (error) {
-      console.error('[v0] Error sending message:', error)
+      // console.error('[v0] Error sending message:', error)
       return { success: false, error: 'Failed to send message' }
     }
 
@@ -145,7 +145,7 @@ export async function sendMessage(
       data: newMessage,
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in sendMessage:', error)
+    // console.error('[v0] Unexpected error in sendMessage:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -171,7 +171,7 @@ export async function getConversationMessages(conversationId: string): Promise<M
       .order('created_at', { ascending: true })
 
     if (error) {
-      console.error('[v0] Error fetching messages:', error)
+      // console.error('[v0] Error fetching messages:', error)
       return { success: false, error: 'Failed to fetch messages' }
     }
 
@@ -180,7 +180,7 @@ export async function getConversationMessages(conversationId: string): Promise<M
       data: messages || [],
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in getConversationMessages:', error)
+    // console.error('[v0] Unexpected error in getConversationMessages:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }

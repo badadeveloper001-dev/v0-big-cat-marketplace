@@ -23,7 +23,6 @@ export async function getUserProfile(userId: string): Promise<UserUpdateResponse
       .single()
 
     if (error) {
-      console.error('[v0] Error fetching user profile:', error)
       return { success: false, error: 'Failed to fetch profile' }
     }
 
@@ -31,8 +30,7 @@ export async function getUserProfile(userId: string): Promise<UserUpdateResponse
       success: true,
       data: user,
     }
-  } catch (error) {
-    console.error('[v0] Unexpected error in getUserProfile:', error)
+  } catch {
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -93,7 +91,6 @@ export async function updateUserProfile(
       .single()
 
     if (error) {
-      console.error('[v0] Error updating user profile:', error)
       return { success: false, error: 'Failed to update profile' }
     }
 
@@ -102,8 +99,7 @@ export async function updateUserProfile(
       success: true,
       data: updatedUser,
     }
-  } catch (error) {
-    console.error('[v0] Unexpected error in updateUserProfile:', error)
+  } catch {
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -166,7 +162,7 @@ export async function updateEmail(
       .single()
 
     if (error) {
-      console.error('[v0] Error updating email:', error)
+      // console.error('[v0] Error updating email:', error)
       return { success: false, error: 'Failed to update email' }
     }
 
@@ -176,7 +172,7 @@ export async function updateEmail(
       data: updatedUser,
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in updateEmail:', error)
+    // console.error('[v0] Unexpected error in updateEmail:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -241,7 +237,7 @@ export async function changePassword(
       .eq('id', userId)
 
     if (error) {
-      console.error('[v0] Error changing password:', error)
+      // console.error('[v0] Error changing password:', error)
       return { success: false, error: 'Failed to change password' }
     }
 
@@ -251,7 +247,7 @@ export async function changePassword(
       data: { message: 'Password changed successfully' },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in changePassword:', error)
+    // console.error('[v0] Unexpected error in changePassword:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -287,7 +283,7 @@ export async function updateNotificationPreferences(
       .single()
 
     if (error) {
-      console.error('[v0] Error updating notification preferences:', error)
+      // console.error('[v0] Error updating notification preferences:', error)
       return { success: false, error: 'Failed to update preferences' }
     }
 
@@ -297,7 +293,7 @@ export async function updateNotificationPreferences(
       data: updatedUser,
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in updateNotificationPreferences:', error)
+    // console.error('[v0] Unexpected error in updateNotificationPreferences:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -321,7 +317,7 @@ export async function getPaymentMethods(userId: string): Promise<UserUpdateRespo
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('[v0] Error fetching payment methods:', error)
+      // console.error('[v0] Error fetching payment methods:', error)
       return { success: false, error: 'Failed to fetch payment methods' }
     }
 
@@ -330,7 +326,7 @@ export async function getPaymentMethods(userId: string): Promise<UserUpdateRespo
       data: paymentMethods || [],
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in getPaymentMethods:', error)
+    // console.error('[v0] Unexpected error in getPaymentMethods:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -405,7 +401,7 @@ export async function addPaymentMethod(
       .single()
 
     if (error) {
-      console.error('[v0] Error adding payment method:', error)
+      // console.error('[v0] Error adding payment method:', error)
       return { success: false, error: 'Failed to add payment method' }
     }
 
@@ -415,7 +411,7 @@ export async function addPaymentMethod(
       data: newCard,
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in addPaymentMethod:', error)
+    // console.error('[v0] Unexpected error in addPaymentMethod:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -454,7 +450,7 @@ export async function removePaymentMethod(
       .eq('user_id', userId)
 
     if (error) {
-      console.error('[v0] Error removing payment method:', error)
+      // console.error('[v0] Error removing payment method:', error)
       return { success: false, error: 'Failed to remove payment method' }
     }
 
@@ -480,7 +476,7 @@ export async function removePaymentMethod(
       data: { message: 'Payment method removed' },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in removePaymentMethod:', error)
+    // console.error('[v0] Unexpected error in removePaymentMethod:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -515,7 +511,7 @@ export async function setDefaultPaymentMethod(
       .single()
 
     if (error) {
-      console.error('[v0] Error setting default payment method:', error)
+      // console.error('[v0] Error setting default payment method:', error)
       return { success: false, error: 'Failed to update default payment method' }
     }
 
@@ -525,7 +521,7 @@ export async function setDefaultPaymentMethod(
       data: updatedCard,
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in setDefaultPaymentMethod:', error)
+    // console.error('[v0] Unexpected error in setDefaultPaymentMethod:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -576,7 +572,7 @@ export async function deleteAccount(
       .eq('id', userId)
 
     if (error) {
-      console.error('[v0] Error deleting account:', error)
+      // console.error('[v0] Error deleting account:', error)
       return { success: false, error: 'Failed to delete account' }
     }
 
@@ -589,7 +585,7 @@ export async function deleteAccount(
       data: { message: 'Account deleted successfully' },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in deleteAccount:', error)
+    // console.error('[v0] Unexpected error in deleteAccount:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }

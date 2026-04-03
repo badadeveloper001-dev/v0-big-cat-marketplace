@@ -97,14 +97,14 @@ export async function createProduct(
       .maybeSingle()
 
     if (createError) {
-      console.error('[v0] Product creation error:', createError)
+      // console.error('[v0] Product creation error:', createError)
       return { success: false, error: 'Failed to create product' }
     }
 
     revalidatePath('/')
     return { success: true, data: newProduct }
   } catch (error) {
-    console.error('[v0] Unexpected error in createProduct:', error)
+    // console.error('[v0] Unexpected error in createProduct:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -159,14 +159,14 @@ export async function updateProduct(
       .maybeSingle()
 
     if (updateError) {
-      console.error('[v0] Product update error:', updateError)
+      // console.error('[v0] Product update error:', updateError)
       return { success: false, error: 'Failed to update product' }
     }
 
     revalidatePath('/')
     return { success: true, data: updatedProduct }
   } catch (error) {
-    console.error('[v0] Unexpected error in updateProduct:', error)
+    // console.error('[v0] Unexpected error in updateProduct:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -188,14 +188,14 @@ export async function deleteProduct(productId: string): Promise<ProductResponse>
       .eq('id', productId)
 
     if (deleteError) {
-      console.error('[v0] Product deletion error:', deleteError)
+      // console.error('[v0] Product deletion error:', deleteError)
       return { success: false, error: 'Failed to delete product' }
     }
 
     revalidatePath('/')
     return { success: true }
   } catch (error) {
-    console.error('[v0] Unexpected error in deleteProduct:', error)
+    // console.error('[v0] Unexpected error in deleteProduct:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -218,13 +218,13 @@ export async function getMerchantProducts(merchantId: string): Promise<ProductRe
       .order('created_at', { ascending: false })
 
     if (fetchError) {
-      console.error('[v0] Error fetching merchant products:', fetchError)
+      // console.error('[v0] Error fetching merchant products:', fetchError)
       return { success: false, error: 'Failed to fetch products' }
     }
 
     return { success: true, data: products || [] }
   } catch (error) {
-    console.error('[v0] Unexpected error in getMerchantProducts:', error)
+    // console.error('[v0] Unexpected error in getMerchantProducts:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -249,7 +249,7 @@ export async function getAllProducts(category?: string, search?: string): Promis
     const { data: products, error: fetchError } = await query
 
     if (fetchError) {
-      console.error('[v0] Error fetching products:', fetchError)
+      // console.error('[v0] Error fetching products:', fetchError)
       return { success: false, error: 'Failed to fetch products' }
     }
 
@@ -266,7 +266,7 @@ export async function getAllProducts(category?: string, search?: string): Promis
 
     return { success: true, data: filteredProducts }
   } catch (error) {
-    console.error('[v0] Unexpected error in getAllProducts:', error)
+    // console.error('[v0] Unexpected error in getAllProducts:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -289,7 +289,7 @@ export async function getProductById(productId: string): Promise<ProductResponse
       .maybeSingle()
 
     if (fetchError) {
-      console.error('[v0] Error fetching product:', fetchError)
+      // console.error('[v0] Error fetching product:', fetchError)
       return { success: false, error: 'Failed to fetch product' }
     }
 
@@ -299,7 +299,7 @@ export async function getProductById(productId: string): Promise<ProductResponse
 
     return { success: true, data: product }
   } catch (error) {
-    console.error('[v0] Unexpected error in getProductById:', error)
+    // console.error('[v0] Unexpected error in getProductById:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -326,14 +326,14 @@ export async function requestWeightVerification(productId: string): Promise<Prod
       .maybeSingle()
 
     if (updateError) {
-      console.error('[v0] Error requesting weight verification:', updateError)
+      // console.error('[v0] Error requesting weight verification:', updateError)
       return { success: false, error: 'Failed to request verification' }
     }
 
     revalidatePath('/')
     return { success: true, data: updated }
   } catch (error) {
-    console.error('[v0] Unexpected error in requestWeightVerification:', error)
+    // console.error('[v0] Unexpected error in requestWeightVerification:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }

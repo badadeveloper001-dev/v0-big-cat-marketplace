@@ -84,7 +84,7 @@ export async function generateOTP(email: string): Promise<AuthResponse> {
       })
 
     if (insertError) {
-      console.error('[v0] Error storing OTP:', insertError)
+      // console.error('[v0] Error storing OTP:', insertError)
       return { success: false, error: 'Failed to generate OTP' }
     }
 
@@ -101,7 +101,7 @@ export async function generateOTP(email: string): Promise<AuthResponse> {
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in generateOTP:', error)
+    // console.error('[v0] Unexpected error in generateOTP:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -161,7 +161,7 @@ export async function verifyOTP(email: string, otpCode: string): Promise<AuthRes
 
     return { success: true, data: { message: 'Email verified successfully' } }
   } catch (error) {
-    console.error('[v0] Unexpected error in verifyOTP:', error)
+    // console.error('[v0] Unexpected error in verifyOTP:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -211,7 +211,7 @@ export async function resendOTP(email: string): Promise<AuthResponse> {
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in resendOTP:', error)
+    // console.error('[v0] Unexpected error in resendOTP:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -268,7 +268,7 @@ export async function buyerSignup(
       .single()
 
     if (createError) {
-      console.error('[v0] Buyer signup error:', createError)
+      // console.error('[v0] Buyer signup error:', createError)
       return { success: false, error: 'Failed to create account' }
     }
 
@@ -283,7 +283,7 @@ export async function buyerSignup(
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in buyerSignup:', error)
+    // console.error('[v0] Unexpected error in buyerSignup:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -346,8 +346,8 @@ export async function buyerSignupWithName(
       .single()
 
     if (createError) {
-      console.error('[v0] Buyer signup error:', createError)
-      console.error('[v0] Error details:', createError.message, createError.code)
+      // console.error('[v0] Buyer signup error:', createError)
+      // console.error('[v0] Error details:', createError.message, createError.code)
       return { success: false, error: `Failed to create account: ${createError.message}` }
     }
 
@@ -364,7 +364,7 @@ export async function buyerSignupWithName(
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in buyerSignupWithName:', error)
+    // console.error('[v0] Unexpected error in buyerSignupWithName:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -430,7 +430,7 @@ export async function merchantSignup(
       .single()
 
     if (createUserError) {
-      console.error('[v0] Merchant signup error:', createUserError)
+      // console.error('[v0] Merchant signup error:', createUserError)
       return { success: false, error: 'Failed to create account' }
     }
 
@@ -452,7 +452,7 @@ export async function merchantSignup(
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in merchantSignup:', error)
+    // console.error('[v0] Unexpected error in merchantSignup:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -521,7 +521,7 @@ export async function emailPasswordLogin(
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in emailPasswordLogin:', error)
+    // console.error('[v0] Unexpected error in emailPasswordLogin:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -580,7 +580,7 @@ export async function getCurrentUser(): Promise<AuthResponse> {
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in getCurrentUser:', error)
+    // console.error('[v0] Unexpected error in getCurrentUser:', error)
     return { success: false, error: 'Failed to fetch user' }
   }
 }
@@ -622,7 +622,7 @@ export async function requestPasswordReset(email: string): Promise<AuthResponse>
       .eq('id', user.id)
 
     if (error) {
-      console.error('[v0] Error storing reset token:', error)
+      // console.error('[v0] Error storing reset token:', error)
       return { success: false, error: 'Failed to process request' }
     }
 
@@ -639,7 +639,7 @@ export async function requestPasswordReset(email: string): Promise<AuthResponse>
       } 
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in requestPasswordReset:', error)
+    // console.error('[v0] Unexpected error in requestPasswordReset:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -697,13 +697,13 @@ export async function resetPassword(
       .eq('id', user.id)
 
     if (error) {
-      console.error('[v0] Error updating password:', error)
+      // console.error('[v0] Error updating password:', error)
       return { success: false, error: 'Failed to update password' }
     }
 
     return { success: true, data: { message: 'Password updated successfully' } }
   } catch (error) {
-    console.error('[v0] Unexpected error in resetPassword:', error)
+    // console.error('[v0] Unexpected error in resetPassword:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -717,14 +717,14 @@ export async function logout(): Promise<AuthResponse> {
     const { error } = await supabase.auth.signOut()
 
     if (error) {
-      console.error('[v0] Logout error:', error)
+      // console.error('[v0] Logout error:', error)
       return { success: false, error: 'Failed to logout' }
     }
 
     revalidatePath('/')
     return { success: true }
   } catch (error) {
-    console.error('[v0] Unexpected error in logout:', error)
+    // console.error('[v0] Unexpected error in logout:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }

@@ -60,7 +60,7 @@ export async function createOrder(data: CreateOrderData) {
       .single()
     
     if (orderError) {
-      console.error('[v0] Order creation error:', orderError)
+      // console.error('[v0] Order creation error:', orderError)
       return { success: false, error: 'Failed to create order' }
     }
     
@@ -81,7 +81,7 @@ export async function createOrder(data: CreateOrderData) {
       .insert(orderItems)
     
     if (itemsError) {
-      console.error('[v0] Order items error:', itemsError)
+      // console.error('[v0] Order items error:', itemsError)
       // Rollback order
       await supabase.from('orders').delete().eq('id', order.id)
       return { success: false, error: 'Failed to create order items' }
@@ -118,7 +118,7 @@ export async function createOrder(data: CreateOrderData) {
       .insert(escrowEntries)
     
     if (escrowError) {
-      console.error('[v0] Escrow error:', escrowError)
+      // console.error('[v0] Escrow error:', escrowError)
       // Continue anyway - escrow can be created later
     }
     
@@ -133,7 +133,7 @@ export async function createOrder(data: CreateOrderData) {
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in createOrder:', error)
+    // console.error('[v0] Unexpected error in createOrder:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -253,7 +253,7 @@ export async function updateOrderStatus(orderId: string, status: string, merchan
       .eq('id', orderId)
     
     if (error) {
-      console.error('[v0] Update order status error:', error)
+      // console.error('[v0] Update order status error:', error)
       return { success: false, error: 'Failed to update order status' }
     }
     
@@ -265,7 +265,7 @@ export async function updateOrderStatus(orderId: string, status: string, merchan
     revalidatePath('/')
     return { success: true }
   } catch (error) {
-    console.error('[v0] Unexpected error in updateOrderStatus:', error)
+    // console.error('[v0] Unexpected error in updateOrderStatus:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -285,10 +285,10 @@ async function releaseEscrow(orderId: string) {
       .eq('status', 'held')
     
     if (error) {
-      console.error('[v0] Release escrow error:', error)
+      // console.error('[v0] Release escrow error:', error)
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in releaseEscrow:', error)
+    // console.error('[v0] Unexpected error in releaseEscrow:', error)
   }
 }
 

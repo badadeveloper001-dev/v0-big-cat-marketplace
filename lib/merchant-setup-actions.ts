@@ -96,12 +96,12 @@ export async function saveMerchantSetup(
       .single()
 
     if (error) {
-      console.error('[v0] Merchant setup error:', error)
+      // console.error('[v0] Merchant setup error:', error)
       return { success: false, error: `Failed to save setup information: ${error.message}` }
     }
 
     if (!result) {
-      console.error('[v0] No result returned from merchant setup')
+      // console.error('[v0] No result returned from merchant setup')
       return { success: false, error: 'Failed to save setup information' }
     }
 
@@ -121,7 +121,7 @@ export async function saveMerchantSetup(
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in saveMerchantSetup:', error)
+    // console.error('[v0] Unexpected error in saveMerchantSetup:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
@@ -162,7 +162,7 @@ export async function getMerchantProfile(userId: string): Promise<SetupResponse>
       },
     }
   } catch (error) {
-    console.error('[v0] Unexpected error in getMerchantProfile:', error)
+    // console.error('[v0] Unexpected error in getMerchantProfile:', error)
     return { success: false, error: 'Failed to fetch merchant profile' }
   }
 }

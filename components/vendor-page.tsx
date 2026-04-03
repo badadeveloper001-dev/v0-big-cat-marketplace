@@ -109,7 +109,7 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
 
   const handleChatVendor = async () => {
     if (!user?.userId) {
-      console.error('[v0] User ID not found')
+      // console.error('[v0] User ID not found')
       onChatVendor?.()
       return
     }
@@ -122,7 +122,7 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
         onChatVendor?.()
       }
     } catch (error) {
-      console.error('[v0] Error creating conversation:', error)
+      // console.error('[v0] Error creating conversation:', error)
     } finally {
       setChatLoading(false)
     }
