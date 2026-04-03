@@ -33,14 +33,17 @@ export async function POST(request: NextRequest) {
     const extension = file.name.split('.').pop() || 'jpg'
     const filename = `products/${timestamp}-${Math.random().toString(36).substring(7)}.${extension}`
 
-    // Upload to Vercel Blob
-    // Try public access first (for public stores), fall back to private if needed
+    // Upload to Vercel Blob - use private access since the store is configured as private
     const blob = await put(filename, file, {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: true,
     })
 
-    return NextResponse.json({ url: blob.url })
+    // For private blobs, return the pathname which can be used with /api/file route
+    return NextResponse.json({ 
+      pathname: blob.pathname,
+      url: `/api/file?pathname=${encodeURIComponent(blob.pathname)}`
+    })
   } catch (error: any) {
     console.error('Upload error:', error)
     // Return more specific error message
