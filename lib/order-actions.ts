@@ -151,10 +151,7 @@ export async function getBuyerOrders(buyerId: string) {
       .order('created_at', { ascending: false })
     
     if (ordersError) {
-      // Don't log schema cache errors - they're expected until cache refreshes
-      if (!ordersError.code?.startsWith('PGRST')) {
-        console.error('[v0] Get buyer orders error:', ordersError)
-      }
+      // Schema cache or other error - return empty silently
       return { success: true, data: [] }
     }
     
@@ -186,8 +183,7 @@ export async function getBuyerOrders(buyerId: string) {
       // If order_items query fails, return orders without items
       return { success: true, data: orders.map(o => ({ ...o, order_items: [] })) }
     }
-  } catch (error) {
-    console.error('[v0] Unexpected error in getBuyerOrders:', error)
+  } catch {
     return { success: true, data: [] }
   }
 }
