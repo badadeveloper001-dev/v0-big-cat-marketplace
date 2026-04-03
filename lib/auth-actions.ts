@@ -1,8 +1,9 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { query, withConnection } from '@/lib/db'
 import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
+import { randomUUID } from 'crypto'
 
 interface AuthResponse {
   success: boolean
@@ -56,37 +57,26 @@ export async function generateOTP(email: string): Promise<AuthResponse> {
       return { success: false, error: 'Invalid email address' }
     }
 
-    const supabase = await createClient()
-
     // Check if email already registered
-    const { data: existingUser } = await supabase
-      .from('auth_users')
-      .select('id')
-      .eq('email', email.toLowerCase())
-      .single()
+    const { rows: existingUsers } = await query(
+      'SELECT id FROM auth_users WHERE email = $1',
+      [email.toLowerCase()]
+    )
 
-    if (existingUser) {
+    if (existingUsers.length > 0) {
       return { success: false, error: 'Email already registered' }
     }
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString()
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+    const otpId = randomUUID()
 
     // Store OTP in database
-    const { error: insertError } = await supabase
-      .from('otp_verification')
-      .insert({
-        email: email.toLowerCase(),
-        otp_code: otp,
-        expires_at: expiresAt.toISOString(),
-        attempts: 0,
-      })
-
-    if (insertError) {
-      // console.error('[v0] Error storing OTP:', insertError)
-      return { success: false, error: 'Failed to generate OTP' }
-    }
+    await query(
+      'INSERT INTO otp_verification (id, email, otp_code, expires_at, attempts) VALUES ($1, $2, $3, $4, $5)',
+      [otpId, email.toLowerCase(), otp, expiresAt.toISOString(), 0]
+    )
 
     // In production, send via email service (SendGrid, etc.)
     // For demo, return OTP in response
