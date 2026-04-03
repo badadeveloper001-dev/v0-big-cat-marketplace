@@ -33,7 +33,32 @@ export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps)
   const [notifications, setNotifications] = useState<Notification[]>([])
 
   useEffect(() => {
-    // Generate role-specific notifications
+    // TODO: Fetch real notifications from database
+    // For now, show empty notifications
+    setNotifications([])
+    
+    // Only show welcome notification for new users
+    if (role === "buyer" || role === "merchant") {
+      // Check if they've seen the welcome notification before
+      const hasSeenWelcome = localStorage.getItem(`welcome_notification_${role}`)
+      if (!hasSeenWelcome) {
+        setNotifications([
+          {
+            id: "welcome",
+            type: "system",
+            title: `Welcome to BigCat!`,
+            message: role === "buyer" 
+              ? "Start exploring our marketplace for amazing deals."
+              : "Set up your store and start selling today.",
+            time: "Just now",
+            read: false,
+          },
+        ])
+        localStorage.setItem(`welcome_notification_${role}`, "true")
+      }
+    }
+    
+    /* Future: Replace with real notification fetch
     if (role === "buyer") {
       setNotifications([
         {
@@ -44,41 +69,9 @@ export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps)
           time: "Just now",
           read: false,
         },
-        {
-          id: "2",
-          type: "delivery",
-          title: "Delivery Update",
-          message: "Your package is on the way! Expected delivery: Tomorrow.",
-          time: "2 hours ago",
-          read: false,
-        },
-        {
-          id: "3",
-          type: "system",
-          title: "Welcome to BigCat!",
-          message: "Start exploring our marketplace for amazing deals.",
-          time: "1 day ago",
-          read: true,
-        },
       ])
     } else if (role === "merchant") {
       setNotifications([
-        {
-          id: "1",
-          type: "order",
-          title: "New Order Received",
-          message: "You have a new order waiting to be processed.",
-          time: "Just now",
-          read: false,
-        },
-        {
-          id: "2",
-          type: "message",
-          title: "Customer Inquiry",
-          message: "A customer has a question about your product.",
-          time: "1 hour ago",
-          read: false,
-        },
         {
           id: "3",
           type: "system",
@@ -108,6 +101,7 @@ export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps)
         },
       ])
     }
+    */
   }, [role])
 
   const getIcon = (type: Notification["type"]) => {

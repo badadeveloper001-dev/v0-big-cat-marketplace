@@ -302,7 +302,7 @@ export function MerchantDashboard() {
         {/* Welcome Section */}
         <div className="px-4 pt-5 pb-4">
           <p className="text-sm text-muted-foreground">Welcome back,</p>
-          <h2 className="text-2xl font-bold text-foreground">{user?.name || "Merchant"}</h2>
+          <h2 className="text-2xl font-bold text-foreground">{user?.merchantProfile?.business_name || user?.name || user?.email?.split('@')[0] || "Merchant"}</h2>
         </div>
 
         {/* Stats Cards */}
