@@ -653,13 +653,13 @@ export function MerchantDashboard() {
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-2 pb-6">
         <div className="flex items-center justify-around">
-          {[
-            { id: "home", icon: Home, label: "Home" },
-            { id: "products", icon: Package, label: "Products", action: () => setActiveTab("products") },
-            { id: "orders", icon: ShoppingBag, label: "Orders", action: () => setActiveTab("orders") },
-            { id: "analytics", icon: BarChart3, label: "Analytics", action: () => setActiveTab("analytics") },
-            { id: "settings", icon: Settings, label: "Settings", action: () => setShowSettings(true) },
-          ].map((item) => (
+{[
+                  { id: "home", icon: Home, label: "Home" },
+                  { id: "products", icon: Package, label: "Products", action: () => setActiveTab("products") },
+                  { id: "orders", icon: ShoppingBag, label: "Orders", action: () => setActiveTab("orders") },
+                  { id: "profile", icon: User, label: "Profile", action: () => setShowProfile(true) },
+                  { id: "settings", icon: Settings, label: "Settings", action: () => setActiveTab("settings") },
+                ].map((item) => (
             <button
               key={item.id}
               onClick={item.action}
