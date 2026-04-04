@@ -1,5 +1,6 @@
 'use server'
 
+// Force rebuild - Fixed Supabase imports
 import { createClient } from '@/lib/supabase/server'
 import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
