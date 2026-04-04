@@ -48,6 +48,9 @@ export function MerchantDashboard() {
   const [activeTab, setActiveTab] = useState("home")
   const [aiMessage, setAiMessage] = useState("")
   const [currentInsight, setCurrentInsight] = useState(0)
+  const [showProfile, setShowProfile] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false)
   
   // Real data states
   const [stats, setStats] = useState<any[]>([])
@@ -77,9 +80,6 @@ export function MerchantDashboard() {
       </div>
     )
   }
-  const [showProfile, setShowProfile] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [showPaymentMethods, setShowPaymentMethods] = useState(false)
 
   useEffect(() => {
     if (user?.userId) {
