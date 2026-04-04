@@ -1,3 +1,4 @@
+// Supabase Server Client - Rose Horizon
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
