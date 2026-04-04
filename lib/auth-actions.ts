@@ -12,16 +12,24 @@ export async function buyerSignup(email: string, password: string, name: string,
     const supabase = await createClient()
     const passwordHash = hashPassword(password)
     
+    console.log("[v0] Attempting buyer signup for:", email)
+    
     const { data, error } = await supabase
       .from('auth_users')
       .insert({ email, password_hash: passwordHash, name, phone, role: 'buyer' })
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.log("[v0] Supabase error:", error)
+      throw error
+    }
+    
+    console.log("[v0] Signup successful:", data?.id)
     return { success: true, data }
   } catch (error: any) {
-    return { success: false, error: error.message }
+    console.log("[v0] Signup catch error:", error?.message || error)
+    return { success: false, error: error?.message || 'Signup failed' }
   }
 }
 
@@ -30,16 +38,24 @@ export async function merchantSignup(email: string, password: string, businessNa
     const supabase = await createClient()
     const passwordHash = hashPassword(password)
     
+    console.log("[v0] Attempting merchant signup for:", email)
+    
     const { data, error } = await supabase
       .from('auth_users')
       .insert({ email, password_hash: passwordHash, business_name: businessName, phone, role: 'merchant' })
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.log("[v0] Supabase error:", error)
+      throw error
+    }
+    
+    console.log("[v0] Merchant signup successful:", data?.id)
     return { success: true, data }
   } catch (error: any) {
-    return { success: false, error: error.message }
+    console.log("[v0] Merchant signup catch error:", error?.message || error)
+    return { success: false, error: error?.message || 'Signup failed' }
   }
 }
 
