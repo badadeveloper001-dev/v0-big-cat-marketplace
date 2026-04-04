@@ -4,191 +4,114 @@ import { createClient } from '@/lib/supabase/server'
 import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
 
-interface AuthResponse {
-  success: boolean
-  error?: string
-  data?: any
-}
+const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
-function validateEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-}
-
-/**
- * Buyer signup
- */
-export async function buyerSignup(email: string, password: string, name?: string): Promise<AuthResponse> {
+export async function buyerSignup(email: string, password: string, name?: string) {
   try {
-    if (!validateEmail(email)) return { success: false, error: 'Invalid email address' }
-    if (password.length < 6) return { success: false, error: 'Password must be at least 6 characters' }
+    if (!validateEmail(email)) return { success: false, error: 'Invalid email' }
+    if (!password || password.length < 6) return { success: false, error: 'Password must be 6+ characters' }
 
     const supabase = await createClient()
     const passwordHash = createHash('sha256').update(password).digest('hex')
 
     const { data, error } = await supabase
       .from('auth_users')
-      .insert({
-        email: email.toLowerCase(),
-        password_hash: passwordHash,
-        name: name || email.split('@')[0],
-        role: 'buyer',
-      })
+      .insert({ email: email.toLowerCase(), password_hash: passwordHash, name, role: 'buyer' })
       .select()
       .single()
 
-    if (error) {
-      if (error.message.includes('unique')) return { success: false, error: 'Email already exists' }
-      return { success: false, error: 'Signup failed' }
-    }
+    if (error) return { success: false, error: 'Email already registered' }
 
     revalidatePath('/')
-    return { success: true, data }
+    return { success: true, data: { userId: data.id, email: data.email, role: data.role } }
   } catch (err) {
-    return { success: false, error: 'An error occurred during signup' }
+    return { success: false, error: 'Signup failed' }
   }
 }
 
-/**
- * Merchant signup
- */
-export async function merchantSignup(email: string, password: string, businessName?: string): Promise<AuthResponse> {
+export async function merchantSignup(email: string, password: string, businessName?: string) {
   try {
-    if (!validateEmail(email)) return { success: false, error: 'Invalid email address' }
-    if (password.length < 6) return { success: false, error: 'Password must be at least 6 characters' }
+    if (!validateEmail(email)) return { success: false, error: 'Invalid email' }
+    if (!password || password.length < 6) return { success: false, error: 'Password must be 6+ characters' }
 
     const supabase = await createClient()
     const passwordHash = createHash('sha256').update(password).digest('hex')
 
     const { data, error } = await supabase
       .from('auth_users')
-      .insert({
-        email: email.toLowerCase(),
-        password_hash: passwordHash,
-        business_name: businessName || 'My Store',
-        role: 'merchant',
-      })
+      .insert({ email: email.toLowerCase(), password_hash: passwordHash, business_name: businessName, role: 'merchant' })
       .select()
       .single()
 
-    if (error) {
-      if (error.message.includes('unique')) return { success: false, error: 'Email already exists' }
-      return { success: false, error: 'Signup failed' }
-    }
+    if (error) return { success: false, error: 'Email already registered' }
 
     revalidatePath('/')
-    return { success: true, data }
+    return { success: true, data: { userId: data.id, email: data.email, role: data.role } }
   } catch (err) {
-    return { success: false, error: 'An error occurred during signup' }
+    return { success: false, error: 'Signup failed' }
   }
 }
 
-/**
- * Login with email and password
- */
-export async function login(email: string, password: string): Promise<AuthResponse> {
+export async function login(email: string, password: string) {
   try {
-    if (!validateEmail(email)) return { success: false, error: 'Invalid email address' }
+    if (!validateEmail(email)) return { success: false, error: 'Invalid email' }
     if (!password) return { success: false, error: 'Password required' }
 
     const supabase = await createClient()
     const passwordHash = createHash('sha256').update(password).digest('hex')
 
-    const { data: user, error } = await supabase
+    const { data, error } = await supabase
       .from('auth_users')
       .select('*')
       .eq('email', email.toLowerCase())
       .eq('password_hash', passwordHash)
       .single()
 
-    if (error || !user) {
-      return { success: false, error: 'Invalid email or password' }
-    }
+    if (error || !data) return { success: false, error: 'Invalid email or password' }
 
     revalidatePath('/')
-    return { success: true, data: { user } }
+    return { success: true, data: { user: data } }
   } catch (err) {
-    return { success: false, error: 'An error occurred during login' }
+    return { success: false, error: 'Login failed' }
   }
 }
 
-/**
- * Get user by ID
- */
-export async function getUserById(userId: string): Promise<AuthResponse> {
-  try {
-    const supabase = await createClient()
-
-    const { data: user, error } = await supabase
-      .from('auth_users')
-      .select('*')
-      .eq('id', userId)
-      .single()
-
-    if (error) return { success: false, error: 'User not found' }
-
-    return { success: true, data: { user } }
-  } catch {
-    return { success: false, error: 'An error occurred' }
-  }
-}
-
-/**
- * Logout
- */
-export async function logout(): Promise<AuthResponse> {
+export async function logout() {
   try {
     revalidatePath('/')
-    return { success: true, data: { message: 'Logged out successfully' } }
-  } catch {
-    return { success: false, error: 'An error occurred' }
+    return { success: true, data: { message: 'Logged out' } }
+  } catch (err) {
+    return { success: false, error: 'Logout failed' }
   }
 }
 
-/**
- * Email and password login (alias for login)
- */
-export async function emailPasswordLogin(email: string, password: string): Promise<AuthResponse> {
+export async function emailPasswordLogin(email: string, password: string) {
   return login(email, password)
 }
 
-/**
- * Buyer signup with name (alias for buyerSignup)
- */
-export async function buyerSignupWithName(email: string, password: string, name: string): Promise<AuthResponse> {
+export async function buyerSignupWithName(email: string, password: string, name: string) {
   return buyerSignup(email, password, name)
 }
 
-/**
- * Request password reset
- */
-export async function requestPasswordReset(email: string): Promise<AuthResponse> {
+export async function requestPasswordReset(email: string) {
   try {
-    if (!validateEmail(email)) return { success: false, error: 'Invalid email address' }
+    if (!validateEmail(email)) return { success: false, error: 'Invalid email' }
 
     const supabase = await createClient()
+    const { data } = await supabase.from('auth_users').select('id').eq('email', email.toLowerCase()).single()
 
-    const { data: user } = await supabase
-      .from('auth_users')
-      .select('id')
-      .eq('email', email.toLowerCase())
-      .single()
+    if (!data) return { success: false, error: 'Email not found' }
 
-    if (!user) return { success: false, error: 'Email not found' }
-
-    console.log(`[v0] Password reset requested for ${email}`)
-    return { success: true, data: { message: 'Password reset instructions sent to email' } }
-  } catch {
-    return { success: false, error: 'An error occurred' }
+    return { success: true, data: { message: 'Password reset sent' } }
+  } catch (err) {
+    return { success: false, error: 'Request failed' }
   }
 }
 
-/**
- * Reset password
- */
-export async function resetPassword(email: string, newPassword: string): Promise<AuthResponse> {
+export async function resetPassword(email: string, newPassword: string) {
   try {
-    if (!validateEmail(email)) return { success: false, error: 'Invalid email address' }
-    if (newPassword.length < 6) return { success: false, error: 'Password must be at least 6 characters' }
+    if (!validateEmail(email)) return { success: false, error: 'Invalid email' }
+    if (!newPassword || newPassword.length < 6) return { success: false, error: 'Password must be 6+ characters' }
 
     const supabase = await createClient()
     const passwordHash = createHash('sha256').update(newPassword).digest('hex')
@@ -198,11 +121,24 @@ export async function resetPassword(email: string, newPassword: string): Promise
       .update({ password_hash: passwordHash })
       .eq('email', email.toLowerCase())
 
-    if (error) return { success: false, error: 'Failed to reset password' }
+    if (error) return { success: false, error: 'Reset failed' }
 
     revalidatePath('/')
-    return { success: true, data: { message: 'Password reset successfully' } }
-  } catch {
-    return { success: false, error: 'An error occurred' }
+    return { success: true, data: { message: 'Password reset success' } }
+  } catch (err) {
+    return { success: false, error: 'Reset failed' }
+  }
+}
+
+export async function getUserById(userId: string) {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase.from('auth_users').select('*').eq('id', userId).single()
+
+    if (error) return { success: false, error: 'User not found' }
+
+    return { success: true, data: { user: data } }
+  } catch (err) {
+    return { success: false, error: 'Failed to fetch user' }
   }
 }
