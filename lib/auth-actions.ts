@@ -1,9 +1,8 @@
 'use server'
 
-import { query, withConnection } from '@/lib/db'
+import { createClient } from '@/lib/supabase/server'
 import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
-import { randomUUID } from 'crypto'
 
 interface AuthResponse {
   success: boolean
@@ -57,26 +56,36 @@ export async function generateOTP(email: string): Promise<AuthResponse> {
       return { success: false, error: 'Invalid email address' }
     }
 
-    // Check if email already registered
-    const { rows: existingUsers } = await query(
-      'SELECT id FROM auth_users WHERE email = $1',
-      [email.toLowerCase()]
-    )
+    const supabase = await createClient()
 
-    if (existingUsers.length > 0) {
+    // Check if email already registered
+    const { data: existingUser } = await supabase
+      .from('auth_users')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .single()
+
+    if (existingUser) {
       return { success: false, error: 'Email already registered' }
     }
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString()
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-    const otpId = randomUUID()
 
     // Store OTP in database
-    await query(
-      'INSERT INTO otp_verification (id, email, otp_code, expires_at, attempts) VALUES ($1, $2, $3, $4, $5)',
-      [otpId, email.toLowerCase(), otp, expiresAt.toISOString(), 0]
-    )
+    const { error: insertError } = await supabase
+      .from('otp_verification')
+      .insert({
+        email: email.toLowerCase(),
+        otp_code: otp,
+        expires_at: expiresAt.toISOString(),
+        attempts: 0,
+      })
+
+    if (insertError) {
+      return { success: false, error: 'Failed to generate OTP' }
+    }
 
     // In production, send via email service (SendGrid, etc.)
     // For demo, return OTP in response
@@ -91,7 +100,6 @@ export async function generateOTP(email: string): Promise<AuthResponse> {
       },
     }
   } catch (error) {
-    // console.error('[v0] Unexpected error in generateOTP:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
