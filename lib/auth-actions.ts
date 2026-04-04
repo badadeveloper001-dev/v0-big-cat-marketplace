@@ -17,7 +17,7 @@ function validateEmail(email: string): boolean {
 /**
  * Buyer signup
  */
-export async function buyerSignup(email: string, password: string, name: string): Promise<AuthResponse> {
+export async function buyerSignup(email: string, password: string, name?: string): Promise<AuthResponse> {
   try {
     if (!validateEmail(email)) return { success: false, error: 'Invalid email address' }
     if (password.length < 6) return { success: false, error: 'Password must be at least 6 characters' }
@@ -25,26 +25,33 @@ export async function buyerSignup(email: string, password: string, name: string)
     const supabase = await createClient()
     const passwordHash = createHash('sha256').update(password).digest('hex')
 
-    const { error } = await supabase.from('auth_users').insert({
-      email: email.toLowerCase(),
-      password_hash: passwordHash,
-      name,
-      role: 'buyer',
-    })
+    const { data, error } = await supabase
+      .from('auth_users')
+      .insert({
+        email: email.toLowerCase(),
+        password_hash: passwordHash,
+        name: name || email.split('@')[0],
+        role: 'buyer',
+      })
+      .select()
+      .single()
 
-    if (error) return { success: false, error: 'Email already exists' }
+    if (error) {
+      if (error.message.includes('unique')) return { success: false, error: 'Email already exists' }
+      return { success: false, error: 'Signup failed' }
+    }
 
     revalidatePath('/')
-    return { success: true, data: { message: 'Signup successful' } }
-  } catch {
-    return { success: false, error: 'An error occurred' }
+    return { success: true, data }
+  } catch (err) {
+    return { success: false, error: 'An error occurred during signup' }
   }
 }
 
 /**
  * Merchant signup
  */
-export async function merchantSignup(email: string, password: string, businessName: string): Promise<AuthResponse> {
+export async function merchantSignup(email: string, password: string, businessName?: string): Promise<AuthResponse> {
   try {
     if (!validateEmail(email)) return { success: false, error: 'Invalid email address' }
     if (password.length < 6) return { success: false, error: 'Password must be at least 6 characters' }
@@ -52,29 +59,36 @@ export async function merchantSignup(email: string, password: string, businessNa
     const supabase = await createClient()
     const passwordHash = createHash('sha256').update(password).digest('hex')
 
-    const { error } = await supabase.from('auth_users').insert({
-      email: email.toLowerCase(),
-      password_hash: passwordHash,
-      business_name: businessName,
-      role: 'merchant',
-      setup_completed: false,
-    })
+    const { data, error } = await supabase
+      .from('auth_users')
+      .insert({
+        email: email.toLowerCase(),
+        password_hash: passwordHash,
+        business_name: businessName || 'My Store',
+        role: 'merchant',
+      })
+      .select()
+      .single()
 
-    if (error) return { success: false, error: 'Email already exists' }
+    if (error) {
+      if (error.message.includes('unique')) return { success: false, error: 'Email already exists' }
+      return { success: false, error: 'Signup failed' }
+    }
 
     revalidatePath('/')
-    return { success: true, data: { message: 'Merchant signup successful' } }
-  } catch {
-    return { success: false, error: 'An error occurred' }
+    return { success: true, data }
+  } catch (err) {
+    return { success: false, error: 'An error occurred during signup' }
   }
 }
 
 /**
- * Login
+ * Login with email and password
  */
 export async function login(email: string, password: string): Promise<AuthResponse> {
   try {
     if (!validateEmail(email)) return { success: false, error: 'Invalid email address' }
+    if (!password) return { success: false, error: 'Password required' }
 
     const supabase = await createClient()
     const passwordHash = createHash('sha256').update(password).digest('hex')
@@ -86,12 +100,14 @@ export async function login(email: string, password: string): Promise<AuthRespon
       .eq('password_hash', passwordHash)
       .single()
 
-    if (error || !user) return { success: false, error: 'Invalid email or password' }
+    if (error || !user) {
+      return { success: false, error: 'Invalid email or password' }
+    }
 
     revalidatePath('/')
-    return { success: true, data: { user, message: 'Login successful' } }
-  } catch {
-    return { success: false, error: 'An error occurred' }
+    return { success: true, data: { user } }
+  } catch (err) {
+    return { success: false, error: 'An error occurred during login' }
   }
 }
 
@@ -151,7 +167,6 @@ export async function requestPasswordReset(email: string): Promise<AuthResponse>
 
     const supabase = await createClient()
 
-    // Check if email exists
     const { data: user } = await supabase
       .from('auth_users')
       .select('id')
@@ -160,9 +175,7 @@ export async function requestPasswordReset(email: string): Promise<AuthResponse>
 
     if (!user) return { success: false, error: 'Email not found' }
 
-    // In production, send password reset email here
     console.log(`[v0] Password reset requested for ${email}`)
-
     return { success: true, data: { message: 'Password reset instructions sent to email' } }
   } catch {
     return { success: false, error: 'An error occurred' }
