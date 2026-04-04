@@ -1,70 +1,47 @@
-"use client"
+'use client'
 
-import { createContext, useContext, useState, ReactNode, useEffect } from "react"
-
-export type UserRole = "buyer" | "merchant" | "admin" | null
+import { createContext, useContext, useState, useEffect } from 'react'
 
 interface User {
   userId: string
   email: string
-  role: UserRole
   phone?: string
   name?: string
+  role: 'buyer' | 'merchant'
   merchantProfile?: any
 }
 
 interface RoleContextType {
-  role: UserRole
+  role: string | null
   user: User | null
-  setRole: (role: UserRole) => void
-  setUser: (user: User | null) => void
+  setRole: (role: string) => void
+  setUser: (user: User) => void
   isLoading: boolean
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined)
 
-export function RoleProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<UserRole>(null)
+export function RoleProvider({ children }: { children: React.ReactNode }) {
+  const [role, setRole] = useState<string | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Restore session from localStorage on mount
   useEffect(() => {
-    try {
-      const storedSession = localStorage.getItem("auth_session")
-      if (storedSession) {
-        const parsedSession = JSON.parse(storedSession)
-        setRole(parsedSession.role)
-        setUser(parsedSession.user)
-      }
-    } catch (error) {
-      console.error("[v0] Failed to restore session:", error)
-    } finally {
-      setIsLoading(false)
+    const stored = localStorage.getItem('userRole')
+    const storedUser = localStorage.getItem('userData')
+    
+    if (stored) setRole(stored)
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser))
+      } catch {}
     }
+    
+    setIsLoading(false)
   }, [])
 
-  // Persist session when role or user changes
-  useEffect(() => {
-    if (!isLoading) {
-      if (role && user) {
-        localStorage.setItem("auth_session", JSON.stringify({ role, user }))
-      } else {
-        localStorage.removeItem("auth_session")
-      }
-    }
-  }, [role, user, isLoading])
-
-  const contextValue: RoleContextType = {
-    role,
-    user,
-    setRole,
-    setUser,
-    isLoading,
-  }
-
   return (
-    <RoleContext.Provider value={contextValue}>
+    <RoleContext.Provider value={{ role, user, setRole, setUser, isLoading }}>
       {children}
     </RoleContext.Provider>
   )
@@ -72,8 +49,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
 export function useRole() {
   const context = useContext(RoleContext)
-  if (context === undefined) {
-    throw new Error("useRole must be used within a RoleProvider")
+  if (!context) {
+    throw new Error('useRole must be used within RoleProvider')
   }
   return context
 }
