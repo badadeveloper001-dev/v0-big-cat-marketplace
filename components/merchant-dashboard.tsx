@@ -1,5 +1,6 @@
 "use client"
 
+// Force rebuild
 import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-actions"
 import { MerchantProducts } from "@/components/merchant-products"
