@@ -44,8 +44,9 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
       }
 
       if (result.success && result.data) {
-        // Check if role is merchant (for login, user might have different role)
-        if (!isSignUp && result.data.role !== "merchant") {
+        // Check if role is merchant (for login, user is in result.data.user)
+        const user = isSignUp ? result.data : result.data.user
+        if (!isSignUp && user.role !== "merchant") {
           setError("This account is not a merchant account. Please use the buyer login.")
           return
         }
@@ -64,11 +65,11 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
           }, 1500)
         } else {
           setUser({
-            userId: result.data.userId,
-            email: result.data.email,
-            phone: result.data.phone,
+            userId: result.data.user.id,
+            email: result.data.user.email,
+            phone: result.data.user.phone,
             role: "merchant",
-            merchantProfile: result.data.merchantProfile,
+            merchantProfile: result.data.user.merchantProfile,
           })
           setRole("merchant")
         }

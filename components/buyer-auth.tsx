@@ -44,8 +44,9 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
       }
 
       if (result.success && result.data) {
-        // Check if role is buyer (for login, user might have different role)
-        if (!isSignUp && result.data.role !== "buyer") {
+        // Check if role is buyer (for login, user is in result.data.user)
+        const user = isSignUp ? result.data : result.data.user
+        if (!isSignUp && user.role !== "buyer") {
           setError("This account is not a buyer account. Please use the merchant login.")
           return
         }
@@ -64,10 +65,10 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
           }, 1500)
         } else {
           setUser({
-            userId: result.data.userId,
-            email: result.data.email,
-            phone: result.data.phone,
-            name: result.data.name,
+            userId: result.data.user.id,
+            email: result.data.user.email,
+            phone: result.data.user.phone,
+            name: result.data.user.name,
             role: "buyer",
           })
           setRole("buyer")
@@ -115,7 +116,7 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
     setError("")
     setLoading(true)
 
-    const result = await resetPassword(formData.email, resetToken, newPassword)
+    const result = await resetPassword(formData.email, newPassword)
     
     if (result.success) {
       setSuccessMessage("Password reset successfully! You can now sign in.")
