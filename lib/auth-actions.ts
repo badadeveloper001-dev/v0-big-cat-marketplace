@@ -2,28 +2,23 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createHash } from 'crypto'
-import bcrypt from 'bcrypt'
+
+function hashPassword(password: string): string {
+  return createHash('sha256').update(password).digest('hex')
+}
 
 export async function buyerSignup(email: string, password: string, name: string, phone: string) {
   try {
     const supabase = await createClient()
-    
-    const passwordHash = await bcrypt.hash(password, 10)
+    const passwordHash = hashPassword(password)
     
     const { data, error } = await supabase
       .from('auth_users')
-      .insert({
-        email,
-        password_hash: passwordHash,
-        name,
-        phone,
-        role: 'buyer'
-      })
+      .insert({ email, password_hash: passwordHash, name, phone, role: 'buyer' })
       .select()
       .single()
 
     if (error) throw error
-
     return { success: true, data }
   } catch (error: any) {
     return { success: false, error: error.message }
@@ -33,23 +28,15 @@ export async function buyerSignup(email: string, password: string, name: string,
 export async function merchantSignup(email: string, password: string, businessName: string, phone: string) {
   try {
     const supabase = await createClient()
-    
-    const passwordHash = await bcrypt.hash(password, 10)
+    const passwordHash = hashPassword(password)
     
     const { data, error } = await supabase
       .from('auth_users')
-      .insert({
-        email,
-        password_hash: passwordHash,
-        business_name: businessName,
-        phone,
-        role: 'merchant'
-      })
+      .insert({ email, password_hash: passwordHash, business_name: businessName, phone, role: 'merchant' })
       .select()
       .single()
 
     if (error) throw error
-
     return { success: true, data }
   } catch (error: any) {
     return { success: false, error: error.message }
@@ -59,22 +46,16 @@ export async function merchantSignup(email: string, password: string, businessNa
 export async function emailPasswordLogin(email: string, password: string) {
   try {
     const supabase = await createClient()
+    const passwordHash = hashPassword(password)
     
-    const { data: user, error: userError } = await supabase
+    const { data: user, error } = await supabase
       .from('auth_users')
       .select('*')
       .eq('email', email)
       .single()
 
-    if (userError || !user) {
-      return { success: false, error: 'User not found' }
-    }
-
-    const passwordMatch = await bcrypt.compare(password, user.password_hash)
-
-    if (!passwordMatch) {
-      return { success: false, error: 'Invalid password' }
-    }
+    if (error || !user) return { success: false, error: 'User not found' }
+    if (user.password_hash !== passwordHash) return { success: false, error: 'Invalid password' }
 
     return { success: true, data: { user } }
   } catch (error: any) {
@@ -97,8 +78,7 @@ export async function requestPasswordReset(email: string) {
 export async function resetPassword(email: string, newPassword: string) {
   try {
     const supabase = await createClient()
-    
-    const passwordHash = await bcrypt.hash(newPassword, 10)
+    const passwordHash = hashPassword(newPassword)
     
     const { error } = await supabase
       .from('auth_users')
@@ -106,7 +86,6 @@ export async function resetPassword(email: string, newPassword: string) {
       .eq('email', email)
 
     if (error) throw error
-
     return { success: true }
   } catch (error: any) {
     return { success: false, error: error.message }
@@ -124,7 +103,6 @@ export async function getUserById(userId: string) {
       .single()
 
     if (error) throw error
-
     return { success: true, data }
   } catch (error: any) {
     return { success: false, error: error.message }
