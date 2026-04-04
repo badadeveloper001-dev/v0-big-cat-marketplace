@@ -58,26 +58,6 @@ const aiSuggestions = [
 
 export function BuyerDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
-  
-  // Guard against undefined user during initial load
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-6 h-6 text-primary animate-spin" />
-      </div>
-    )
-  }
-  
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground mb-2">No user session found</p>
-        </div>
-      </div>
-    )
-  }
-  
   const [activeTab, setActiveTab] = useState("home")
   const [searchQuery, setSearchQuery] = useState("")
   const [aiExpanded, setAiExpanded] = useState(false)
@@ -100,6 +80,25 @@ export function BuyerDashboard() {
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showPaymentMethods, setShowPaymentMethods] = useState(false)
+  
+  // Guard against undefined user during initial load - AFTER all hooks
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+      </div>
+    )
+  }
+  
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-2">No user session found</p>
+        </div>
+      </div>
+    )
+  }
 
   useEffect(() => {
     loadMerchants()

@@ -45,8 +45,21 @@ import { NotificationsPanel } from "./notifications-panel"
 
 export function MerchantDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
+  const [activeTab, setActiveTab] = useState("home")
+  const [aiMessage, setAiMessage] = useState("")
+  const [currentInsight, setCurrentInsight] = useState(0)
   
-  // Guard against undefined user during initial load
+  // Real data states
+  const [stats, setStats] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [recentOrders, setRecentOrders] = useState<any[]>([])
+  const [loadingStats, setLoadingStats] = useState(true)
+  const [loadingProducts, setLoadingProducts] = useState(true)
+  const [loadingOrders, setLoadingOrders] = useState(true)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [showTokenDialog, setShowTokenDialog] = useState(false)
+  
+  // Guard against undefined user during initial load - AFTER all hooks
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -64,20 +77,6 @@ export function MerchantDashboard() {
       </div>
     )
   }
-  
-  const [activeTab, setActiveTab] = useState("home")
-  const [aiMessage, setAiMessage] = useState("")
-  const [currentInsight, setCurrentInsight] = useState(0)
-  
-  // Real data states
-  const [stats, setStats] = useState<any[]>([])
-  const [products, setProducts] = useState<any[]>([])
-  const [recentOrders, setRecentOrders] = useState<any[]>([])
-  const [loadingStats, setLoadingStats] = useState(true)
-  const [loadingProducts, setLoadingProducts] = useState(true)
-  const [loadingOrders, setLoadingOrders] = useState(true)
-  const [showNotifications, setShowNotifications] = useState(false)
-  const [showTokenDialog, setShowTokenDialog] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showPaymentMethods, setShowPaymentMethods] = useState(false)
