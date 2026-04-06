@@ -9,9 +9,8 @@ import Image from 'next/image'
 interface Profile {
   id: string
   email: string
-  full_name: string
+  name: string
   phone: string
-  address?: string
   avatar_url?: string
 }
 
@@ -22,9 +21,8 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [formData, setFormData] = useState({
-    full_name: '',
+    name: '',
     phone: '',
-    address: '',
   })
 
   useEffect(() => {
@@ -40,9 +38,8 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
       if (result.success && result.data) {
         setProfile(result.data)
         setFormData({
-          full_name: result.data.full_name || '',
+          name: result.data.name || '',
           phone: result.data.phone || '',
-          address: result.data.address || '',
         })
       }
     } catch (error) {
@@ -54,7 +51,7 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
   }
 
   const handleSave = async () => {
-    if (!formData.full_name.trim()) {
+    if (!formData.name.trim()) {
       setMessage({ type: 'error', text: 'Name is required' })
       return
     }
@@ -62,9 +59,8 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
     setSaving(true)
     try {
       const result = await updateUserProfile(user?.userId || '', {
-        full_name: formData.full_name,
+        name: formData.name,
         phone: formData.phone,
-        address: formData.address,
       })
 
       if (result.success) {
@@ -146,13 +142,13 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
             {profile?.avatar_url ? (
               <Image
                 src={profile.avatar_url}
-                alt={profile.full_name}
+                alt={profile.name}
                 fill
                 className="rounded-full object-cover"
               />
             ) : (
               <span className="text-4xl font-bold text-primary">
-                {(profile?.full_name || 'U').charAt(0).toUpperCase()}
+                {(profile?.name || 'U').charAt(0).toUpperCase()}
               </span>
             )}
             <button className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -170,8 +166,8 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
             </label>
             <input
               type="text"
-              value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-4 py-3 bg-secondary rounded-lg border border-border focus:outline-none focus:border-primary transition-colors"
               placeholder="Enter your full name"
             />
@@ -205,18 +201,7 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
             />
           </div>
 
-          <div>
-            <label className="text-sm font-semibold text-foreground block mb-2">
-              Address
-            </label>
-            <textarea
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="w-full px-4 py-3 bg-secondary rounded-lg border border-border focus:outline-none focus:border-primary transition-colors resize-none"
-              placeholder="Enter your address"
-              rows={3}
-            />
-          </div>
+          
         </div>
 
         {/* Action Buttons */}

@@ -35,9 +35,9 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
       if (isSignUp) {
         result = await buyerSignupWithName(
           formData.email,
-          formData.phone,
           formData.password,
-          formData.name
+          formData.name,
+          formData.phone
         )
       } else {
         result = await emailPasswordLogin(formData.email, formData.password)
