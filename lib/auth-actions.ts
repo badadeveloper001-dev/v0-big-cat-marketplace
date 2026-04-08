@@ -1,150 +1,106 @@
-'use server'
-
 import { createClient } from '@/lib/supabase/server'
-import { createHash } from 'crypto'
+import bcrypt from 'bcrypt'
 
 function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex')
+  return bcrypt.hashSync(password, 10)
 }
 
-export async function buyerSignup(email: string, password: string, name: string, phone: string) {
+function verifyPassword(password: string, hash: string): boolean {
+  return bcrypt.compareSync(password, hash)
+}
+
+export async function signup(email: string, password: string, name: string, phone: string, role: 'buyer' | 'merchant') {
   try {
-    const supabase = await createClient()
-    const passwordHash = hashPassword(password)
-    
-    console.log("[v0] Attempting buyer signup for:", email)
-    
-    // Check if email already exists
+    const supabase = createClient()
+
+    // Check if user already exists
     const { data: existingUser } = await supabase
       .from('auth_users')
       .select('id')
       .eq('email', email)
       .single()
-    
+
     if (existingUser) {
-      console.log("[v0] Email already exists:", email)
       return { success: false, error: 'An account with this email already exists. Please try logging in instead.' }
     }
-    
+
+    // Hash password
+    const passwordHash = hashPassword(password)
+
+    // Create user
+    const userData = role === 'merchant'
+      ? { email, password_hash: passwordHash, business_name: name, phone, role }
+      : { email, password_hash: passwordHash, name, phone, role }
+
     const { data, error } = await supabase
       .from('auth_users')
-      .insert({ email, password_hash: passwordHash, name, phone, role: 'buyer' })
+      .insert(userData)
       .select()
       .single()
 
     if (error) {
-      console.log("[v0] Supabase error:", error)
-      throw error
+      console.error('Signup error:', error)
+      return { success: false, error: 'Failed to create account. Please try again.' }
     }
-    
-    console.log("[v0] Signup successful:", data?.id)
+
     return { success: true, data }
-  } catch (error: any) {
-    console.log("[v0] Signup catch error:", error?.message || error)
-    return { success: false, error: error?.message || 'Signup failed' }
+  } catch (error) {
+    console.error('Signup error:', error)
+    return { success: false, error: 'An unexpected error occurred. Please try again.' }
   }
 }
 
-export async function merchantSignup(email: string, password: string, businessName: string, phone: string) {
+export async function login(email: string, password: string) {
   try {
-    const supabase = await createClient()
-    const passwordHash = hashPassword(password)
-    
-    console.log("[v0] Attempting merchant signup for:", email)
-    
-    // Check if email already exists
-    const { data: existingUser } = await supabase
-      .from('auth_users')
-      .select('id')
-      .eq('email', email)
-      .single()
-    
-    if (existingUser) {
-      console.log("[v0] Email already exists:", email)
-      return { success: false, error: 'An account with this email already exists. Please try logging in instead.' }
-    }
-    
-    const { data, error } = await supabase
-      .from('auth_users')
-      .insert({ email, password_hash: passwordHash, business_name: businessName, phone, role: 'merchant' })
-      .select()
-      .single()
+    const supabase = createClient()
 
-    if (error) {
-      console.log("[v0] Supabase error:", error)
-      throw error
-    }
-    
-    console.log("[v0] Merchant signup successful:", data?.id)
-    return { success: true, data }
-  } catch (error: any) {
-    console.log("[v0] Merchant signup catch error:", error?.message || error)
-    return { success: false, error: error?.message || 'Signup failed' }
-  }
-}
-
-export async function emailPasswordLogin(email: string, password: string) {
-  try {
-    const supabase = await createClient()
-    const passwordHash = hashPassword(password)
-    
+    // Get user by email
     const { data: user, error } = await supabase
       .from('auth_users')
       .select('*')
       .eq('email', email)
       .single()
 
-    if (error || !user) return { success: false, error: 'User not found' }
-    if (user.password_hash !== passwordHash) return { success: false, error: 'Invalid password' }
+    if (error || !user) {
+      return { success: false, error: 'Invalid email or password.' }
+    }
 
-    return { success: true, data: { user } }
-  } catch (error: any) {
-    return { success: false, error: error.message }
-  }
-}
+    // Verify password
+    if (!verifyPassword(password, user.password_hash)) {
+      return { success: false, error: 'Invalid email or password.' }
+    }
 
-export async function logout() {
-  return { success: true }
-}
-
-export async function buyerSignupWithName(email: string, password: string, name: string, phone: string) {
-  return buyerSignup(email, password, name, phone)
-}
-
-export async function requestPasswordReset(email: string) {
-  return { success: true }
-}
-
-export async function resetPassword(email: string, newPassword: string) {
-  try {
-    const supabase = await createClient()
-    const passwordHash = hashPassword(newPassword)
-    
-    const { error } = await supabase
-      .from('auth_users')
-      .update({ password_hash: passwordHash })
-      .eq('email', email)
-
-    if (error) throw error
-    return { success: true }
-  } catch (error: any) {
-    return { success: false, error: error.message }
+    // Return user data (excluding password hash)
+    const { password_hash, ...userData } = user
+    return { success: true, data: { user: userData } }
+  } catch (error) {
+    console.error('Login error:', error)
+    return { success: false, error: 'An unexpected error occurred. Please try again.' }
   }
 }
 
 export async function getUserById(userId: string) {
   try {
-    const supabase = await createClient()
-    
+    const supabase = createClient()
+
     const { data, error } = await supabase
       .from('auth_users')
       .select('*')
       .eq('id', userId)
       .single()
 
-    if (error) throw error
-    return { success: true, data }
-  } catch (error: any) {
-    return { success: false, error: error.message }
+    if (error) {
+      return { success: false, error: 'User not found.' }
+    }
+
+    const { password_hash, ...userData } = data
+    return { success: true, data: userData }
+  } catch (error) {
+    console.error('Get user error:', error)
+    return { success: false, error: 'An unexpected error occurred.' }
   }
+}
+
+export async function logout() {
+  return { success: true }
 }

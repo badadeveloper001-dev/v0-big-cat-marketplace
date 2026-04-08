@@ -1,7 +1,7 @@
 "use client"
 
 import { useRole } from "@/lib/role-context"
-import { logout } from "@/lib/auth-actions"
+import { logout } from "@/lib/auth-client"
 import { VendorPage } from "@/components/vendor-page"
 import { ChatInterface } from "@/components/chat-interface"
 import { ProductsMarketplace } from "@/components/products-marketplace"

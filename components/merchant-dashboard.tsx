@@ -2,7 +2,7 @@
 
 // Force rebuild
 import { useRole } from "@/lib/role-context"
-import { logout } from "@/lib/auth-actions"
+import { logout } from "@/lib/auth-client"
 import { MerchantProducts } from "@/components/merchant-products"
 import { MerchantOrders } from "@/components/merchant-orders"
 import { ProfilePage } from "@/components/profile-page"
