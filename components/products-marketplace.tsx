@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getAllProducts } from '@/lib/product-actions'
 import { Search, Filter, X, ArrowLeft } from 'lucide-react'
 import { ProductCard, ProductGrid } from './product-card'
 
@@ -49,9 +48,14 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
 
   const loadProducts = async () => {
     setLoading(true)
-    const result = await getAllProducts()
-    if (result.success) {
-      setProducts(result.data)
+    try {
+      const response = await fetch('/api/products')
+      const result = await response.json()
+      if (result.success) {
+        setProducts(result.data)
+      }
+    } catch (error) {
+      console.error('Failed to load products')
     }
     setLoading(false)
   }

@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getOrCreateConversation } from "@/lib/message-actions"
 import { useRole } from "@/lib/role-context"
 import {
   ArrowLeft,
@@ -24,7 +23,6 @@ import {
 import Image from "next/image"
 import { formatNaira } from "@/lib/currency-utils"
 import { useCart } from "@/lib/cart-context"
-import { getMerchantProducts } from "@/lib/product-actions"
 
 interface VendorPageProps {
   vendor: {
@@ -96,7 +94,8 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   const loadProducts = async () => {
     setLoading(true)
     try {
-      const result = await getMerchantProducts(String(vendor.id))
+      const response = await fetch(`/api/products/merchant?merchantId=${vendor.id}`)
+      const result = await response.json()
       if (result.success && result.data) {
         setProducts(result.data)
       }
@@ -116,7 +115,14 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
 
     setChatLoading(true)
     try {
-      const result = await getOrCreateConversation(user.userId, String(vendor.id))
+      const response = await fetch('/api/messages/conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ buyerId: user.userId, merchantId: String(vendor.id) }),
+      })
+      const result = await response.json()
       if (result.success) {
         // Conversation created, now open chat
         onChatVendor?.()

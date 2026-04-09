@@ -35,8 +35,6 @@ import {
   Loader2,
 } from "lucide-react"
 import { useState, useEffect } from "react"
-import { getMerchants } from "@/lib/admin-actions"
-import { getBuyerOrders } from "@/lib/order-actions"
 import { formatNaira } from "@/lib/currency-utils"
 import { NotificationsPanel } from "./notifications-panel"
 
@@ -108,7 +106,8 @@ export function BuyerDashboard() {
   const loadMerchants = async () => {
     setLoadingMerchants(true)
     try {
-      const result = await getMerchants()
+      const response = await fetch('/api/admin/merchants')
+      const result = await response.json()
       if (result.success) {
         const merchantsData = result.data.map((m: any) => ({
           id: m.id,
@@ -137,9 +136,10 @@ export function BuyerDashboard() {
     setLoadingOrders(true)
     try {
       if (user?.userId) {
-        const result = await getBuyerOrders(user.userId)
-        if (result.success && result.orders && result.orders.length > 0) {
-          const ordersData = result.orders.slice(0, 3).map((o: any) => ({
+        const response = await fetch(`/api/orders/buyer?buyerId=${user.userId}`)
+        const result = await response.json()
+        if (result.success && result.data && result.data.length > 0) {
+          const ordersData = result.data.slice(0, 3).map((o: any) => ({
             id: o.id?.substring(0, 8) || "NX-0000",
             item: `Order ${o.id?.substring(0, 4)}`,
             status: o.status === "delivered" ? "Delivered" : "In Transit",
@@ -147,7 +147,7 @@ export function BuyerDashboard() {
               month: "short",
               day: "numeric",
             }),
-            amount: o.grand_total || 0,
+            amount: o.total_amount || 0,
             icon: "📦",
           }))
           setRecentOrders(ordersData)

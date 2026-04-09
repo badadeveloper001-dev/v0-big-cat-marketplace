@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw, ChevronDown } from "lucide-react"
-import { getMerchantOrders, updateOrderStatus } from "@/lib/order-actions"
 import { useRole } from "@/lib/role-context"
 
 interface MerchantOrdersProps {
@@ -37,14 +36,18 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
       if (!user?.userId) return
 
       setIsLoading(true)
-      const result = await getMerchantOrders(user.userId)
-      setIsLoading(false)
-
-      if (result.success) {
-        setOrders(result.data || [])
-      } else {
-        setError(result.error || 'Failed to fetch orders')
+      try {
+        const response = await fetch(`/api/orders/merchant?merchantId=${user.userId}`)
+        const result = await response.json()
+        if (result.success) {
+          setOrders(result.data || [])
+        } else {
+          setError(result.error || 'Failed to fetch orders')
+        }
+      } catch (error) {
+        setError('Failed to fetch orders')
       }
+      setIsLoading(false)
     }
 
     fetchOrders()
@@ -52,16 +55,27 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     setUpdatingOrderId(orderId)
-    
-    const result = await updateOrderStatus(orderId, newStatus, user?.userId)
-    
-    setUpdatingOrderId(null)
-    
-    if (result.success) {
-      setOrders(orders.map(order => 
-        order.id === orderId ? { ...order, status: newStatus } : order
-      ))
+
+    try {
+      const response = await fetch('/api/orders/update-status', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ orderId, status: newStatus }),
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        setOrders(orders.map(order =>
+          order.id === orderId ? { ...order, status: newStatus } : order
+        ))
+      }
+    } catch (error) {
+      console.error('Failed to update order status')
     }
+
+    setUpdatingOrderId(null)
   }
 
   const formatDate = (dateString: string) => {

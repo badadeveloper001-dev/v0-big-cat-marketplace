@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getProductById } from '@/lib/product-actions'
 import { formatNaira } from '@/lib/currency-utils'
 import { useCart } from '@/lib/cart-context'
 import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2, ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react'
@@ -28,11 +27,16 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
 
   const loadProduct = async () => {
     setLoading(true)
-    const result = await getProductById(productId)
-    if (result.success) {
-      setProduct(result.data)
-    } else {
-      setError(result.error || 'Failed to load product')
+    try {
+      const response = await fetch(`/api/products/${productId}`)
+      const result = await response.json()
+      if (result.success) {
+        setProduct(result.data)
+      } else {
+        setError(result.error || 'Failed to load product')
+      }
+    } catch (error) {
+      setError('Failed to load product')
     }
     setLoading(false)
   }

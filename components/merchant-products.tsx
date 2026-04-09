@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getMerchantProducts, createProduct, deleteProduct, updateProduct, requestWeightVerification } from '@/lib/product-actions'
 import { formatNaira } from '@/lib/currency-utils'
 import { Plus, Trash2, Edit2, AlertCircle, Package, Loader2, X, Check, ImageIcon } from 'lucide-react'
 import { ImageUpload, ProductImage } from './image-upload'
@@ -48,11 +47,16 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
 
   const loadProducts = async () => {
     setLoading(true)
-    const result = await getMerchantProducts(merchantId)
-    if (result.success) {
-      setProducts(result.data)
-    } else {
-      setError(result.error || 'Failed to load products')
+    try {
+      const response = await fetch(`/api/products/merchant?merchantId=${merchantId}`)
+      const result = await response.json()
+      if (result.success) {
+        setProducts(result.data)
+      } else {
+        setError(result.error || 'Failed to load products')
+      }
+    } catch (error) {
+      setError('Failed to load products')
     }
     setLoading(false)
   }
@@ -77,44 +81,76 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
       return
     }
 
-    const result = await createProduct(merchantId, {
-      name: formData.name,
-      description: formData.description,
-      price: parseFloat(formData.price),
-      category: formData.category,
-      weight: formData.weight ? parseFloat(formData.weight) : undefined,
-      images: formData.images,
-    })
+    try {
+      const response = await fetch('/api/products/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          merchantId,
+          product: {
+            name: formData.name,
+            description: formData.description,
+            price: parseFloat(formData.price),
+            category: formData.category,
+            weight: formData.weight ? parseFloat(formData.weight) : undefined,
+            images: formData.images,
+          }
+        }),
+      })
+      const result = await response.json()
 
-    if (result.success) {
-      setSuccess('Product created successfully!')
-      setFormData({ name: '', description: '', price: '', category: 'Electronics', weight: '', images: [] })
-      setShowAddForm(false)
-      loadProducts()
-    } else {
-      setError(result.error || 'Failed to create product')
+      if (result.success) {
+        setSuccess('Product created successfully!')
+        setFormData({ name: '', description: '', price: '', category: 'Electronics', weight: '', images: [] })
+        setShowAddForm(false)
+        loadProducts()
+      } else {
+        setError(result.error || 'Failed to create product')
+      }
+    } catch (error) {
+      setError('Failed to create product')
     }
   }
 
   const handleDeleteProduct = async (productId: string) => {
     if (confirm('Are you sure you want to delete this product?')) {
-      const result = await deleteProduct(productId)
-      if (result.success) {
-        setSuccess('Product deleted successfully')
-        loadProducts()
-      } else {
-        setError(result.error || 'Failed to delete product')
+      try {
+        const response = await fetch(`/api/products/delete?productId=${productId}`, {
+          method: 'DELETE',
+        })
+        const result = await response.json()
+        if (result.success) {
+          setSuccess('Product deleted successfully')
+          loadProducts()
+        } else {
+          setError(result.error || 'Failed to delete product')
+        }
+      } catch (error) {
+        setError('Failed to delete product')
       }
     }
   }
 
   const handleRequestWeightVerification = async (productId: string) => {
-    const result = await requestWeightVerification(productId)
-    if (result.success) {
-      setSuccess('Weight verification requested. An agent will update it soon.')
-      loadProducts()
-    } else {
-      setError(result.error || 'Failed to request verification')
+    try {
+      const response = await fetch('/api/products/weight-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ productId }),
+      })
+      const result = await response.json()
+      if (result.success) {
+        setSuccess('Weight verification requested. An agent will update it soon.')
+        loadProducts()
+      } else {
+        setError(result.error || 'Failed to request verification')
+      }
+    } catch (error) {
+      setError('Failed to request verification')
     }
   }
 

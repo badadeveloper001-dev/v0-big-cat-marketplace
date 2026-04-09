@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
-import { getBuyerOrders } from "@/lib/order-actions"
 import { formatNaira } from "@/lib/currency-utils"
 import { useRole } from "@/lib/role-context"
 
@@ -31,14 +30,18 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
       if (!user?.userId) return
 
       setIsLoading(true)
-      const result = await getBuyerOrders(user.userId)
-      setIsLoading(false)
-
-      if (result.success) {
-        setOrders(result.data || [])
-      } else {
-        setError(result.error || 'Failed to fetch orders')
+      try {
+        const response = await fetch(`/api/orders/buyer?buyerId=${user.userId}`)
+        const result = await response.json()
+        if (result.success) {
+          setOrders(result.data || [])
+        } else {
+          setError(result.error || 'Failed to fetch orders')
+        }
+      } catch (error) {
+        setError('Failed to fetch orders')
       }
+      setIsLoading(false)
     }
 
     fetchOrders()

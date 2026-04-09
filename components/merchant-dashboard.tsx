@@ -39,8 +39,6 @@ import {
   Loader2,
 } from "lucide-react"
 import { useState, useEffect } from "react"
-import { getMerchantProducts } from "@/lib/product-actions"
-import { getMerchantOrders } from "@/lib/order-actions"
 import { NotificationsPanel } from "./notifications-panel"
 
 export function MerchantDashboard() {
@@ -111,7 +109,8 @@ export function MerchantDashboard() {
     setLoadingProducts(true)
     try {
       if (user?.userId) {
-        const result = await getMerchantProducts(user.userId)
+        const response = await fetch(`/api/products/merchant?merchantId=${user.userId}`)
+        const result = await response.json()
         if (result.success && result.data) {
           setProducts(result.data.slice(0, 4))
         }
@@ -127,7 +126,8 @@ export function MerchantDashboard() {
     setLoadingOrders(true)
     try {
       if (user?.userId) {
-        const result = await getMerchantOrders(user.userId)
+        const response = await fetch(`/api/orders/merchant?merchantId=${user.userId}`)
+        const result = await response.json()
         if (result.success && result.orders) {
           setRecentOrders(result.orders.slice(0, 3))
         }
