@@ -14,31 +14,49 @@ interface User {
 interface RoleContextType {
   role: string | null
   user: User | null
-  setRole: (role: string) => void
-  setUser: (user: User) => void
+  setRole: (role: string | null) => void
+  setUser: (user: User | null) => void
   isLoading: boolean
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined)
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<string | null>(null)
-  const [user, setUser] = useState<User | null>(null)
+  const [role, setRoleState] = useState<string | null>(null)
+  const [user, setUserState] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const stored = localStorage.getItem('userRole')
     const storedUser = localStorage.getItem('userData')
-    
-    if (stored) setRole(stored)
+
+    if (stored) setRoleState(stored)
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser))
+        setUserState(JSON.parse(storedUser))
       } catch {}
     }
-    
+
     setIsLoading(false)
   }, [])
+
+  const setRole = (newRole: string | null) => {
+    setRoleState(newRole)
+    if (newRole) {
+      localStorage.setItem('userRole', newRole)
+    } else {
+      localStorage.removeItem('userRole')
+    }
+  }
+
+  const setUser = (newUser: User | null) => {
+    setUserState(newUser)
+    if (newUser) {
+      localStorage.setItem('userData', JSON.stringify(newUser))
+    } else {
+      localStorage.removeItem('userData')
+    }
+  }
 
   return (
     <RoleContext.Provider value={{ role, user, setRole, setUser, isLoading }}>

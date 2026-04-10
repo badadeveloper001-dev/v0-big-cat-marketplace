@@ -16,14 +16,19 @@ export function MarketplaceApp() {
   const [setupComplete, setSetupComplete] = useState(false)
   const [storeSettingsComplete, setStoreSettingsComplete] = useState(false)
 
+  const merchantSetupCompleted = Boolean(
+    user?.merchantProfile?.setup_completed ?? (user as any)?.setup_completed
+  )
+  const merchantSmedanId = user?.merchantProfile?.smedan_id || (user as any)?.smedan_id || ""
+
   // Check if merchant setup and store settings are already completed
   useEffect(() => {
-    if (user?.merchantProfile?.setup_completed) {
+    if (merchantSetupCompleted) {
       setSetupComplete(true)
       // Assume store settings are complete if basic setup is complete
       setStoreSettingsComplete(true)
     }
-  }, [user])
+  }, [merchantSetupCompleted])
 
   // Show loading state while restoring session
   if (isLoading) {
@@ -43,13 +48,13 @@ export function MarketplaceApp() {
   }
 
   // Handle merchant setup flow - only show if setup not completed
-  const needsSetup = role === "merchant" && !user?.merchantProfile?.setup_completed && !setupComplete
+  const needsSetup = role === "merchant" && !merchantSetupCompleted && !setupComplete
   
   if (needsSetup) {
     return (
       <MerchantSetup
         userId={user?.userId || ""}
-        smedanId={user?.merchantProfile?.smedan_id || ""}
+        smedanId={merchantSmedanId}
         onComplete={(profile) => {
           // Update user context with completed profile
           if (user) {

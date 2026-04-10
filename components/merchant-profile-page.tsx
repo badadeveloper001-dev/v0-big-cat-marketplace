@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRole } from '@/lib/role-context'
-import { getUserProfile, updateUserProfile } from '@/lib/user-actions'
 import { ArrowLeft, Camera, Loader2, Check, AlertCircle, Store, MapPin, FileText, User, Phone, Mail } from 'lucide-react'
 import Image from 'next/image'
 
@@ -64,21 +63,24 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
   const loadProfile = async () => {
     setLoading(true)
     try {
-      const result = await getUserProfile(user?.userId || '')
+      const response = await fetch(`/api/user/profile?userId=${user?.userId || ''}`)
+      const result = await response.json()
+
       if (result.success && result.data) {
         setProfile(result.data)
         setFormData({
-          full_name: result.data.full_name || '',
-          phone: result.data.phone || '',
+          full_name: result.data.full_name || result.data.name || user?.name || '',
+          phone: result.data.phone || user?.phone || '',
           address: result.data.address || '',
-          business_name: result.data.business_name || '',
-          business_description: result.data.business_description || '',
-          business_category: result.data.business_category || 'General Merchandise',
-          location: result.data.location || '',
+          business_name: result.data.business_name || user?.merchantProfile?.business_name || user?.name || '',
+          business_description: result.data.business_description || user?.merchantProfile?.business_description || '',
+          business_category: result.data.business_category || user?.merchantProfile?.business_category || 'General Merchandise',
+          location: result.data.location || user?.merchantProfile?.location || '',
         })
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to load profile' })
       }
     } catch (error) {
-      // console.error('[v0] Error loading profile:', error)
       setMessage({ type: 'error', text: 'Failed to load profile' })
     } finally {
       setLoading(false)
@@ -111,20 +113,33 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
             location: formData.location,
           }
 
-      const result = await updateUserProfile(user?.userId || '', updateData)
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: user?.userId || '', updates: updateData }),
+      })
+      const result = await response.json()
 
       if (result.success) {
         setProfile(result.data)
         setMessage({ type: 'success', text: activeTab === 'personal' ? 'Profile updated successfully' : 'Store updated successfully' })
-        
-        // Update user context if business name changed
-        if (activeTab === 'store' && formData.business_name) {
+
+        if (user) {
           setUser({
-            ...user!,
+            ...user,
+            phone: result.data.phone || user.phone,
+            name: result.data.full_name || result.data.name || result.data.business_name || user.name,
             merchantProfile: {
-              ...user?.merchantProfile,
-              business_name: formData.business_name,
-            }
+              ...user.merchantProfile,
+              business_name: result.data.business_name || user.merchantProfile?.business_name,
+              business_description: result.data.business_description || user.merchantProfile?.business_description,
+              business_category: result.data.business_category || user.merchantProfile?.business_category,
+              location: result.data.location || user.merchantProfile?.location,
+              smedan_id: result.data.smedan_id || user.merchantProfile?.smedan_id,
+              logo_url: result.data.logo_url || result.data.avatar_url || user.merchantProfile?.logo_url,
+            },
           })
         }
         
@@ -230,10 +245,10 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
             {/* Avatar */}
             <div className="flex justify-center">
               <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-border">
-                  {profile?.avatar_url ? (
+                <div className="relative w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-border">
+                  {(profile?.avatar_url || user?.merchantProfile?.logo_url) ? (
                     <Image
-                      src={profile.avatar_url}
+                      src={profile?.avatar_url || user?.merchantProfile?.logo_url}
                       alt="Profile"
                       fill
                       className="object-cover"

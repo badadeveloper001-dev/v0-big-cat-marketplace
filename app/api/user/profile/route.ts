@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getOrCreateConversation, getUserConversations } from '@/lib/message-actions'
+import { getUserProfile, updateUserProfile } from '@/lib/user-actions'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,10 +13,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const result = await getUserConversations(userId)
+    const result = await getUserProfile(userId)
     return NextResponse.json(result)
   } catch (error) {
-    console.error('Get user conversations API error:', error)
+    console.error('Get user profile API error:', error)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
@@ -24,21 +24,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
-    const { buyerId, merchantId, productId } = await request.json()
+    const { userId, updates } = await request.json()
 
-    if (!buyerId || !merchantId) {
+    if (!userId || !updates) {
       return NextResponse.json(
-        { success: false, error: 'Buyer ID and Merchant ID are required' },
+        { success: false, error: 'User ID and updates are required' },
         { status: 400 }
       )
     }
 
-    const result = await getOrCreateConversation(buyerId, merchantId, productId)
+    const result = await updateUserProfile(userId, updates)
     return NextResponse.json(result)
   } catch (error) {
-    console.error('Get or create conversation API error:', error)
+    console.error('Update user profile API error:', error)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

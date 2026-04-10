@@ -40,7 +40,7 @@ interface VendorPageProps {
     description: string
   }
   onBack: () => void
-  onChatVendor?: () => void
+  onChatVendor?: (conversation?: any) => void
   onBrowseMore?: () => void
   onViewProduct?: (productId: string) => void
 }
@@ -124,8 +124,17 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
       })
       const result = await response.json()
       if (result.success) {
-        // Conversation created, now open chat
-        onChatVendor?.()
+        onChatVendor?.({
+          id: result.data?.id,
+          vendorId: vendor.id,
+          vendorName: vendor.name,
+          vendorLocation: vendor.location,
+          vendorRating: vendor.rating,
+          lastMessage: 'Start a conversation',
+          timestamp: new Date(),
+          unread: 0,
+          avatar: vendor.initials?.charAt(0) || 'V',
+        })
       }
     } catch (error) {
       // console.error('[v0] Error creating conversation:', error)

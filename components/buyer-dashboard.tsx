@@ -74,6 +74,7 @@ export function BuyerDashboard() {
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showChat, setShowChat] = useState(false)
+  const [initialConversation, setInitialConversation] = useState<any | null>(null)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -211,7 +212,7 @@ export function BuyerDashboard() {
           </div>
         </header>
         <div className="flex-1">
-          <ChatInterface />
+          <ChatInterface initialConversation={initialConversation} />
         </div>
       </div>
     )
@@ -222,8 +223,9 @@ export function BuyerDashboard() {
       <VendorPage 
         vendor={selectedVendor} 
         onBack={() => setSelectedVendor(null)}
-        onChatVendor={() => {
+        onChatVendor={(conversation) => {
           setSelectedVendor(null)
+          setInitialConversation(conversation || null)
           setShowChat(true)
         }}
         onBrowseMore={() => {

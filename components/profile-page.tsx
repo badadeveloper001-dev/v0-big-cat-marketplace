@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRole } from '@/lib/role-context'
-import { getUserProfile, updateUserProfile } from '@/lib/user-actions'
 import { ArrowLeft, Camera, Loader2, Check, AlertCircle } from 'lucide-react'
 import Image from 'next/image'
 
@@ -34,16 +33,18 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
   const loadProfile = async () => {
     setLoading(true)
     try {
-      const result = await getUserProfile(user?.userId || '')
+      const response = await fetch(`/api/user/profile?userId=${user?.userId || ''}`)
+      const result = await response.json()
       if (result.success && result.data) {
         setProfile(result.data)
         setFormData({
-          name: result.data.name || '',
-          phone: result.data.phone || '',
+          name: result.data.name || result.data.full_name || user?.name || '',
+          phone: result.data.phone || user?.phone || '',
         })
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to load profile' })
       }
     } catch (error) {
-      // console.error('[v0] Error loading profile:', error)
       setMessage({ type: 'error', text: 'Failed to load profile' })
     } finally {
       setLoading(false)
@@ -58,10 +59,20 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
 
     setSaving(true)
     try {
-      const result = await updateUserProfile(user?.userId || '', {
-        name: formData.name,
-        phone: formData.phone,
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user?.userId || '',
+          updates: {
+            name: formData.name,
+            phone: formData.phone,
+          },
+        }),
       })
+      const result = await response.json()
 
       if (result.success) {
         setProfile(result.data)

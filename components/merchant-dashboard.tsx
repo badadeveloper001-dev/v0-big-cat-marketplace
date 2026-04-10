@@ -9,6 +9,7 @@ import { ProfilePage } from "@/components/profile-page"
 import { MerchantProfilePage } from "@/components/merchant-profile-page"
 import { SettingsPage } from "@/components/settings-page"
 import { PaymentMethodsPage } from "@/components/payment-methods-page"
+import { ChatInterface } from "@/components/chat-interface"
 import { formatNaira } from "@/lib/currency-utils"
 import { ClipboardList } from "lucide-react"
 import {
@@ -37,6 +38,8 @@ import {
   Truck,
   LogOut,
   Loader2,
+  User,
+  MessageSquare,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { NotificationsPanel } from "./notifications-panel"
@@ -314,6 +317,19 @@ export function MerchantDashboard() {
             Orders
           </div>
         </button>
+        <button
+          onClick={() => setActiveTab("messages")}
+          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "messages"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            Messages
+          </div>
+        </button>
       </div>
 
       {/* Main Content */}
@@ -559,6 +575,8 @@ export function MerchantDashboard() {
           <MerchantProducts merchantId={user?.userId || ""} />
         ) : activeTab === "orders" ? (
           <MerchantOrders onBack={() => setActiveTab("home")} />
+        ) : activeTab === "messages" ? (
+          <ChatInterface />
         ) : activeTab === "analytics" ? (
           <div className="px-4 py-6">
             <div className="text-center mb-6">
@@ -677,6 +695,7 @@ export function MerchantDashboard() {
                   { id: "home", icon: Home, label: "Home" },
                   { id: "products", icon: Package, label: "Products", action: () => setActiveTab("products") },
                   { id: "orders", icon: ShoppingBag, label: "Orders", action: () => setActiveTab("orders") },
+                  { id: "messages", icon: MessageSquare, label: "Messages", action: () => setActiveTab("messages") },
                   { id: "profile", icon: User, label: "Profile", action: () => setShowProfile(true) },
                   { id: "settings", icon: Settings, label: "Settings", action: () => setActiveTab("settings") },
                 ].map((item) => (

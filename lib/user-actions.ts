@@ -18,7 +18,20 @@ export async function getUserProfile(userId: string) {
   }
 }
 
-export async function updateUserProfile(userId: string, updates: { name?: string; phone?: string; business_name?: string; email?: string }) {
+export async function updateUserProfile(
+  userId: string,
+  updates: {
+    name?: string
+    full_name?: string
+    phone?: string
+    address?: string
+    business_name?: string
+    business_description?: string
+    business_category?: string
+    location?: string
+    email?: string
+  }
+) {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase.from('auth_users').update(updates).eq('id', userId).select().single()

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useRole } from "@/lib/role-context"
 import {
   ArrowLeft,
   Send,
@@ -9,9 +10,10 @@ import {
   MoreVertical,
   Store,
   ShoppingCart,
-  Clock,
   Check,
   CheckCheck,
+  Loader2,
+  MessageSquare,
 } from "lucide-react"
 
 interface Message {
@@ -22,9 +24,9 @@ interface Message {
   read: boolean
 }
 
-interface Conversation {
+export interface Conversation {
   id: string
-  vendorId: number
+  vendorId: string | number
   vendorName: string
   vendorLocation: string
   vendorRating: number
@@ -34,129 +36,46 @@ interface Conversation {
   avatar: string
 }
 
-const mockConversations: Conversation[] = [
-  {
-    id: "conv1",
-    vendorId: 1,
-    vendorName: "StyleHaus",
-    vendorLocation: "Lagos, NG",
-    vendorRating: 4.9,
-    lastMessage: "Your order will arrive tomorrow!",
-    timestamp: new Date(Date.now() - 5 * 60000),
-    unread: 2,
-    avatar: "🛍️",
-  },
-  {
-    id: "conv2",
-    vendorId: 2,
-    vendorName: "TechHub Pro",
-    vendorLocation: "Abuja, NG",
-    vendorRating: 4.7,
-    lastMessage: "We have the latest iPhone 15 in stock",
-    timestamp: new Date(Date.now() - 2 * 3600000),
-    unread: 0,
-    avatar: "💻",
-  },
-  {
-    id: "conv3",
-    vendorId: 3,
-    vendorName: "HomeWorks",
-    vendorLocation: "Ikeja, NG",
-    vendorRating: 4.8,
-    lastMessage: "Plumbing job completed successfully",
-    timestamp: new Date(Date.now() - 24 * 3600000),
-    unread: 0,
-    avatar: "🏠",
-  },
-]
+function mapConversation(conversation: any, userId?: string): Conversation {
+  const counterpart = conversation?.buyer_id === userId
+    ? conversation?.merchant || conversation?.buyer
+    : conversation?.buyer || conversation?.merchant
+  const displayName = counterpart?.business_name || counterpart?.full_name || counterpart?.name || "Vendor"
 
-const mockMessages: { [key: string]: Message[] } = {
-  conv1: [
-    {
-      id: "m1",
-      sender: "merchant",
-      text: "Hi! Thanks for your order. We're preparing it now.",
-      timestamp: new Date(Date.now() - 3600000),
-      read: true,
-    },
-    {
-      id: "m2",
-      sender: "buyer",
-      text: "Great! When will it ship?",
-      timestamp: new Date(Date.now() - 3000000),
-      read: true,
-    },
-    {
-      id: "m3",
-      sender: "merchant",
-      text: "Your order will arrive tomorrow!",
-      timestamp: new Date(Date.now() - 5 * 60000),
-      read: false,
-    },
-  ],
-  conv2: [
-    {
-      id: "m1",
-      sender: "buyer",
-      text: "Do you have iPhone 15 Pro Max?",
-      timestamp: new Date(Date.now() - 7200000),
-      read: true,
-    },
-    {
-      id: "m2",
-      sender: "merchant",
-      text: "We have the latest iPhone 15 in stock",
-      timestamp: new Date(Date.now() - 2 * 3600000),
-      read: false,
-    },
-  ],
-  conv3: [
-    {
-      id: "m1",
-      sender: "buyer",
-      text: "Can you fix my kitchen sink?",
-      timestamp: new Date(Date.now() - 48 * 3600000),
-      read: true,
-    },
-    {
-      id: "m2",
-      sender: "merchant",
-      text: "Yes, we can! When are you available?",
-      timestamp: new Date(Date.now() - 47 * 3600000),
-      read: true,
-    },
-    {
-      id: "m3",
-      sender: "buyer",
-      text: "Tomorrow at 10 AM works",
-      timestamp: new Date(Date.now() - 25 * 3600000),
-      read: true,
-    },
-    {
-      id: "m4",
-      sender: "merchant",
-      text: "Perfect! See you then",
-      timestamp: new Date(Date.now() - 24.5 * 3600000),
-      read: true,
-    },
-    {
-      id: "m5",
-      sender: "merchant",
-      text: "Plumbing job completed successfully",
-      timestamp: new Date(Date.now() - 24 * 3600000),
-      read: true,
-    },
-  ],
+  return {
+    id: conversation.id,
+    vendorId: counterpart?.id || conversation.merchant_id,
+    vendorName: displayName,
+    vendorLocation: counterpart?.location || "Nigeria",
+    vendorRating: 4.8,
+    lastMessage: conversation.last_message || "Start a conversation",
+    timestamp: new Date(conversation.last_message_at || conversation.created_at || Date.now()),
+    unread: 0,
+    avatar: displayName.charAt(0).toUpperCase(),
+  }
+}
+
+function mapMessage(message: any, userId?: string): Message {
+  return {
+    id: message.id,
+    sender: message.sender_id === userId ? "buyer" : "merchant",
+    text: message.content,
+    timestamp: new Date(message.created_at || Date.now()),
+    read: Boolean(message.read_at),
+  }
 }
 
 function ChatListScreen({
+  conversations,
+  loading,
   onSelectConversation,
 }: {
+  conversations: Conversation[]
+  loading: boolean
   onSelectConversation: (conv: Conversation) => void
 }) {
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex items-center justify-between p-4">
           <h1 className="text-xl font-bold text-foreground">Messages</h1>
@@ -166,47 +85,55 @@ function ChatListScreen({
         </div>
       </div>
 
-      {/* Conversations List */}
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col divide-y divide-border">
-          {mockConversations.map((conv) => (
-            <button
-              key={conv.id}
-              onClick={() => onSelectConversation(conv)}
-              className="flex items-center gap-3 p-4 hover:bg-secondary/50 transition-colors text-left"
-            >
-              {/* Avatar */}
-              <div className="flex-shrink-0 w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-xl shadow-sm">
-                {conv.avatar}
-              </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+              <MessageSquare className="w-7 h-7 text-primary" />
+            </div>
+            <h3 className="font-semibold text-foreground mb-2">No conversations yet</h3>
+            <p className="text-sm text-muted-foreground">
+              Tap <strong>Chat Vendor</strong> on any seller page to start messaging.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col divide-y divide-border">
+            {conversations.map((conv) => (
+              <button
+                key={conv.id}
+                onClick={() => onSelectConversation(conv)}
+                className="flex items-center gap-3 p-4 hover:bg-secondary/50 transition-colors text-left"
+              >
+                <div className="flex-shrink-0 w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-lg font-semibold text-primary shadow-sm">
+                  {conv.avatar}
+                </div>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <h3 className="font-semibold text-foreground truncate">
-                    {conv.vendorName}
-                  </h3>
-                  <span className="text-xs text-muted-foreground flex-shrink-0">
-                    {formatTime(conv.timestamp)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-muted-foreground truncate">
-                    {conv.lastMessage}
-                  </p>
-                  {conv.unread > 0 && (
-                    <span className="ml-auto flex-shrink-0 flex items-center justify-center w-6 h-6 bg-primary text-primary-foreground text-xs font-bold rounded-full">
-                      {conv.unread}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <h3 className="font-semibold text-foreground truncate">{conv.vendorName}</h3>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                      {formatTime(conv.timestamp)}
                     </span>
-                  )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground truncate">{conv.lastMessage}</p>
+                    {conv.unread > 0 && (
+                      <span className="ml-auto flex-shrink-0 flex items-center justify-center w-6 h-6 bg-primary text-primary-foreground text-xs font-bold rounded-full">
+                        {conv.unread}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Safety Notice */}
       <div className="border-t border-border bg-secondary/50 p-3 text-center">
         <p className="text-xs text-muted-foreground">
           🔒 For your safety, keep all communication within the platform
@@ -223,57 +150,72 @@ function ChatConversationScreen({
   conversation: Conversation
   onBack: () => void
 }) {
-  const [messages, setMessages] = useState<Message[]>(
-    mockMessages[conversation.id] || []
-  )
+  const { user } = useRole()
+  const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [showQuickActions, setShowQuickActions] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const message: Message = {
-        id: `m${Date.now()}`,
-        sender: "buyer",
-        text: newMessage,
-        timestamp: new Date(),
-        read: false,
-      }
-      setMessages([...messages, message])
-      setNewMessage("")
-
-      // Simulate merchant reply after a delay
-      setTimeout(() => {
-        const reply: Message = {
-          id: `m${Date.now() + 1}`,
-          sender: "merchant",
-          text: "Thanks for your message! We'll get back to you soon.",
-          timestamp: new Date(),
-          read: false,
+  useEffect(() => {
+    const loadMessages = async () => {
+      setLoading(true)
+      try {
+        const response = await fetch(`/api/messages/${conversation.id}`)
+        const result = await response.json()
+        if (result.success) {
+          setMessages((result.data || []).map((message: any) => mapMessage(message, user?.userId)))
         }
-        setMessages((prev) => [...prev, reply])
-      }, 2000)
+      } catch (error) {
+        console.error("Failed to load messages:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadMessages()
+  }, [conversation.id, user?.userId])
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !user?.userId || sending) return
+
+    setSending(true)
+    try {
+      const response = await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId: conversation.id,
+          senderId: user.userId,
+          content: newMessage,
+        }),
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        setMessages((prev) => [...prev, mapMessage(result.data, user.userId)])
+        setNewMessage("")
+      }
+    } catch (error) {
+      console.error("Failed to send message:", error)
+    } finally {
+      setSending(false)
     }
   }
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-card border-b border-border">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="p-2 hover:bg-secondary rounded-xl transition-colors"
-            >
+            <button onClick={onBack} className="p-2 hover:bg-secondary rounded-xl transition-colors">
               <ArrowLeft className="w-5 h-5 text-foreground" />
             </button>
             <div>
-              <h2 className="font-semibold text-foreground">
-                {conversation.vendorName}
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                {conversation.vendorLocation}
-              </p>
+              <h2 className="font-semibold text-foreground">{conversation.vendorName}</h2>
+              <p className="text-xs text-muted-foreground">{conversation.vendorLocation}</p>
             </div>
           </div>
           <button className="p-2 hover:bg-secondary rounded-xl transition-colors">
@@ -282,45 +224,42 @@ function ChatConversationScreen({
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.sender === "buyer" ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={`max-w-xs px-4 py-2 rounded-2xl ${
-                msg.sender === "buyer"
-                  ? "bg-primary text-primary-foreground rounded-br-none"
-                  : "bg-secondary text-foreground rounded-bl-none"
-              }`}
-            >
-              <p className="text-sm break-words">{msg.text}</p>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="text-center py-12 text-sm text-muted-foreground">
+            No messages yet. Say hello to start the conversation.
+          </div>
+        ) : (
+          messages.map((msg) => (
+            <div key={msg.id} className={`flex ${msg.sender === "buyer" ? "justify-end" : "justify-start"}`}>
               <div
-                className={`flex items-center gap-1 mt-1 text-xs ${
+                className={`max-w-xs px-4 py-2 rounded-2xl ${
                   msg.sender === "buyer"
-                    ? "text-primary-foreground/70"
-                    : "text-muted-foreground"
+                    ? "bg-primary text-primary-foreground rounded-br-none"
+                    : "bg-secondary text-foreground rounded-bl-none"
                 }`}
               >
-                <span>{formatTime(msg.timestamp)}</span>
-                {msg.sender === "buyer" && (
-                  <div className="ml-1">
-                    {msg.read ? (
-                      <CheckCheck className="w-3 h-3" />
-                    ) : (
-                      <Check className="w-3 h-3" />
-                    )}
-                  </div>
-                )}
+                <p className="text-sm break-words">{msg.text}</p>
+                <div
+                  className={`flex items-center gap-1 mt-1 text-xs ${
+                    msg.sender === "buyer" ? "text-primary-foreground/70" : "text-muted-foreground"
+                  }`}
+                >
+                  <span>{formatTime(msg.timestamp)}</span>
+                  {msg.sender === "buyer" && (
+                    <div className="ml-1">{msg.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />}</div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
-      {/* Quick Actions */}
       {showQuickActions && (
         <div className="border-t border-border bg-card p-4">
           <div className="grid grid-cols-2 gap-3">
@@ -336,7 +275,6 @@ function ChatConversationScreen({
         </div>
       )}
 
-      {/* Input */}
       <div className="border-t border-border bg-card p-4">
         <div className="flex gap-3 items-end">
           <div className="flex-1 flex items-center gap-2 bg-input rounded-2xl px-4 py-2">
@@ -344,7 +282,7 @@ function ChatConversationScreen({
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={(e) => {
+              onKeyDown={(e) => {
                 if (e.key === "Enter") handleSendMessage()
               }}
               placeholder="Type a message..."
@@ -356,15 +294,14 @@ function ChatConversationScreen({
           </div>
           <button
             onClick={handleSendMessage}
-            disabled={!newMessage.trim()}
+            disabled={!newMessage.trim() || sending}
             className="flex items-center justify-center w-10 h-10 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed rounded-full transition-colors"
           >
-            <Send className="w-5 h-5 text-primary-foreground" />
+            {sending ? <Loader2 className="w-5 h-5 text-primary-foreground animate-spin" /> : <Send className="w-5 h-5 text-primary-foreground" />}
           </button>
         </div>
       </div>
 
-      {/* Safety Notice */}
       <div className="border-t border-border bg-secondary/50 p-3 text-center">
         <p className="text-xs text-muted-foreground">
           🔒 For your safety, keep all communication within the platform
@@ -374,25 +311,63 @@ function ChatConversationScreen({
   )
 }
 
-export function ChatInterface() {
-  const [selectedConversation, setSelectedConversation] =
-    useState<Conversation | null>(null)
+export function ChatInterface({ initialConversation = null }: { initialConversation?: Conversation | null }) {
+  const { user } = useRole()
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(initialConversation)
+  const [conversations, setConversations] = useState<Conversation[]>(initialConversation ? [initialConversation] : [])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (initialConversation) {
+      setSelectedConversation(initialConversation)
+    }
+  }, [initialConversation])
+
+  useEffect(() => {
+    const loadConversations = async () => {
+      if (!user?.userId) {
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      try {
+        const response = await fetch(`/api/messages/conversation?userId=${user.userId}`)
+        const result = await response.json()
+        if (result.success) {
+          const mapped = (result.data || []).map((conversation: any) => mapConversation(conversation, user.userId))
+          setConversations(mapped)
+
+          if (initialConversation) {
+            const matched = mapped.find((conversation: Conversation) => conversation.id === initialConversation.id)
+            if (matched) {
+              setSelectedConversation(matched)
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load conversations:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadConversations()
+  }, [user?.userId, initialConversation])
 
   if (selectedConversation) {
-    return (
-      <ChatConversationScreen
-        conversation={selectedConversation}
-        onBack={() => setSelectedConversation(null)}
-      />
-    )
+    return <ChatConversationScreen conversation={selectedConversation} onBack={() => setSelectedConversation(null)} />
   }
 
-  return <ChatListScreen onSelectConversation={setSelectedConversation} />
+  return <ChatListScreen conversations={conversations} loading={loading} onSelectConversation={setSelectedConversation} />
 }
 
 function formatTime(date: Date): string {
+  const timestamp = new Date(date)
+  if (Number.isNaN(timestamp.getTime())) return "Now"
+
   const now = new Date()
-  const diff = now.getTime() - date.getTime()
+  const diff = now.getTime() - timestamp.getTime()
   const minutes = Math.floor(diff / 60000)
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
@@ -402,5 +377,5 @@ function formatTime(date: Date): string {
   if (hours < 24) return `${hours}h ago`
   if (days < 7) return `${days}d ago`
 
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  return timestamp.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }

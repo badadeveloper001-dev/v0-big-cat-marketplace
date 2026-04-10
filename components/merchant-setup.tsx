@@ -1,8 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRole } from "@/lib/role-context"
-import { saveMerchantSetup } from "@/lib/merchant-setup-actions"
 import { Store, FileText, MapPin, Tag, Image, Loader2, Check, AlertCircle } from "lucide-react"
 
 interface MerchantSetupProps {
@@ -110,13 +108,23 @@ export function MerchantSetup({ userId, smedanId, onComplete }: MerchantSetupPro
       }
 
       // For now, use the preview URL as logo (in production, upload to Vercel Blob)
-      const result = await saveMerchantSetup(userId, smedanId, {
-        businessName: formData.businessName,
-        businessDescription: formData.businessDescription,
-        category: formData.category,
-        location: formData.location,
-        logoUrl: logoPreview || undefined,
+      const response = await fetch('/api/merchant/setup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          smedanId,
+          businessName: formData.businessName,
+          businessDescription: formData.businessDescription,
+          category: formData.category,
+          location: formData.location,
+          logoUrl: logoPreview || undefined,
+        }),
       })
+
+      const result = await response.json()
 
       if (result.success) {
         setSuccess(true)

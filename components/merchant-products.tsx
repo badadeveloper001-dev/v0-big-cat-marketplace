@@ -81,6 +81,28 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
       return
     }
 
+    const price = Number.parseFloat(formData.price)
+    if (!Number.isFinite(price) || price <= 0) {
+      setError('Enter a valid product price greater than 0')
+      return
+    }
+
+    if (price > 99999999.99) {
+      setError('Product price is too large')
+      return
+    }
+
+    const weight = formData.weight ? Number.parseFloat(formData.weight) : undefined
+    if (formData.weight && (!Number.isFinite(weight) || (weight ?? 0) < 0)) {
+      setError('Enter a valid weight')
+      return
+    }
+
+    if (weight !== undefined && weight > 99999999.99) {
+      setError('Product weight is too large')
+      return
+    }
+
     try {
       const response = await fetch('/api/products/create', {
         method: 'POST',
@@ -92,9 +114,9 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
           product: {
             name: formData.name,
             description: formData.description,
-            price: parseFloat(formData.price),
+            price,
             category: formData.category,
-            weight: formData.weight ? parseFloat(formData.weight) : undefined,
+            weight,
             images: formData.images,
           }
         }),
@@ -254,6 +276,8 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                 <input
                   type="number"
                   step="0.01"
+                  min="0.01"
+                  max="99999999.99"
                   value={formData.price}
                   onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   placeholder="0.00"
@@ -268,6 +292,8 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                 <input
                   type="number"
                   step="0.01"
+                  min="0"
+                  max="99999999.99"
                   value={formData.weight}
                   onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
                   placeholder="Optional"

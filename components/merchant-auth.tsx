@@ -7,6 +7,24 @@ import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Hash, Loader2, CheckCircle2,
 export function MerchantAuth({ onBack }: { onBack: () => void }) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
+
+  const normalizeMerchantUser = (user: any) => ({
+    userId: user.id,
+    email: user.email,
+    phone: user.phone,
+    name: user.business_name || user.name,
+    role: "merchant" as const,
+    merchantProfile: {
+      business_name: user.business_name || user.name,
+      business_description: user.business_description || "",
+      business_category: user.business_category || "",
+      smedan_id: user.smedan_id || "",
+      setup_completed: Boolean(user.setup_completed),
+      location: user.location || "",
+      avatar_url: user.avatar_url || "",
+      logo_url: user.logo_url || user.avatar_url || "",
+    },
+  })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
@@ -60,23 +78,11 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
         if (isSignUp) {
           setSuccessMessage("Account created successfully! Redirecting...")
           setTimeout(() => {
-            setUser({
-              userId: user.id,
-              email: user.email,
-              phone: user.phone,
-              name: user.business_name || user.name,
-              role: "merchant",
-            })
+            setUser(normalizeMerchantUser(user))
             setRole("merchant")
           }, 1500)
         } else {
-          setUser({
-            userId: user.id,
-            email: user.email,
-            phone: user.phone,
-            name: user.business_name || user.name,
-            role: "merchant",
-          })
+          setUser(normalizeMerchantUser(user))
           setRole("merchant")
         }
       } else {
