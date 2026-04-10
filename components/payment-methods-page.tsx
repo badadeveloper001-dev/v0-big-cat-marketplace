@@ -3,12 +3,6 @@
 import { useState, useEffect } from "react"
 import { useRole } from "@/lib/role-context"
 import { 
-  getPaymentMethods, 
-  addPaymentMethod, 
-  removePaymentMethod, 
-  setDefaultPaymentMethod 
-} from "@/lib/user-actions"
-import { 
   ArrowLeft, 
   CreditCard, 
   Plus, 
@@ -55,15 +49,19 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
 
   const loadPaymentMethods = async () => {
     if (!user?.userId) return
-    
+
     setLoading(true)
     try {
-      const result = await getPaymentMethods(user.userId)
+      const response = await fetch(`/api/user/payment-methods?userId=${user.userId}`)
+      const result = await response.json()
       if (result.success && result.data) {
         setPaymentMethods(result.data)
+      } else {
+        setError(result.error || "Failed to load payment methods")
       }
     } catch (err) {
       console.error("Error loading payment methods:", err)
+      setError("Failed to load payment methods")
     } finally {
       setLoading(false)
     }
@@ -103,14 +101,24 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
 
     setSaving(true)
     try {
-      const result = await addPaymentMethod(user.userId, {
-        card_type: detectCardType(cardNumber),
-        card_last_four: cardNumber.replace(/\s/g, "").slice(-4),
-        card_holder_name: cardHolder.trim(),
-        expiry_month: month,
-        expiry_year: year,
-        is_default: paymentMethods.length === 0,
+      const response = await fetch('/api/user/payment-methods', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.userId,
+          method: {
+            card_type: detectCardType(cardNumber),
+            card_last_four: cardNumber.replace(/\s/g, "").slice(-4),
+            card_holder_name: cardHolder.trim(),
+            expiry_month: month,
+            expiry_year: year,
+            is_default: paymentMethods.length === 0,
+          },
+        }),
       })
+      const result = await response.json()
 
       if (result.success) {
         setSuccess("Card added successfully!")
@@ -132,7 +140,14 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
     
     setError("")
     try {
-      const result = await removePaymentMethod(user.userId, cardId)
+      const response = await fetch('/api/user/payment-methods', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ methodId: cardId }),
+      })
+      const result = await response.json()
       if (result.success) {
         setSuccess("Card removed")
         loadPaymentMethods()
@@ -149,7 +164,14 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
     
     setError("")
     try {
-      const result = await setDefaultPaymentMethod(user.userId, cardId)
+      const response = await fetch('/api/user/payment-methods', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: user.userId, methodId: cardId }),
+      })
+      const result = await response.json()
       if (result.success) {
         setSuccess("Default card updated")
         loadPaymentMethods()

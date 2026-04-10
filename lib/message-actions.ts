@@ -19,20 +19,31 @@ export async function getOrCreateConversation(buyerId: string, merchantId: strin
     if (existing) return { success: true, data: existing }
 
     const baseConversation = {
-      id: generateId('conv'),
       buyer_id: buyerId,
       merchant_id: merchantId,
       last_message_at: new Date().toISOString(),
     }
 
-    let result = await supabase
-      .from('conversations')
-      .insert(productId ? { ...baseConversation, product_id: productId } : baseConversation)
-      .select()
-      .single()
+    const tryInsert = async (payload: Record<string, any>) => {
+      return supabase.from('conversations').insert(payload as any).select().single()
+    }
+
+    let result = await tryInsert(productId ? { ...baseConversation, product_id: productId } : baseConversation)
 
     if (result.error && String(result.error.message || '').includes('product_id')) {
-      result = await supabase.from('conversations').insert(baseConversation).select().single()
+      result = await tryInsert(baseConversation)
+    }
+
+    if (
+      result.error &&
+      /null value in column "id"|not-null constraint|violates not-null/i.test(String(result.error.message || ''))
+    ) {
+      const fallbackBase = { id: generateId('conv'), ...baseConversation }
+      result = await tryInsert(productId ? { ...fallbackBase, product_id: productId } : fallbackBase)
+
+      if (result.error && String(result.error.message || '').includes('product_id')) {
+        result = await tryInsert(fallbackBase)
+      }
     }
 
     if (result.error) throw result.error
@@ -60,22 +71,33 @@ export async function getConversationMessages(conversationId: string) {
 export async function sendMessage(conversationId: string, senderId: string, content: string) {
   try {
     const supabase = await createClient()
-    const payload = {
-      id: generateId('msg'),
+    const basePayload = {
       conversation_id: conversationId,
       sender_id: senderId,
       content,
     }
 
-    const { data, error } = await supabase.from('messages').insert(payload).select().single()
-    if (error) throw error
+    const tryInsert = async (payload: Record<string, any>) => {
+      return supabase.from('messages').insert(payload as any).select().single()
+    }
+
+    let result = await tryInsert(basePayload)
+
+    if (
+      result.error &&
+      /null value in column "id"|not-null constraint|violates not-null/i.test(String(result.error.message || ''))
+    ) {
+      result = await tryInsert({ id: generateId('msg'), ...basePayload })
+    }
+
+    if (result.error) throw result.error
 
     await supabase
       .from('conversations')
-      .update({ last_message_at: new Date().toISOString() })
+      .update({ last_message_at: new Date().toISOString() } as any)
       .eq('id', conversationId)
 
-    return { success: true, data }
+    return { success: true, data: result.data }
   } catch (error: any) {
     return { success: false, error: error.message }
   }

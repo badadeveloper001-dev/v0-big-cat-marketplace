@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRole } from '@/lib/role-context'
-import { changePassword, updateEmail, updateNotificationPreferences, deleteAccount } from '@/lib/user-actions'
 import { ArrowLeft, Lock, Mail, Bell, Loader2, Check, AlertCircle, Eye, EyeOff, Trash2 } from 'lucide-react'
 
 interface SettingsMessage {
@@ -65,11 +64,19 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
 
     setLoading(true)
     try {
-      const result = await changePassword(
-        user?.userId || '',
-        passwordForm.currentPassword,
-        passwordForm.newPassword
-      )
+      const response = await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'change-password',
+          userId: user?.userId || '',
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      })
+      const result = await response.json()
 
       if (result.success) {
         setMessage({ type: 'success', text: 'Password changed successfully' })
@@ -97,7 +104,18 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
 
     setLoading(true)
     try {
-      const result = await updateEmail(user?.userId || '', emailForm.newEmail, emailForm.password)
+      const response = await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update-email',
+          userId: user?.userId || '',
+          newEmail: emailForm.newEmail,
+        }),
+      })
+      const result = await response.json()
 
       if (result.success) {
         setMessage({ type: 'success', text: 'Email updated successfully' })
@@ -118,7 +136,18 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
   const handleNotificationUpdate = async () => {
     setLoading(true)
     try {
-      const result = await updateNotificationPreferences(user?.userId || '', notifications)
+      const response = await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update-notifications',
+          userId: user?.userId || '',
+          preferences: notifications,
+        }),
+      })
+      const result = await response.json()
 
       if (result.success) {
         setMessage({ type: 'success', text: 'Notification preferences updated' })
@@ -148,7 +177,17 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
 
     setLoading(true)
     try {
-      const result = await deleteAccount(user?.userId || '', deletePassword)
+      const response = await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'delete-account',
+          userId: user?.userId || '',
+        }),
+      })
+      const result = await response.json()
 
       if (result.success) {
         setMessage({ type: 'success', text: 'Account deleted successfully. Redirecting...' })
