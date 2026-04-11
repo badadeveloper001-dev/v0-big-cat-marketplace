@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react"
 import { useRole } from "@/lib/role-context"
 import {
+  containsBlockedContactRequest,
+  getUserStrikeCount,
+  isUserSuspended,
+  recordSafetyViolation,
+  resetSafetyState,
+} from "@/lib/trust-safety"
+import {
   ArrowLeft,
   Send,
   Mic,
@@ -14,6 +21,7 @@ import {
   CheckCheck,
   Loader2,
   MessageSquare,
+  ShieldAlert,
 } from "lucide-react"
 
 interface Message {
@@ -157,6 +165,15 @@ function ChatConversationScreen({
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState("")
+  const [warning, setWarning] = useState("")
+  const [suspended, setSuspended] = useState(false)
+  const [strikeCount, setStrikeCount] = useState(0)
+
+  useEffect(() => {
+    const userId = user?.userId
+    setSuspended(isUserSuspended(userId))
+    setStrikeCount(getUserStrikeCount(userId))
+  }, [user?.userId])
 
   useEffect(() => {
     const loadMessages = async () => {
@@ -178,9 +195,24 @@ function ChatConversationScreen({
   }, [conversation.id, user?.userId])
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !user?.userId || sending) return
+    if (!newMessage.trim() || !user?.userId || sending || suspended) return
 
     setError("")
+    setWarning("")
+
+    if (containsBlockedContactRequest(newMessage)) {
+      const result = recordSafetyViolation(user.userId)
+      setStrikeCount(result.strikes)
+
+      if (result.suspended) {
+        setSuspended(true)
+        setError("Your account has been temporarily suspended for violating platform policies.")
+      } else {
+        setWarning("For your safety, please keep all conversations within the platform.")
+      }
+      return
+    }
+
     setSending(true)
     try {
       const response = await fetch('/api/messages/send', {
@@ -212,6 +244,31 @@ function ChatConversationScreen({
 
   return (
     <div className="flex flex-col h-full bg-background">
+      {suspended ? (
+        <div className="p-4">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-center">
+            <ShieldAlert className="w-8 h-8 text-red-600 mx-auto mb-2" />
+            <p className="font-semibold text-red-700 mb-1">Account Suspended</p>
+            <p className="text-sm text-red-700">
+              Your account has been temporarily suspended for violating platform policies.
+            </p>
+            <p className="text-xs text-red-600 mt-2">Strikes: {strikeCount}</p>
+            <button
+              onClick={() => {
+                resetSafetyState(user?.userId)
+                setStrikeCount(0)
+                setSuspended(false)
+                setError("")
+                setWarning("")
+              }}
+              className="mt-4 px-4 py-2 rounded-xl bg-white border border-red-200 text-red-700 text-sm font-medium"
+            >
+              Reset Strikes (Demo)
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="sticky top-0 z-10 bg-card border-b border-border">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
@@ -230,6 +287,11 @@ function ChatConversationScreen({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {warning && (
+          <div className="rounded-xl border border-[#E8D7FF] bg-[#F3E8FF] px-3 py-2 text-sm text-[#6C2BD9]">
+            {warning}
+          </div>
+        )}
         {error && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
@@ -291,11 +353,20 @@ function ChatConversationScreen({
             <input
               type="text"
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value
+                setNewMessage(value)
+                if (containsBlockedContactRequest(value)) {
+                  setWarning("For your safety, please keep all conversations within the platform.")
+                } else {
+                  setWarning("")
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSendMessage()
               }}
-              placeholder="Type a message..."
+              placeholder={suspended ? "Messaging disabled due to suspension" : "Type a message..."}
+              disabled={suspended}
               className="flex-1 bg-transparent outline-none text-foreground placeholder-muted-foreground text-sm"
             />
             <button className="p-2 hover:bg-secondary rounded-lg transition-colors">
@@ -304,7 +375,7 @@ function ChatConversationScreen({
           </div>
           <button
             onClick={handleSendMessage}
-            disabled={!newMessage.trim() || sending}
+            disabled={!newMessage.trim() || sending || suspended}
             className="flex items-center justify-center w-10 h-10 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed rounded-full transition-colors"
           >
             {sending ? <Loader2 className="w-5 h-5 text-primary-foreground animate-spin" /> : <Send className="w-5 h-5 text-primary-foreground" />}
@@ -326,6 +397,13 @@ export function ChatInterface({ initialConversation = null }: { initialConversat
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(initialConversation)
   const [conversations, setConversations] = useState<Conversation[]>(initialConversation ? [initialConversation] : [])
   const [loading, setLoading] = useState(true)
+  const [suspended, setSuspended] = useState(false)
+  const [strikeCount, setStrikeCount] = useState(0)
+
+  useEffect(() => {
+    setSuspended(isUserSuspended(user?.userId))
+    setStrikeCount(getUserStrikeCount(user?.userId))
+  }, [user?.userId])
 
   useEffect(() => {
     if (initialConversation) {
@@ -335,6 +413,11 @@ export function ChatInterface({ initialConversation = null }: { initialConversat
 
   useEffect(() => {
     const loadConversations = async () => {
+      if (suspended) {
+        setLoading(false)
+        return
+      }
+
       if (!user?.userId) {
         setLoading(false)
         return
@@ -363,7 +446,32 @@ export function ChatInterface({ initialConversation = null }: { initialConversat
     }
 
     loadConversations()
-  }, [user?.userId, initialConversation])
+  }, [user?.userId, initialConversation, suspended])
+
+  if (suspended) {
+    return (
+      <div className="h-full p-4">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-center">
+          <ShieldAlert className="w-8 h-8 text-red-600 mx-auto mb-2" />
+          <p className="font-semibold text-red-700 mb-1">Account Suspended</p>
+          <p className="text-sm text-red-700">
+            Your account has been temporarily suspended for violating platform policies.
+          </p>
+          <p className="text-xs text-red-600 mt-2">Strikes: {strikeCount}</p>
+          <button
+            onClick={() => {
+              resetSafetyState(user?.userId)
+              setStrikeCount(0)
+              setSuspended(false)
+            }}
+            className="mt-4 px-4 py-2 rounded-xl bg-white border border-red-200 text-red-700 text-sm font-medium"
+          >
+            Reset Strikes (Demo)
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (selectedConversation) {
     return <ChatConversationScreen conversation={selectedConversation} onBack={() => setSelectedConversation(null)} />

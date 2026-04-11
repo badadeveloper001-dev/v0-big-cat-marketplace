@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { ShoppingBag, Store, Shield, ArrowRight, Lock } from "lucide-react"
 import { BuyerAuth } from "./buyer-auth"
 import { MerchantAuth } from "./merchant-auth"
@@ -26,6 +27,7 @@ const roles = [
 export function Onboarding() {
   const [selectedAuth, setSelectedAuth] = useState<AuthType>(null)
   const [showAdminModal, setShowAdminModal] = useState(false)
+  const [logoSrc, setLogoSrc] = useState("/bigcat-logo.png")
 
   // Show buyer auth if selected
   if (selectedAuth === "buyer") {
@@ -42,8 +44,25 @@ export function Onboarding() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-4 shadow-md shadow-primary/30">
-            <span className="text-primary-foreground font-bold text-xl">B</span>
+          <div className="inline-flex items-center justify-center w-28 h-28 rounded-3xl bg-[#DDB85A] mb-4 shadow-md">
+            <Image
+              src={logoSrc}
+              alt="BigCat logo"
+              width={112}
+              height={112}
+              className="w-24 h-24 object-contain"
+              onError={() => {
+                if (logoSrc === "/bigcat-logo.png") {
+                  setLogoSrc("/bigcat-logo.jpg")
+                  return
+                }
+
+                if (logoSrc !== "/placeholder-logo.png") {
+                  setLogoSrc("/placeholder-logo.png")
+                }
+              }}
+              priority
+            />
           </div>
           <h1 className="text-2xl font-bold text-foreground text-balance">
             Welcome to BigCat Marketplace

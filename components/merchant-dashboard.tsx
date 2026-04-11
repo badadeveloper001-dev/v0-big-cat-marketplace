@@ -655,9 +655,9 @@ export function MerchantDashboard() {
                   onClick={() => setShowPaymentMethods(true)}
                   className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors"
                 >
-                  <span className="text-sm text-muted-foreground">Payment Methods</span>
+                  <span className="text-sm text-muted-foreground">Wallet</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-primary">Manage</span>
+                    <span className="text-sm text-primary">Open</span>
                     <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   </div>
                 </button>

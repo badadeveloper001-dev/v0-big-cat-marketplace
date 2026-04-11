@@ -3,9 +3,27 @@
 import { useState, useEffect } from "react"
 import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw, ChevronDown } from "lucide-react"
 import { useRole } from "@/lib/role-context"
+import {
+  createEscrowRecord,
+  getEscrowByOrderId,
+  markOrderDeliveredAndReleaseEscrow,
+  type EscrowRecord,
+} from "@/lib/escrow"
+import { getDemoMerchantOrders, updateDemoOrderStatus } from "@/lib/demo-orders"
 
 interface MerchantOrdersProps {
   onBack: () => void
+}
+
+interface DeliveryPayload {
+  order_id: string
+  merchant_id: string
+  buyer_id: string
+  pickup_address: string
+  delivery_address: string
+  weight: number
+  delivery_type: string
+  status: "pending"
 }
 
 const statusOptions = [
@@ -27,9 +45,40 @@ const statusConfig: { [key: string]: { label: string; color: string; icon: any }
 export function MerchantOrders({ onBack }: MerchantOrdersProps) {
   const { user } = useRole()
   const [orders, setOrders] = useState<any[]>([])
+  const [escrowMap, setEscrowMap] = useState<Record<string, EscrowRecord>>({})
+  const [sentToLogistics, setSentToLogistics] = useState<Record<string, boolean>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null)
+
+  const badgeClass = (status: "held" | "released") =>
+    status === "held"
+      ? "bg-amber-100 text-amber-700"
+      : "bg-green-100 text-green-700"
+
+  const syncEscrowForOrders = (orderList: any[]) => {
+    const next: Record<string, EscrowRecord> = {}
+
+    orderList.forEach((order) => {
+      const orderId = String(order.id)
+      const totalAmount = Number(order.grand_total || order.total_amount || 0)
+      const deliveryAmount = Number(order.delivery_fee || 0)
+      let escrow = getEscrowByOrderId(orderId)
+
+      if (!escrow) {
+        escrow = createEscrowRecord(orderId, totalAmount, deliveryAmount)
+      }
+
+      if (order.status === "delivered") {
+        escrow = markOrderDeliveredAndReleaseEscrow(orderId) || escrow
+      }
+
+      next[orderId] = escrow
+    })
+
+    setEscrowMap(next)
+  }
 
   useEffect(() => {
     async function fetchOrders() {
@@ -39,13 +88,33 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
       try {
         const response = await fetch(`/api/orders/merchant?merchantId=${user.userId}`)
         const result = await response.json()
+        const demoOrders = getDemoMerchantOrders(user.userId)
+
         if (result.success) {
-          setOrders(result.data || [])
+          const fetched = result.data || []
+          const merged = [
+            ...demoOrders,
+            ...fetched.filter((order: any) => !demoOrders.some((demo) => String(demo.id) === String(order.id))),
+          ]
+
+          setOrders(merged)
+          syncEscrowForOrders(merged)
         } else {
-          setError(result.error || 'Failed to fetch orders')
+          if (demoOrders.length > 0) {
+            setOrders(demoOrders)
+            syncEscrowForOrders(demoOrders)
+          } else {
+            setError(result.error || 'Failed to fetch orders')
+          }
         }
-      } catch (error) {
-        setError('Failed to fetch orders')
+      } catch {
+        const demoOrders = getDemoMerchantOrders(user.userId)
+        if (demoOrders.length > 0) {
+          setOrders(demoOrders)
+          syncEscrowForOrders(demoOrders)
+        } else {
+          setError('Failed to fetch orders')
+        }
       }
       setIsLoading(false)
     }
@@ -53,8 +122,89 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
     fetchOrders()
   }, [user?.userId])
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('delivery_data')
+      if (!raw) {
+        setSentToLogistics({})
+        return
+      }
+
+      const parsed = JSON.parse(raw)
+      const deliveries = Array.isArray(parsed) ? parsed : [parsed]
+      const sentMap: Record<string, boolean> = {}
+
+      deliveries.forEach((entry: Partial<DeliveryPayload>) => {
+        if (entry?.order_id) {
+          sentMap[String(entry.order_id)] = true
+        }
+      })
+
+      setSentToLogistics(sentMap)
+    } catch {
+      setSentToLogistics({})
+    }
+  }, [])
+
+  const buildDeliveryPayload = (order: any): DeliveryPayload => {
+    const itemWeight = (order.items || []).reduce((sum: number, item: any) => {
+      const weight = Number(item?.weight ?? item?.products?.weight ?? 0)
+      return sum + Math.max(0, weight) * Number(item?.quantity || 0)
+    }, 0)
+
+    return {
+      order_id: String(order.id),
+      merchant_id: String(order.merchant_id || user?.userId || ''),
+      buyer_id: String(order.buyer_id || ''),
+      pickup_address: String(order.pickup_address || order.merchant_pickup_address || user?.merchantProfile?.location || order.delivery_address || ''),
+      delivery_address: String(order.delivery_address || ''),
+      weight: itemWeight,
+      delivery_type: String(order.delivery_type || 'normal'),
+      status: 'pending',
+    }
+  }
+
+  const handleSendToLogistics = (order: any) => {
+    const orderId = String(order.id)
+    const delivery = buildDeliveryPayload(order)
+
+    try {
+      const raw = localStorage.getItem('delivery_data')
+      const parsed = raw ? JSON.parse(raw) : []
+      const deliveries: DeliveryPayload[] = Array.isArray(parsed) ? parsed : [parsed]
+      const next = deliveries.filter((entry) => String(entry.order_id) !== orderId)
+      next.push(delivery)
+      localStorage.setItem('delivery_data', JSON.stringify(next))
+
+      setSentToLogistics((prev) => ({ ...prev, [orderId]: true }))
+      setSuccess('Order sent to logistics')
+      window.open('https://v0-logistics-management-app-n2sphuaru.vercel.app/', '_blank', 'noopener,noreferrer')
+    } catch {
+      setError('Failed to send order to logistics')
+    }
+  }
+
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     setUpdatingOrderId(orderId)
+
+    if (String(orderId).startsWith('demo_')) {
+      const updated = updateDemoOrderStatus(orderId, newStatus)
+      if (updated) {
+        setOrders((prev) => prev.map((order) =>
+          String(order.id) === String(orderId) ? { ...order, status: newStatus } : order
+        ))
+      }
+
+      if (newStatus === 'delivered') {
+        const updatedEscrow = markOrderDeliveredAndReleaseEscrow(orderId)
+        if (updatedEscrow) {
+          setEscrowMap((prev) => ({ ...prev, [orderId]: updatedEscrow }))
+        }
+      }
+
+      setUpdatingOrderId(null)
+      return
+    }
 
     try {
       const response = await fetch('/api/orders/update-status', {
@@ -67,9 +217,17 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
       const result = await response.json()
 
       if (result.success) {
-        setOrders(orders.map(order =>
+        const nextOrders = orders.map(order =>
           order.id === orderId ? { ...order, status: newStatus } : order
-        ))
+        )
+        setOrders(nextOrders)
+
+        if (newStatus === 'delivered') {
+          const updatedEscrow = markOrderDeliveredAndReleaseEscrow(orderId)
+          if (updatedEscrow) {
+            setEscrowMap((prev) => ({ ...prev, [orderId]: updatedEscrow }))
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to update order status')
@@ -102,6 +260,12 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
       </header>
 
       <main className="flex-1 overflow-auto p-4">
+        {success && (
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            {success}
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12">
             <RefreshCw className="w-8 h-8 text-muted-foreground animate-spin mb-3" />
@@ -125,6 +289,8 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
             {orders.map((order) => {
               const StatusIcon = statusConfig[order.status]?.icon || Clock
               const isUpdating = updatingOrderId === order.id
+              const escrow = escrowMap[String(order.id)]
+              const paymentHeld = escrow?.merchant_status === "held" || escrow?.logistics_status === "held"
               
               return (
                 <div
@@ -181,6 +347,30 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
                     </p>
                   </div>
 
+                  {/* Escrow Status */}
+                  {escrow && (
+                    <div className="mt-3 pt-3 border-t border-border space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">Payment Status</p>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${paymentHeld ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                          {paymentHeld ? 'Held in Escrow' : 'Released from Escrow'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-foreground">Merchant Payment</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass(escrow.merchant_status)}`}>
+                          {escrow.merchant_status === 'held' ? 'Held' : 'Released'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-foreground">Logistics Payment</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass(escrow.logistics_status)}`}>
+                          {escrow.logistics_status === 'held' ? 'Held' : 'Released'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Status Update */}
                   {order.status !== 'delivered' && (
                     <div className="mt-3 pt-3 border-t border-border">
@@ -206,6 +396,14 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
                           Updating...
                         </p>
                       )}
+
+                      <button
+                        onClick={() => handleSendToLogistics(order)}
+                        disabled={Boolean(sentToLogistics[String(order.id)])}
+                        className="w-full mt-3 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {sentToLogistics[String(order.id)] ? 'Sent to Logistics' : 'Send to Logistics'}
+                      </button>
                     </div>
                   )}
 

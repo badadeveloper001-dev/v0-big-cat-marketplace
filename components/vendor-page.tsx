@@ -23,6 +23,7 @@ import {
 import Image from "next/image"
 import { formatNaira } from "@/lib/currency-utils"
 import { useCart } from "@/lib/cart-context"
+import { isUserSuspended } from "@/lib/trust-safety"
 
 interface VendorPageProps {
   vendor: {
@@ -86,10 +87,16 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [chatLoading, setChatLoading] = useState(false)
+  const [isSuspended, setIsSuspended] = useState(false)
+  const [policyNotice, setPolicyNotice] = useState("")
 
   useEffect(() => {
     loadProducts()
   }, [vendor.id])
+
+  useEffect(() => {
+    setIsSuspended(isUserSuspended(user?.userId))
+  }, [user?.userId])
 
   const loadProducts = async () => {
     setLoading(true)
@@ -107,6 +114,11 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   }
 
   const handleChatVendor = async () => {
+    if (isSuspended) {
+      setPolicyNotice("Your account has been temporarily suspended for violating platform policies.")
+      return
+    }
+
     if (!user?.userId) {
       // console.error('[v0] User ID not found')
       onChatVendor?.()
@@ -144,6 +156,11 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   }
 
   const handleAddToCart = (product: any) => {
+    if (isSuspended) {
+      setPolicyNotice("Your account has been temporarily suspended for violating platform policies.")
+      return
+    }
+
     addItem({
       id: product.id,
       productId: product.id,
@@ -196,6 +213,14 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto pb-28">
+        {policyNotice && (
+          <div className="px-4 pt-4">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {policyNotice}
+            </div>
+          </div>
+        )}
+
         {/* Hero Section */}
         <section className="px-4 pt-6 pb-5">
           {/* AI Recommendation Badge */}
@@ -441,7 +466,7 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
         <div className="flex gap-3">
           <button 
             onClick={handleChatVendor}
-            disabled={chatLoading}
+            disabled={chatLoading || isSuspended}
             className="flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-secondary text-foreground font-semibold rounded-2xl hover:bg-secondary/80 transition-colors shadow-sm disabled:opacity-50"
           >
             {chatLoading ? (

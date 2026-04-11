@@ -1,9 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
+import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw, Loader2 } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 import { useRole } from "@/lib/role-context"
+import {
+  createEscrowRecord,
+  getEscrowByOrderId,
+  markOrderDeliveredAndReleaseEscrow,
+  type EscrowRecord,
+} from "@/lib/escrow"
+import { getDemoBuyerOrders, updateDemoOrderStatus } from "@/lib/demo-orders"
 
 interface BuyerOrdersProps {
   onBack: () => void
@@ -22,8 +29,38 @@ const orderSteps = ['Pending', 'Paid', 'Processing', 'Shipped', 'Delivered']
 export function BuyerOrders({ onBack }: BuyerOrdersProps) {
   const { user } = useRole()
   const [orders, setOrders] = useState<any[]>([])
+  const [escrowMap, setEscrowMap] = useState<Record<string, EscrowRecord>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null)
+
+  const badgeClass = (status: "held" | "released") =>
+    status === "held"
+      ? "bg-amber-100 text-amber-700"
+      : "bg-green-100 text-green-700"
+
+  const syncEscrowForOrders = (orderList: any[]) => {
+    const next: Record<string, EscrowRecord> = {}
+
+    orderList.forEach((order) => {
+      const orderId = String(order.id)
+      const totalAmount = Number(order.grand_total || order.total_amount || 0)
+      const deliveryAmount = Number(order.delivery_fee || 0)
+      let escrow = getEscrowByOrderId(orderId)
+
+      if (!escrow) {
+        escrow = createEscrowRecord(orderId, totalAmount, deliveryAmount)
+      }
+
+      if (order.status === "delivered") {
+        escrow = markOrderDeliveredAndReleaseEscrow(orderId) || escrow
+      }
+
+      next[orderId] = escrow
+    })
+
+    setEscrowMap(next)
+  }
 
   useEffect(() => {
     async function fetchOrders() {
@@ -33,19 +70,93 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
       try {
         const response = await fetch(`/api/orders/buyer?buyerId=${user.userId}`)
         const result = await response.json()
+        const demoOrders = getDemoBuyerOrders(user.userId)
+
         if (result.success) {
-          setOrders(result.data || [])
+          const fetched = result.data || []
+          const merged = [
+            ...demoOrders,
+            ...fetched.filter((order: any) => !demoOrders.some((demo) => String(demo.id) === String(order.id))),
+          ]
+          setOrders(merged)
+          syncEscrowForOrders(merged)
         } else {
-          setError(result.error || 'Failed to fetch orders')
+          if (demoOrders.length > 0) {
+            setOrders(demoOrders)
+            syncEscrowForOrders(demoOrders)
+          } else {
+            setError(result.error || 'Failed to fetch orders')
+          }
         }
-      } catch (error) {
-        setError('Failed to fetch orders')
+      } catch {
+        const demoOrders = getDemoBuyerOrders(user.userId)
+        if (demoOrders.length > 0) {
+          setOrders(demoOrders)
+          syncEscrowForOrders(demoOrders)
+        } else {
+          setError('Failed to fetch orders')
+        }
       }
       setIsLoading(false)
     }
 
     fetchOrders()
   }, [user?.userId])
+
+  const handleMarkAsDelivered = async (orderId: string) => {
+    setUpdatingOrderId(orderId)
+    setError("")
+
+    if (String(orderId).startsWith('demo_')) {
+      const updated = updateDemoOrderStatus(orderId, 'delivered')
+      if (!updated) {
+        setError('Failed to mark order as delivered')
+        setUpdatingOrderId(null)
+        return
+      }
+
+      setOrders((prev) => prev.map((order) =>
+        String(order.id) === String(orderId) ? { ...order, status: 'delivered' } : order
+      ))
+
+      const updatedEscrow = markOrderDeliveredAndReleaseEscrow(orderId)
+      if (updatedEscrow) {
+        setEscrowMap((prev) => ({ ...prev, [orderId]: updatedEscrow }))
+      }
+
+      setUpdatingOrderId(null)
+      return
+    }
+
+    try {
+      const response = await fetch('/api/orders/update-status', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ orderId, status: 'delivered' }),
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        setError(result.error || 'Failed to mark order as delivered')
+        return
+      }
+
+      setOrders((prev) => prev.map((order) =>
+        order.id === orderId ? { ...order, status: 'delivered' } : order
+      ))
+
+      const updatedEscrow = markOrderDeliveredAndReleaseEscrow(orderId)
+      if (updatedEscrow) {
+        setEscrowMap((prev) => ({ ...prev, [orderId]: updatedEscrow }))
+      }
+    } catch {
+      setError('Failed to mark order as delivered')
+    } finally {
+      setUpdatingOrderId(null)
+    }
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -93,6 +204,8 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
           <div className="space-y-4">
             {orders.map((order) => {
               const StatusIcon = statusConfig[order.status]?.icon || Clock
+              const escrow = escrowMap[String(order.id)]
+              const paymentHeld = escrow?.merchant_status === "held" || escrow?.logistics_status === "held"
               return (
                 <div
                   key={order.id}
@@ -114,10 +227,10 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
 
                   {/* Order Items */}
                   <div className="space-y-2 mb-3">
-                    {order.order_items?.map((item: any) => (
+                    {(order.order_items || order.items || []).map((item: any) => (
                       <div key={item.id} className="flex justify-between items-center text-sm">
                         <span className="text-foreground">
-                          {item.product_name} x{item.quantity}
+                          {item.product_name || item.name} x{item.quantity}
                         </span>
                         <span className="text-muted-foreground">
                           N{item.total_price?.toLocaleString()}
@@ -189,6 +302,49 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
                       {order.delivery_type === 'express' ? 'Express Delivery' : 'Normal Delivery'}
                     </p>
                   </div>
+
+                  {/* Escrow Status */}
+                  {escrow && (
+                    <div className="mt-3 pt-3 border-t border-border space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">Payment Status</p>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${paymentHeld ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                          {paymentHeld ? 'Held in Escrow' : 'Released from Escrow'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-foreground">Merchant Payment</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass(escrow.merchant_status)}`}>
+                          {escrow.merchant_status === 'held' ? 'Held' : 'Released'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-foreground">Logistics Payment</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass(escrow.logistics_status)}`}>
+                          {escrow.logistics_status === 'held' ? 'Held' : 'Released'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {order.status !== 'delivered' && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <button
+                        onClick={() => handleMarkAsDelivered(String(order.id))}
+                        disabled={updatingOrderId === String(order.id)}
+                        className="w-full rounded-lg bg-[#6C2BD9] text-white py-2.5 text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-2"
+                      >
+                        {updatingOrderId === String(order.id) ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          'Mark as Delivered'
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}

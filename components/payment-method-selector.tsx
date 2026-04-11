@@ -53,14 +53,14 @@ export function PaymentMethodSelector({ selectedMethod, onSelect }: PaymentMetho
           >
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
-                <div className={`p-2 rounded-lg ${method.highlighted ? 'bg-green-100' : 'bg-secondary'}`}>
-                  <method.icon className={`w-5 h-5 ${method.highlighted ? 'text-green-600' : 'text-muted-foreground'}`} />
+                <div className={`p-2 rounded-lg ${method.highlighted ? 'bg-[#F3E8FF]' : 'bg-secondary'}`}>
+                  <method.icon className={`w-5 h-5 ${method.highlighted ? 'text-[#6C2BD9]' : 'text-muted-foreground'}`} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-foreground">{method.label}</p>
                     {method.badge && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-semibold">
+                      <span className="text-xs px-2 py-1 rounded-full bg-[#F3E8FF] text-[#6C2BD9] font-semibold">
                         {method.badge}
                       </span>
                     )}

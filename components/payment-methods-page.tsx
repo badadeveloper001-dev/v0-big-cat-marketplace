@@ -1,438 +1,254 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { ArrowLeft, Loader2, Plus, Send, Wallet } from "lucide-react"
 import { useRole } from "@/lib/role-context"
-import { 
-  ArrowLeft, 
-  CreditCard, 
-  Plus, 
-  Trash2, 
-  Star, 
-  Loader2, 
-  X,
-  CheckCircle2
-} from "lucide-react"
-
-interface PaymentMethod {
-  id: string
-  card_type: string
-  card_last_four: string
-  card_holder_name: string
-  expiry_month: number
-  expiry_year: number
-  is_default: boolean
-}
 
 interface PaymentMethodsPageProps {
   onBack: () => void
 }
 
+interface WalletTransaction {
+  id: string
+  type: "credit" | "debit"
+  amount: number
+  description: string
+  date: string
+}
+
+const DEFAULT_BALANCE = 0
+const QUICK_ADD_AMOUNTS = [1000, 5000, 10000]
+const DEMO_CHARGE_AMOUNT = 1500
+
 export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
   const { user } = useRole()
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
-  const [showAddCard, setShowAddCard] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [balance, setBalance] = useState(DEFAULT_BALANCE)
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([])
+  const [amountInput, setAmountInput] = useState("1000")
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
-  
-  // New card form state
-  const [cardNumber, setCardNumber] = useState("")
-  const [cardHolder, setCardHolder] = useState("")
-  const [expiryMonth, setExpiryMonth] = useState("")
-  const [expiryYear, setExpiryYear] = useState("")
-  const [cardType, setCardType] = useState("visa")
+
+  const storageKey = user?.userId ? `wallet_balance_${user.userId}` : "wallet_balance_guest"
+  const transactionKey = `${storageKey}_transactions`
 
   useEffect(() => {
-    loadPaymentMethods()
-  }, [user?.userId])
-
-  const loadPaymentMethods = async () => {
-    if (!user?.userId) return
-
     setLoading(true)
     try {
-      const response = await fetch(`/api/user/payment-methods?userId=${user.userId}`)
-      const result = await response.json()
-      if (result.success && result.data) {
-        setPaymentMethods(result.data)
-      } else {
-        setError(result.error || "Failed to load payment methods")
-      }
-    } catch (err) {
-      console.error("Error loading payment methods:", err)
-      setError("Failed to load payment methods")
+      const storedBalance = localStorage.getItem(storageKey)
+      const parsedBalance = storedBalance ? Number(storedBalance) : DEFAULT_BALANCE
+      setBalance(Number.isFinite(parsedBalance) ? parsedBalance : DEFAULT_BALANCE)
+
+      const storedTransactions = localStorage.getItem(transactionKey)
+      const parsedTransactions = storedTransactions
+        ? (JSON.parse(storedTransactions) as WalletTransaction[])
+        : []
+      setTransactions(Array.isArray(parsedTransactions) ? parsedTransactions : [])
+    } catch {
+      setError("Could not load wallet from local storage")
+      setBalance(DEFAULT_BALANCE)
+      setTransactions([])
     } finally {
       setLoading(false)
     }
+  }, [storageKey, transactionKey])
+
+  useEffect(() => {
+    if (loading) return
+
+    localStorage.setItem(storageKey, balance.toString())
+    localStorage.setItem(transactionKey, JSON.stringify(transactions))
+  }, [balance, loading, storageKey, transactionKey, transactions])
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: "NGN",
+      maximumFractionDigits: 2,
+    }).format(amount)
   }
 
-  const handleAddCard = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const appendTransaction = (transaction: WalletTransaction) => {
+    setTransactions((prev) => [transaction, ...prev].slice(0, 12))
+  }
+
+  const handleAddMoney = (amount?: number) => {
     setError("")
     setSuccess("")
-    
-    if (!user?.userId) return
-    
-    // Basic validation
-    if (cardNumber.replace(/\s/g, "").length < 16) {
-      setError("Please enter a valid card number")
-      return
-    }
-    
-    if (!cardHolder.trim()) {
-      setError("Please enter the card holder name")
-      return
-    }
-    
-    const month = parseInt(expiryMonth)
-    const year = parseInt(expiryYear)
-    
-    if (!month || month < 1 || month > 12) {
-      setError("Please enter a valid expiry month (1-12)")
-      return
-    }
-    
-    const currentYear = new Date().getFullYear()
-    if (!year || year < currentYear || year > currentYear + 20) {
-      setError("Please enter a valid expiry year")
+
+    const parsedAmount = amount ?? Number(amountInput)
+    if (!parsedAmount || parsedAmount <= 0) {
+      setError("Enter a valid amount to fund your wallet")
       return
     }
 
-    setSaving(true)
-    try {
-      const response = await fetch('/api/user/payment-methods', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.userId,
-          method: {
-            card_type: detectCardType(cardNumber),
-            card_last_four: cardNumber.replace(/\s/g, "").slice(-4),
-            card_holder_name: cardHolder.trim(),
-            expiry_month: month,
-            expiry_year: year,
-            is_default: paymentMethods.length === 0,
-          },
-        }),
-      })
-      const result = await response.json()
-
-      if (result.success) {
-        setSuccess("Card added successfully!")
-        setShowAddCard(false)
-        resetForm()
-        loadPaymentMethods()
-      } else {
-        setError(result.error || "Failed to add card")
-      }
-    } catch (err) {
-      setError("An unexpected error occurred")
-    } finally {
-      setSaving(false)
-    }
+    setBalance((prev) => prev + parsedAmount)
+    appendTransaction({
+      id: crypto.randomUUID(),
+      type: "credit",
+      amount: parsedAmount,
+      description: "Wallet funding",
+      date: new Date().toISOString(),
+    })
+    setSuccess(`${formatCurrency(parsedAmount)} added successfully`)
   }
 
-  const handleRemoveCard = async (cardId: string) => {
-    if (!user?.userId) return
-    
+  const handlePayWithWallet = () => {
     setError("")
-    try {
-      const response = await fetch('/api/user/payment-methods', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ methodId: cardId }),
-      })
-      const result = await response.json()
-      if (result.success) {
-        setSuccess("Card removed")
-        loadPaymentMethods()
-      } else {
-        setError(result.error || "Failed to remove card")
-      }
-    } catch (err) {
-      setError("An unexpected error occurred")
+    setSuccess("")
+
+    if (balance < DEMO_CHARGE_AMOUNT) {
+      setError("Insufficient wallet balance. Add money to continue.")
+      return
     }
+
+    setBalance((prev) => prev - DEMO_CHARGE_AMOUNT)
+    appendTransaction({
+      id: crypto.randomUUID(),
+      type: "debit",
+      amount: DEMO_CHARGE_AMOUNT,
+      description: "Wallet payment",
+      date: new Date().toISOString(),
+    })
+    setSuccess(`Payment of ${formatCurrency(DEMO_CHARGE_AMOUNT)} completed`)
   }
 
-  const handleSetDefault = async (cardId: string) => {
-    if (!user?.userId) return
-    
-    setError("")
-    try {
-      const response = await fetch('/api/user/payment-methods', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId: user.userId, methodId: cardId }),
-      })
-      const result = await response.json()
-      if (result.success) {
-        setSuccess("Default card updated")
-        loadPaymentMethods()
-      } else {
-        setError(result.error || "Failed to update default card")
-      }
-    } catch (err) {
-      setError("An unexpected error occurred")
-    }
-  }
-
-  const detectCardType = (number: string): string => {
-    const cleaned = number.replace(/\s/g, "")
-    if (cleaned.startsWith("4")) return "visa"
-    if (/^5[1-5]/.test(cleaned)) return "mastercard"
-    if (/^3[47]/.test(cleaned)) return "amex"
-    if (/^6(?:011|5)/.test(cleaned)) return "discover"
-    return "visa"
-  }
-
-  const formatCardNumber = (value: string): string => {
-    const cleaned = value.replace(/\D/g, "").slice(0, 16)
-    const groups = cleaned.match(/.{1,4}/g)
-    return groups ? groups.join(" ") : cleaned
-  }
-
-  const resetForm = () => {
-    setCardNumber("")
-    setCardHolder("")
-    setExpiryMonth("")
-    setExpiryYear("")
-    setCardType("visa")
-  }
-
-  const getCardIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case "visa":
-        return <span className="text-blue-600 font-bold text-xs">VISA</span>
-      case "mastercard":
-        return <span className="text-orange-600 font-bold text-xs">MC</span>
-      case "amex":
-        return <span className="text-blue-800 font-bold text-xs">AMEX</span>
-      default:
-        return <CreditCard className="w-5 h-5 text-muted-foreground" />
-    }
-  }
+  const cardClasses =
+    "rounded-3xl bg-white shadow-[0_10px_35px_rgba(25,25,25,0.08)] border border-[#F0E7FF]"
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-white text-[#2E2E2E]">
+      <header className="sticky top-0 z-50 border-b border-[#F3E8FF] bg-white/95 backdrop-blur px-4 py-3">
+        <div className="mx-auto max-w-md flex items-center justify-between">
           <button
             onClick={onBack}
-            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+            className="p-2 -ml-2 text-[#6B7280] hover:text-[#6C2BD9] transition-colors"
             aria-label="Go back"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="font-semibold text-foreground">Payment Methods</h1>
+          <h1 className="font-semibold">Wallet</h1>
           <div className="w-9" />
         </div>
       </header>
 
-      <div className="p-4 space-y-4">
-        {/* Error/Success Messages */}
-        {error && (
-          <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-xl text-sm">
-            {error}
+      <main className="mx-auto max-w-md px-4 py-5 space-y-5">
+        <section className="rounded-3xl p-5 text-white shadow-[0_14px_40px_rgba(108,43,217,0.35)] bg-gradient-to-br from-[#6C2BD9] via-[#7A37E6] to-[#9A6AF0]">
+          <p className="text-sm text-white/80">Available Balance</p>
+          {loading ? (
+            <div className="py-6 flex items-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span className="text-sm text-white/90">Loading wallet...</span>
+            </div>
+          ) : (
+            <h2 className="mt-2 text-4xl font-extrabold tracking-tight">{formatCurrency(balance)}</h2>
+          )}
+          <div className="mt-4 flex items-center gap-2 text-xs text-white/80">
+            <Wallet className="w-4 h-4" />
+            <span>Secure wallet powered by local storage</span>
           </div>
-        )}
-        {success && (
-          <div className="bg-green-500/10 border border-green-500/20 text-green-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4" />
-            {success}
+        </section>
+
+        {(error || success) && (
+          <div
+            className={`rounded-2xl px-4 py-3 text-sm ${
+              error
+                ? "bg-red-50 text-red-600 border border-red-100"
+                : "bg-[#F3E8FF] text-[#6C2BD9] border border-[#E8D7FF]"
+            }`}
+          >
+            {error || success}
           </div>
         )}
 
-        {/* Loading State */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <section className={`${cardClasses} p-4 space-y-4`}>
+          <div>
+            <label className="text-sm font-medium text-[#4B5563]">Fund Wallet Amount</label>
+            <input
+              type="number"
+              min="1"
+              value={amountInput}
+              onChange={(event) => setAmountInput(event.target.value)}
+              placeholder="Enter amount"
+              className="mt-2 w-full rounded-2xl border border-[#E6D8FF] bg-[#FCFAFF] px-4 py-3 outline-none focus:ring-2 focus:ring-[#6C2BD9]/30"
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {QUICK_ADD_AMOUNTS.map((amount) => (
+                <button
+                  key={amount}
+                  onClick={() => handleAddMoney(amount)}
+                  className="rounded-full bg-[#F3E8FF] text-[#6C2BD9] px-3 py-1.5 text-xs font-semibold hover:bg-[#EAD7FF] transition-colors"
+                >
+                  +{formatCurrency(amount)}
+                </button>
+              ))}
+            </div>
           </div>
-        ) : (
-          <>
-            {/* Saved Cards */}
-            {paymentMethods.length > 0 ? (
-              <div className="space-y-3">
-                <h2 className="text-sm font-medium text-muted-foreground px-1">Saved Cards</h2>
-                {paymentMethods.map((card) => (
-                  <div
-                    key={card.id}
-                    className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4"
-                  >
-                    <div className="w-12 h-8 bg-secondary rounded-lg flex items-center justify-center">
-                      {getCardIcon(card.card_type)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-foreground">
-                          •••• {card.card_last_four}
-                        </span>
-                        {card.is_default && (
-                          <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full font-medium">
-                            Default
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Expires {card.expiry_month.toString().padStart(2, "0")}/{card.expiry_year}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {!card.is_default && (
-                        <button
-                          onClick={() => handleSetDefault(card.id)}
-                          className="p-2 text-muted-foreground hover:text-primary transition-colors"
-                          title="Set as default"
-                        >
-                          <Star className="w-5 h-5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleRemoveCard(card.id)}
-                        className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-                        title="Remove card"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => handleAddMoney()}
+              className="w-full rounded-2xl bg-[#6C2BD9] text-white font-semibold py-3 shadow-[0_8px_20px_rgba(108,43,217,0.28)] hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Money
+            </button>
+            <button
+              onClick={handlePayWithWallet}
+              className="w-full rounded-2xl bg-[#6C2BD9] text-white font-semibold py-3 shadow-[0_8px_20px_rgba(108,43,217,0.28)] hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+            >
+              <Send className="w-4 h-4" />
+              Pay with Wallet
+            </button>
+          </div>
+
+          <p className="text-xs text-[#6B7280]">
+            Demo payment charge: {formatCurrency(DEMO_CHARGE_AMOUNT)}
+          </p>
+        </section>
+
+        <section className={`${cardClasses} p-4`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold">Recent Transactions</h3>
+            <span className="text-xs text-[#6B7280]">Latest activity</span>
+          </div>
+
+          {transactions.length === 0 ? (
+            <div className="rounded-2xl bg-[#FAF5FF] border border-[#F3E8FF] p-4 text-sm text-[#6B7280]">
+              No transactions yet. Add money to get started.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {transactions.map((transaction) => (
+                <div
+                  key={transaction.id}
+                  className="rounded-2xl border border-[#F2EBFF] bg-white px-3 py-2.5 flex items-center justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{transaction.description}</p>
+                    <p className="text-xs text-[#6B7280]">
+                      {new Date(transaction.date).toLocaleString("en-NG", {
+                        month: "short",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <CreditCard className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <h3 className="font-semibold text-foreground mb-1">No Cards Saved</h3>
-                <p className="text-sm text-muted-foreground">
-                  Add a card to make checkout faster
-                </p>
-              </div>
-            )}
-
-            {/* Add Card Button */}
-            {!showAddCard && (
-              <button
-                onClick={() => setShowAddCard(true)}
-                className="w-full py-4 bg-primary text-primary-foreground rounded-2xl font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-                Add New Card
-              </button>
-            )}
-
-            {/* Add Card Form */}
-            {showAddCard && (
-              <div className="bg-card border border-border rounded-2xl p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-foreground">Add New Card</h3>
-                  <button
-                    onClick={() => {
-                      setShowAddCard(false)
-                      resetForm()
-                      setError("")
-                    }}
-                    className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  <p
+                    className={`text-sm font-semibold ${
+                      transaction.type === "credit" ? "text-green-600" : "text-[#6C2BD9]"
+                    }`}
                   >
-                    <X className="w-5 h-5" />
-                  </button>
+                    {transaction.type === "credit" ? "+" : "-"}
+                    {formatCurrency(transaction.amount)}
+                  </p>
                 </div>
-
-                <form onSubmit={handleAddCard} className="space-y-4">
-                  {/* Card Number */}
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Card Number
-                    </label>
-                    <div className="relative">
-                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <input
-                        type="text"
-                        value={cardNumber}
-                        onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                        placeholder="1234 5678 9012 3456"
-                        className="w-full pl-10 pr-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        maxLength={19}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Card Holder */}
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Card Holder Name
-                    </label>
-                    <input
-                      type="text"
-                      value={cardHolder}
-                      onChange={(e) => setCardHolder(e.target.value)}
-                      placeholder="John Doe"
-                      className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                  </div>
-
-                  {/* Expiry Date */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Expiry Month
-                      </label>
-                      <input
-                        type="number"
-                        value={expiryMonth}
-                        onChange={(e) => setExpiryMonth(e.target.value)}
-                        placeholder="MM"
-                        min="1"
-                        max="12"
-                        className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Expiry Year
-                      </label>
-                      <input
-                        type="number"
-                        value={expiryYear}
-                        onChange={(e) => setExpiryYear(e.target.value)}
-                        placeholder="YYYY"
-                        min={new Date().getFullYear()}
-                        max={new Date().getFullYear() + 20}
-                        className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Submit Button */}
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {saving ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Adding Card...
-                      </>
-                    ) : (
-                      "Add Card"
-                    )}
-                  </button>
-                </form>
-
-                <p className="text-xs text-muted-foreground text-center">
-                  Your card information is securely encrypted
-                </p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
     </div>
   )
 }

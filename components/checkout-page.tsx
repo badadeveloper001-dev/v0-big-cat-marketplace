@@ -8,6 +8,9 @@ import { createOrder } from "@/lib/order-actions"
 import { calculateDeliveryFee } from "@/lib/delivery-utils"
 import { formatNaira } from "@/lib/currency-utils"
 import { PaymentMethodSelector, type PaymentMethod } from "@/components/payment-method-selector"
+import { getUserStrikeCount, isUserSuspended, resetSafetyState } from "@/lib/trust-safety"
+import { createEscrowRecord } from "@/lib/escrow"
+import { createDemoOrdersFromCheckout } from "@/lib/demo-orders"
 
 interface CheckoutPageProps {
   onBack: () => void
@@ -22,7 +25,11 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('palmpay')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [deliveryFee, setDeliveryFee] = useState(0)
+  const [walletBalance, setWalletBalance] = useState(0)
+  const [suspended, setSuspended] = useState(false)
+  const [strikeCount, setStrikeCount] = useState(0)
 
   // Calculate total weight
   const totalWeight = items.reduce((sum, item) => sum + (0.5 * item.quantity), 0) // Default 0.5kg per item
@@ -41,8 +48,40 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
 
   const productTotal = getTotal()
   const grandTotal = productTotal + deliveryFee
+  const isWalletPayment = paymentMethod === 'palmpay'
+  const isWalletInsufficient = isWalletPayment && deliveryAddress.trim() && walletBalance < grandTotal
+  const walletShortfall = isWalletInsufficient ? grandTotal - walletBalance : 0
+
+  const getWalletStorageKey = () => {
+    return user?.userId ? `wallet_balance_${user.userId}` : "wallet_balance_guest"
+  }
+
+  const getWalletBalance = () => {
+    const storageKey = getWalletStorageKey()
+    const raw = localStorage.getItem(storageKey)
+    const parsed = raw ? Number(raw) : 0
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
+  useEffect(() => {
+    if (!isWalletPayment) return
+    setWalletBalance(getWalletBalance())
+  }, [isWalletPayment, user?.userId])
+
+  useEffect(() => {
+    setSuspended(isUserSuspended(user?.userId))
+    setStrikeCount(getUserStrikeCount(user?.userId))
+  }, [user?.userId])
 
   const handleSubmit = async () => {
+    setError('')
+    setSuccess('')
+
+    if (suspended) {
+      setError('Your account has been temporarily suspended for violating platform policies.')
+      return
+    }
+
     if (!deliveryAddress.trim()) {
       setError('Please enter a delivery address')
       return
@@ -53,8 +92,45 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       return
     }
 
+    const currentWalletBalance = isWalletPayment ? getWalletBalance() : 0
+    if (isWalletPayment && currentWalletBalance < grandTotal) {
+      setWalletBalance(currentWalletBalance)
+      setError('Insufficient funds in wallet')
+      return
+    }
+
     setIsSubmitting(true)
-    setError('')
+
+    if (isWalletPayment) {
+      const createdOrders = createDemoOrdersFromCheckout({
+        buyerId: user.userId,
+        items,
+        deliveryAddress: deliveryAddress.trim(),
+        deliveryType,
+        deliveryFee,
+      })
+
+      if (createdOrders.length === 0) {
+        setIsSubmitting(false)
+        setError('Could not create order from cart items')
+        return
+      }
+
+      const firstOrderId = String(createdOrders[0].id)
+      createEscrowRecord(firstOrderId, grandTotal, deliveryFee)
+
+      const updatedBalance = Math.max(0, currentWalletBalance - grandTotal)
+      localStorage.setItem(getWalletStorageKey(), updatedBalance.toString())
+      setWalletBalance(updatedBalance)
+      setSuccess('Payment successful')
+
+      setIsSubmitting(false)
+      clearCart()
+      setTimeout(() => {
+        onSuccess(firstOrderId)
+      }, 700)
+      return
+    }
 
     const result = await createOrder({
       buyerId: user.userId,
@@ -74,8 +150,19 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     setIsSubmitting(false)
 
     if (result.success && result.data) {
+      const orderId = String(result.data.orderId || result.data.id || `order_${Date.now()}`)
+      createEscrowRecord(orderId, grandTotal, deliveryFee)
+
+      if (isWalletPayment) {
+        const updatedBalance = Math.max(0, currentWalletBalance - grandTotal)
+        localStorage.setItem(getWalletStorageKey(), updatedBalance.toString())
+        setWalletBalance(updatedBalance)
+        setSuccess('Payment successful')
+      }
       clearCart()
-      onSuccess(result.data.orderId)
+      setTimeout(() => {
+        onSuccess(orderId)
+      }, isWalletPayment ? 700 : 0)
     } else {
       setError(result.error || 'Failed to place order')
     }
@@ -194,7 +281,51 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         {/* Payment Method Selection */}
         <section className="p-4 border-b border-border">
           <PaymentMethodSelector selectedMethod={paymentMethod} onSelect={setPaymentMethod} />
+
+          {isWalletPayment && (
+            <div className="mt-3 rounded-xl border border-[#E8D7FF] bg-[#F9F5FF] p-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#5B21B6] font-medium">Wallet Balance</span>
+                <span className="font-semibold text-[#6C2BD9]">{formatNaira(walletBalance)}</span>
+              </div>
+              {deliveryAddress.trim() && (
+                <div className="mt-2 space-y-1">
+                  <p className={`text-xs ${isWalletInsufficient ? 'text-red-600' : 'text-[#6C2BD9]'}`}>
+                    {isWalletInsufficient
+                      ? 'Insufficient funds in wallet'
+                      : 'Wallet balance is sufficient for this payment'}
+                  </p>
+                  {isWalletInsufficient && (
+                    <p className="text-xs text-red-600/90">
+                      You need {formatNaira(walletShortfall)} more to complete this payment.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </section>
+
+        {suspended && (
+          <section className="mx-4 rounded-xl border border-red-200 bg-red-50 p-4">
+            <p className="text-sm font-semibold text-red-700">Account Suspended</p>
+            <p className="text-xs text-red-700 mt-1">
+              Your account has been temporarily suspended for violating platform policies.
+            </p>
+            <p className="text-xs text-red-600 mt-1">Strikes: {strikeCount}</p>
+            <button
+              onClick={() => {
+                resetSafetyState(user?.userId)
+                setStrikeCount(0)
+                setSuspended(false)
+                setError('')
+              }}
+              className="mt-3 px-3 py-2 rounded-lg border border-red-200 bg-white text-red-700 text-xs font-medium"
+            >
+              Reset Strikes (Demo)
+            </button>
+          </section>
+        )}
 
         {/* Price Breakdown */}
         <section className="p-4">
@@ -225,6 +356,12 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
             <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
+
+        {success && (
+          <div className="mx-4 mt-3 p-3 bg-[#F3E8FF] border border-[#E8D7FF] rounded-lg">
+            <p className="text-sm text-[#6C2BD9] font-medium">{success}</p>
+          </div>
+        )}
       </main>
 
       {/* Fixed Bottom - Place Order */}
@@ -238,11 +375,15 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
           </div>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !deliveryAddress.trim()}
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isSubmitting || !deliveryAddress.trim() || isWalletInsufficient || suspended}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${
+              isWalletPayment
+                ? 'bg-[#6C2BD9] text-white'
+                : 'bg-primary text-primary-foreground'
+            }`}
           >
             <CreditCard className="w-5 h-5" />
-            {isSubmitting ? 'Processing...' : 'Place Order'}
+            {isSubmitting ? 'Processing...' : isWalletPayment ? 'Pay with Wallet' : 'Place Order'}
           </button>
         </div>
       </div>

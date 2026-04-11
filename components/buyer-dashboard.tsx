@@ -29,7 +29,6 @@ import {
   Package,
   Zap,
   X,
-  Send,
   LogOut,
   ClipboardList,
   Loader2,
@@ -37,6 +36,18 @@ import {
 import { useState, useEffect } from "react"
 import { formatNaira } from "@/lib/currency-utils"
 import { NotificationsPanel } from "./notifications-panel"
+import { getUserStrikeCount, isUserSuspended, resetSafetyState } from "@/lib/trust-safety"
+
+declare global {
+  interface Window {
+    voiceflow?: {
+      chat?: {
+        load?: (config: Record<string, unknown>) => void
+      }
+    }
+    __voiceflowLoaded?: boolean
+  }
+}
 
 const categories = [
   { name: "Fashion", icon: "👗", color: "bg-rose-50" },
@@ -58,7 +69,8 @@ export function BuyerDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
   const [activeTab, setActiveTab] = useState("home")
   const [searchQuery, setSearchQuery] = useState("")
-  const [aiExpanded, setAiExpanded] = useState(false)
+  const [aiFullscreenOpen, setAiFullscreenOpen] = useState(false)
+  const [voiceflowReady, setVoiceflowReady] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState<any | null>(null)
   const [showProducts, setShowProducts] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
@@ -79,6 +91,22 @@ export function BuyerDashboard() {
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showPaymentMethods, setShowPaymentMethods] = useState(false)
+  const [isSuspended, setIsSuspended] = useState(false)
+  const [strikeCount, setStrikeCount] = useState(0)
+  const [policyNotice, setPolicyNotice] = useState("")
+
+  const cleanupStaleVoiceflowUi = (target?: HTMLElement | null) => {
+    if (typeof document === "undefined") return
+
+    const widgets = Array.from(document.querySelectorAll<HTMLElement>(".vfrc-widget"))
+    widgets.forEach((widget) => {
+      if (target && target.contains(widget)) return
+      widget.remove()
+    })
+
+    const launchers = Array.from(document.querySelectorAll<HTMLElement>(".vfrc-launcher"))
+    launchers.forEach((launcher) => launcher.remove())
+  }
   
   // Guard against undefined user during initial load - AFTER all hooks
   if (isLoading) {
@@ -103,6 +131,66 @@ export function BuyerDashboard() {
     loadMerchants()
     loadOrders()
   }, [user])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    if (window.__voiceflowLoaded) {
+      setVoiceflowReady(Boolean(window.voiceflow?.chat?.load))
+      return
+    }
+
+    const existingScript = document.getElementById("voiceflow-widget-script")
+    if (existingScript) {
+      setVoiceflowReady(Boolean(window.voiceflow?.chat?.load))
+      return
+    }
+
+    const script = document.createElement("script")
+    script.id = "voiceflow-widget-script"
+    script.src = "https://cdn.voiceflow.com/widget-next/bundle.mjs"
+    script.type = "text/javascript"
+    script.onload = () => {
+      window.__voiceflowLoaded = true
+      setVoiceflowReady(true)
+    }
+
+    document.body.appendChild(script)
+  }, [])
+
+  useEffect(() => {
+    if (!aiFullscreenOpen || !voiceflowReady) return
+
+    const target = document.getElementById("bigcat-ai-embed-target")
+    if (!target) return
+
+    cleanupStaleVoiceflowUi(target)
+    target.innerHTML = ""
+    window.voiceflow?.chat?.load?.({
+      verify: { projectID: "69cd13f41da9471151f855b8" },
+      url: "https://general-runtime.voiceflow.com",
+      versionID: "production",
+      voice: {
+        url: "https://runtime-api.voiceflow.com",
+      },
+      render: {
+        mode: "embedded",
+        target,
+      },
+    })
+  }, [aiFullscreenOpen, voiceflowReady])
+
+  useEffect(() => {
+    const suspended = isUserSuspended(user?.userId)
+    setIsSuspended(suspended)
+    setStrikeCount(getUserStrikeCount(user?.userId))
+  }, [user?.userId])
+
+  const guardSuspendedAction = () => {
+    if (!isSuspended) return false
+    setPolicyNotice("Your account has been temporarily suspended for violating platform policies.")
+    return true
+  }
 
   const loadMerchants = async () => {
     setLoadingMerchants(true)
@@ -171,7 +259,16 @@ export function BuyerDashboard() {
 
   const handleSuggestionTap = (s: string) => {
     setSearchQuery(s)
-    setAiExpanded(false)
+    setAiFullscreenOpen(true)
+  }
+
+  const openAiAssistant = () => {
+    setAiFullscreenOpen(true)
+  }
+
+  const closeAiAssistant = () => {
+    setAiFullscreenOpen(false)
+    cleanupStaleVoiceflowUi(null)
   }
 
   if (showProfile) {
@@ -224,6 +321,7 @@ export function BuyerDashboard() {
         vendor={selectedVendor} 
         onBack={() => setSelectedVendor(null)}
         onChatVendor={(conversation) => {
+          if (guardSuspendedAction()) return
           setSelectedVendor(null)
           setInitialConversation(conversation || null)
           setShowChat(true)
@@ -259,6 +357,7 @@ export function BuyerDashboard() {
       <CartView 
         onBack={() => setShowCart(false)} 
         onCheckout={() => {
+          if (guardSuspendedAction()) return
           setShowCart(false)
           setShowCheckout(true)
         }}
@@ -293,6 +392,32 @@ export function BuyerDashboard() {
       isOpen={showNotifications} 
       onClose={() => setShowNotifications(false)} 
     />
+    {isSuspended && (
+      <div className="mx-4 mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+        <p className="font-semibold text-red-700">Account Suspended</p>
+        <p className="text-sm text-red-700 mt-1">
+          Your account has been temporarily suspended for violating platform policies.
+        </p>
+        <p className="text-xs text-red-600 mt-1">Strikes: {strikeCount}</p>
+        <button
+          onClick={() => {
+            resetSafetyState(user?.userId)
+            setIsSuspended(false)
+            setStrikeCount(0)
+            setPolicyNotice("")
+          }}
+          className="mt-3 px-3 py-2 rounded-lg border border-red-200 bg-white text-red-700 text-xs font-medium"
+        >
+          Reset Strikes (Demo)
+        </button>
+      </div>
+    )}
+
+    {policyNotice && (
+      <div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        {policyNotice}
+      </div>
+    )}
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Compact Header */}
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
@@ -358,7 +483,18 @@ export function BuyerDashboard() {
         {activeTab === "home" && (
           <>
         <section className="px-4 pt-5 pb-4">
-          <div className="bg-primary rounded-3xl p-5 shadow-lg shadow-primary/20">
+          <div
+            className="bg-primary rounded-3xl p-5 shadow-lg shadow-primary/20"
+            onClick={openAiAssistant}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                openAiAssistant()
+              }
+            }}
+          >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-2xl bg-primary-foreground/20 flex items-center justify-center">
                 <Sparkles className="w-6 h-6 text-primary-foreground" />
@@ -382,15 +518,13 @@ export function BuyerDashboard() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => setAiExpanded(true)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && searchQuery.trim()) {
                       setProductSearchQuery(searchQuery)
                       setShowProducts(true)
-                      setAiExpanded(false)
                     }
                   }}
-                  placeholder="Ask anything or search..."
+                  placeholder="Ask anything... find products, vendors, services"
                   className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none text-base"
                 />
                 <button
@@ -416,89 +550,6 @@ export function BuyerDashboard() {
             </div>
           </div>
         </section>
-
-        {/* AI Expanded Panel Overlay */}
-        {aiExpanded && (
-          <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm">
-            <div className="flex flex-col h-full">
-              {/* AI Panel Header */}
-              <div className="flex items-center justify-between px-4 py-4 border-b border-border">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-primary-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">BigCat AI</h3>
-                    <p className="text-xs text-muted-foreground">Ask me anything</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setAiExpanded(false)}
-                  className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* AI Content */}
-              <div className="flex-1 overflow-auto px-4 py-6">
-                <div className="max-w-md mx-auto">
-                  <p className="text-center text-muted-foreground mb-6">
-                    How can I help you today?
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    {aiSuggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleSuggestionTap(s)}
-                        className="flex items-center gap-3 p-4 bg-card border border-border rounded-2xl hover:border-primary/40 hover:bg-primary/5 transition-all text-left group"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                          <Sparkles className="w-5 h-5 text-primary group-hover:text-primary-foreground" />
-                        </div>
-                        <span className="text-foreground font-medium">{s}</span>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* AI Input */}
-              <div className="p-4 border-t border-border bg-card">
-                <div className="flex items-center gap-3 px-4 py-3 bg-secondary rounded-2xl">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && searchQuery.trim()) {
-                        setProductSearchQuery(searchQuery)
-                        setShowProducts(true)
-                        setAiExpanded(false)
-                      }
-                    }}
-                    placeholder="Type your question..."
-                    className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
-                    autoFocus
-                  />
-                  <button 
-                    onClick={() => {
-                      if (searchQuery.trim()) {
-                        setProductSearchQuery(searchQuery)
-                        setShowProducts(true)
-                        setAiExpanded(false)
-                      }
-                    }}
-                    className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Categories */}
         <section className="mb-6">
@@ -555,7 +606,10 @@ export function BuyerDashboard() {
               {displayMerchants.map((vendor) => (
                 <button
                   key={vendor.id}
-                  onClick={() => setSelectedVendor(vendor)}
+                  onClick={() => {
+                    if (guardSuspendedAction()) return
+                    setSelectedVendor(vendor)
+                  }}
                   className="flex items-center gap-4 p-4 bg-card border border-border rounded-2xl shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left"
                 >
                   <div className={`w-14 h-14 rounded-2xl ${vendor.bgColor} flex items-center justify-center flex-shrink-0`}>
@@ -669,7 +723,7 @@ export function BuyerDashboard() {
               <div className="divide-y divide-border">
                 {[
                   { label: "Edit Profile", value: "Update your info", action: () => setShowProfile(true) },
-                  { label: "Payment Methods", value: "Add/remove cards", action: () => setShowPaymentMethods(true) },
+                  { label: "Wallet", value: "Balance, funding and payments", action: () => setShowPaymentMethods(true) },
                   { label: "Settings", value: "App settings", action: () => setShowSettings(true) },
                 ].map((item) => (
                   <button 
@@ -715,6 +769,21 @@ export function BuyerDashboard() {
           </div>
         )}
       </main>
+
+      {aiFullscreenOpen && (
+        <div className="fixed inset-0 z-[70] bg-background">
+          <div className="absolute top-3 right-3 z-[71]">
+            <button
+              onClick={closeAiAssistant}
+              className="h-10 w-10 rounded-full bg-black/55 text-white flex items-center justify-center shadow-md"
+              aria-label="Close AI assistant"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div id="bigcat-ai-embed-target" className="h-full w-full" />
+        </div>
+      )}
 
         {/* Bottom Navigation */}
         <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around px-2 py-3 max-w-2xl mx-auto">
@@ -769,6 +838,12 @@ export function BuyerDashboard() {
           </button>
         </div>
     </div>
+
+    <style jsx global>{`
+      .vfrc-launcher {
+        display: none !important;
+      }
+    `}</style>
     </>
   )
 }
