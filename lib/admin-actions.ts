@@ -20,9 +20,22 @@ export async function getPlatformStats() {
   try {
     const supabase = await createClient()
     const { count: userCount } = await supabase.from('auth_users').select('*', { count: 'exact', head: true })
+    const { count: merchantCount } = await supabase.from('auth_users').select('*', { count: 'exact', head: true }).eq('role', 'merchant')
     const { count: orderCount } = await supabase.from('orders').select('*', { count: 'exact', head: true })
-    const { count: productCount } = await supabase.from('products').select('*', { count: 'exact', head: true })
-    return { success: true, data: { users: userCount || 0, orders: orderCount || 0, products: productCount || 0 } }
+    
+    // Calculate total revenue from orders
+    const { data: orders } = await supabase.from('orders').select('total_amount')
+    const totalRevenue = orders?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0
+    
+    return { 
+      success: true, 
+      stats: { 
+        totalUsers: userCount || 0, 
+        totalMerchants: merchantCount || 0, 
+        totalRevenue: totalRevenue,
+        activeNow: 0
+      } 
+    }
   } catch (error: any) {
     return { success: false, error: error.message }
   }
