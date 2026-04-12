@@ -102,6 +102,12 @@ export function PalmpayAdminDashboard() {
     },
   ]
 
+  const failedTransactions = transactions.filter((txn) => txn.status !== 'completed').length
+  const highValueCount = transactions.filter((txn) => Number(txn.amount || 0) >= 50000).length
+  const settlementQueue = transactions
+    .filter((txn) => txn.status !== 'completed')
+    .slice(0, 5)
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -182,6 +188,45 @@ export function PalmpayAdminDashboard() {
                 <span className="font-bold text-foreground">{formatNaira(stats.productEscrow + stats.deliveryEscrow)}</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h2 className="font-bold text-lg text-foreground mb-4">Payment Risk Monitor</h2>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Failed transactions</span>
+                <span className="font-bold text-red-600">{failedTransactions}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">High value transactions</span>
+                <span className="font-bold text-amber-600">{highValueCount}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Escrow release backlog</span>
+                <span className="font-bold text-purple-600">{stats.pendingPayments}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h2 className="font-bold text-lg text-foreground mb-4">Settlement Queue</h2>
+            {settlementQueue.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No pending settlements.</p>
+            ) : (
+              <div className="space-y-2">
+                {settlementQueue.map((txn) => (
+                  <div key={txn.id} className="rounded-lg border border-border px-3 py-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{txn.id.substring(0, 8)}</p>
+                      <p className="text-xs text-muted-foreground">{txn.date}</p>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">{formatNaira(txn.amount)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

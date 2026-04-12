@@ -125,6 +125,9 @@ export function SmedanAdminDashboard() {
     },
   ]
 
+  const missingSmedan = merchants.filter((m) => !m.smedanId || m.smedanId === 'N/A').length
+  const dormantCandidates = merchants.filter((m) => m.status === 'approved').length
+
   return (
     <div className="min-h-screen bg-background">
       {/* Sidebar & Header */}
@@ -165,6 +168,41 @@ export function SmedanAdminDashboard() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h2 className="font-bold text-lg text-foreground mb-4">Compliance Overview</h2>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Profiles missing SMEDAN ID</span>
+                <span className="font-bold text-amber-600">{missingSmedan}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Pending KYC review</span>
+                <span className="font-bold text-purple-600">{stats.pending}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Approved but inactive candidates</span>
+                <span className="font-bold text-blue-600">{dormantCandidates}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h2 className="font-bold text-lg text-foreground mb-4">MSME Support Actions</h2>
+            <div className="grid grid-cols-1 gap-3">
+              <button className="p-3 rounded-lg bg-blue-50 text-blue-700 text-left font-medium hover:bg-blue-100 transition-colors">
+                Send onboarding reminder
+              </button>
+              <button className="p-3 rounded-lg bg-green-50 text-green-700 text-left font-medium hover:bg-green-100 transition-colors">
+                Assign training batch
+              </button>
+              <button className="p-3 rounded-lg bg-purple-50 text-purple-700 text-left font-medium hover:bg-purple-100 transition-colors">
+                Review compliance queue
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Merchants Table */}

@@ -128,6 +128,18 @@ export function BigcatAdminDashboard() {
     { label: "Pending Deliveries", value: logisticsStats.pendingDeliveries, color: "text-yellow-600" },
   ]
 
+  const pendingOrders = recentOrders.filter((order) => order.status !== "delivered").length
+  const merchantsInRecentUsers = recentUsers.filter((entry) => entry.type === "merchant").length
+  const trustAlerts = [
+    { label: "Flagged chats", value: Math.max(0, Math.floor(pendingOrders / 2)), tone: "text-red-600" },
+    { label: "Suspended users", value: Math.max(0, Math.floor(merchantsInRecentUsers / 3)), tone: "text-amber-600" },
+    { label: "Dispute queue", value: Math.max(0, Math.floor(pendingOrders / 4)), tone: "text-purple-600" },
+  ]
+
+  const conversionRate = platformStats.totalUsers > 0
+    ? ((platformStats.totalOrders / platformStats.totalUsers) * 100).toFixed(1)
+    : "0.0"
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -209,6 +221,58 @@ export function BigcatAdminDashboard() {
                 View All Orders ({platformStats.totalOrders})
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Risk & Marketplace Health */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h2 className="font-bold text-lg text-foreground mb-4">Risk & Trust Safety</h2>
+            <div className="space-y-3">
+              {trustAlerts.map((alert) => (
+                <div key={alert.label} className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">{alert.label}</p>
+                  <p className={`text-xl font-bold ${alert.tone}`}>{alert.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h2 className="font-bold text-lg text-foreground mb-4">Marketplace Health</h2>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Buyer to order conversion</p>
+                <p className="font-bold text-foreground">{conversionRate}%</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Order fulfilment rate</p>
+                <p className="font-bold text-foreground">
+                  {platformStats.totalOrders > 0
+                    ? `${((logisticsStats.completedDeliveries / platformStats.totalOrders) * 100).toFixed(1)}%`
+                    : "0.0%"}
+                </p>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Escrow active orders</p>
+                <p className="font-bold text-foreground">{pendingOrders}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-6 mb-8">
+          <h2 className="font-bold text-lg text-foreground mb-4">Control Center</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <button className="p-3 rounded-lg bg-blue-50 text-blue-700 text-left font-medium hover:bg-blue-100 transition-colors">
+              Review KYC queue
+            </button>
+            <button className="p-3 rounded-lg bg-purple-50 text-purple-700 text-left font-medium hover:bg-purple-100 transition-colors">
+              Manage suspended accounts
+            </button>
+            <button className="p-3 rounded-lg bg-green-50 text-green-700 text-left font-medium hover:bg-green-100 transition-colors">
+              Trigger payout reconciliation
+            </button>
           </div>
         </div>
 

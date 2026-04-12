@@ -4,6 +4,13 @@ import { useState } from "react"
 import { useRole } from "@/lib/role-context"
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Hash, Loader2, CheckCircle2, Store } from "lucide-react"
 
+declare global {
+  interface Window {
+    google?: any
+    __googleScriptLoaded?: boolean
+  }
+}
+
 export function MerchantAuth({ onBack }: { onBack: () => void }) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
@@ -19,6 +26,7 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
       business_description: user.business_description || "",
       business_category: user.business_category || "",
       smedan_id: user.smedan_id || "",
+      cac_id: user.cac_id || "",
       setup_completed: Boolean(user.setup_completed),
       location: user.location || "",
       avatar_url: user.avatar_url || "",
@@ -27,13 +35,16 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string>("")
   const [successMessage, setSuccessMessage] = useState<string>("")
   const [formData, setFormData] = useState({
+    businessName: "",
     email: "",
     phone: "",
     password: "",
     smedanId: "",
+    cacId: "",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,9 +59,11 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
         ? {
             email: formData.email,
             password: formData.password,
-            name: formData.smedanId, // Using smedanId as business name
+            name: formData.businessName,
             phone: formData.phone,
-            role: 'merchant'
+            role: 'merchant',
+            smedanId: formData.smedanId,
+            cacId: formData.cacId,
           }
         : {
             email: formData.email,
@@ -101,6 +114,87 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
       ...formData,
       [e.target.name]: e.target.value,
     })
+  }
+
+  const ensureGoogleScript = async () => {
+    if (typeof window === 'undefined') return false
+    if (window.google?.accounts?.id) return true
+
+    if (!window.__googleScriptLoaded) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = 'https://accounts.google.com/gsi/client'
+        script.async = true
+        script.defer = true
+        script.onload = () => {
+          window.__googleScriptLoaded = true
+          resolve()
+        }
+        script.onerror = () => reject(new Error('Failed to load Google script'))
+        document.head.appendChild(script)
+      })
+    }
+
+    return Boolean(window.google?.accounts?.id)
+  }
+
+  const handleGoogleSignIn = async () => {
+    setError('')
+    setSuccessMessage('')
+    setGoogleLoading(true)
+
+    try {
+      const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+      if (!googleClientId) {
+        setError('Google sign-in is not configured. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID.')
+        return
+      }
+
+      const loaded = await ensureGoogleScript()
+      if (!loaded || !window.google?.accounts?.id) {
+        setError('Failed to initialize Google sign-in.')
+        return
+      }
+
+      const credential = await new Promise<string>((resolve, reject) => {
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: (response: any) => {
+            if (response?.credential) resolve(response.credential)
+            else reject(new Error('No Google credential received'))
+          },
+        })
+
+        window.google.accounts.id.prompt((notification: any) => {
+          const skipped = notification?.isSkippedMoment?.()
+          const notDisplayed = notification?.isNotDisplayed?.()
+          if (skipped || notDisplayed) {
+            reject(new Error('Google prompt was closed before completing sign in.'))
+          }
+        })
+      })
+
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ credential, role: 'merchant' }),
+      })
+
+      const result = await response.json()
+      if (!result.success || !result.data?.user) {
+        setError(result.error || 'Google sign-in failed')
+        return
+      }
+
+      setUser(normalizeMerchantUser(result.data.user))
+      setRole('merchant')
+    } catch (err: any) {
+      setError(err?.message || 'Google sign-in failed')
+    } finally {
+      setGoogleLoading(false)
+    }
   }
 
   return (
@@ -164,6 +258,22 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
               {isSignUp && (
                 <>
                   <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Business Name</label>
+                    <div className="relative">
+                      <Store className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        name="businessName"
+                        placeholder="Enter your registered business name"
+                        value={formData.businessName}
+                        onChange={handleChange}
+                        className="w-full pl-11 pr-4 py-3 bg-secondary/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Phone Number</label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -188,6 +298,22 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
                         name="smedanId"
                         placeholder="Enter your SMEDAN registration ID"
                         value={formData.smedanId}
+                        onChange={handleChange}
+                        className="w-full pl-11 pr-4 py-3 bg-secondary/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">CAC ID</label>
+                    <div className="relative">
+                      <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        name="cacId"
+                        placeholder="Enter your CAC registration ID"
+                        value={formData.cacId}
                         onChange={handleChange}
                         className="w-full pl-11 pr-4 py-3 bg-secondary/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground"
                         required
@@ -236,13 +362,24 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
               </button>
             </form>
 
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading || loading}
+                className="w-full py-3 px-4 bg-white border border-border text-foreground font-semibold rounded-xl hover:bg-muted/50 transition-colors disabled:opacity-50"
+              >
+                {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
+              </button>
+            </div>
+
             <div className="mt-8 text-center">
               <button
                 onClick={() => {
                   setIsSignUp(!isSignUp)
                   setError("")
                   setSuccessMessage("")
-                  setFormData({ email: "", phone: "", password: "", smedanId: "" })
+                  setFormData({ businessName: "", email: "", phone: "", password: "", smedanId: "", cacId: "" })
                 }}
                 className="text-primary hover:text-primary/80 font-medium transition-colors"
               >

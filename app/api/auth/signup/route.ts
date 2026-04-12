@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { signup } from '@/lib/auth-actions'
+import { signupEnhanced } from '@/lib/auth-actions'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name, phone, role } = await request.json()
+    const { email, password, name, phone, role, smedanId, cacId } = await request.json()
 
     if (!email || !password || !name || !phone || !role) {
       return NextResponse.json(
@@ -12,7 +12,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = await signup(email, password, name, phone, role as 'buyer' | 'merchant')
+    if (role === 'merchant' && !cacId) {
+      return NextResponse.json(
+        { success: false, error: 'CAC ID is required for merchant accounts' },
+        { status: 400 }
+      )
+    }
+
+    const result = await signupEnhanced({
+      email,
+      password,
+      name,
+      phone,
+      role: role as 'buyer' | 'merchant',
+      smedanId,
+      cacId,
+    })
 
     if (result.success) {
       return NextResponse.json(result)

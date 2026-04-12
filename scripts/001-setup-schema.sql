@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS auth_users (
   business_description TEXT,
   business_category VARCHAR(100),
   smedan_id VARCHAR(100),
+  cac_id VARCHAR(100),
+  google_id VARCHAR(255),
   setup_completed BOOLEAN DEFAULT false,
   location VARCHAR(255),
   created_at TIMESTAMP DEFAULT now(),
