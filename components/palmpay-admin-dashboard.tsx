@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, TrendingUp, Wallet, DollarSign, CheckCircle2, Clock, Loader2 } from "lucide-react"
+import { ArrowLeft, TrendingUp, Wallet, DollarSign, CheckCircle2, Clock, Loader2, UserPlus, Copy, Trash2, MapPin } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 
 export function PalmpayAdminDashboard() {
@@ -18,6 +18,10 @@ export function PalmpayAdminDashboard() {
     pendingPayments: 0
   })
   const [loading, setLoading] = useState(true)
+  const [agents, setAgents] = useState<any[]>([])
+  const [newAgent, setNewAgent] = useState({ name: "", email: "", region: "" })
+  const [agentAction, setAgentAction] = useState("")
+  const [agentsLoading, setAgentsLoading] = useState(false)
 
   useEffect(() => {
     const adminAccess = sessionStorage.getItem("adminAccess")
@@ -50,6 +54,75 @@ export function PalmpayAdminDashboard() {
     const interval = setInterval(loadData, 30000) // Refresh every 30 seconds
     return () => clearInterval(interval)
   }, [])
+
+  const loadAgents = async () => {
+    setAgentsLoading(true)
+    try {
+      const res = await fetch('/api/admin/agents')
+      const data = await res.json()
+      if (data.success) {
+        setAgents(data.agents || [])
+      }
+    } catch (error) {
+      console.error('Error loading agents:', error)
+    } finally {
+      setAgentsLoading(false)
+    }
+  }
+
+  const addAgent = async () => {
+    if (!newAgent.name || !newAgent.email || !newAgent.region) {
+      alert('Please fill in all fields')
+      return
+    }
+
+    setAgentAction('adding')
+    try {
+      const res = await fetch('/api/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAgent)
+      })
+      const data = await res.json()
+      if (data.success) {
+        setNewAgent({ name: "", email: "", region: "" })
+        loadAgents()
+      }
+    } catch (error) {
+      console.error('Error adding agent:', error)
+    } finally {
+      setAgentAction('')
+    }
+  }
+
+  const deleteAgent = async (agentId: string) => {
+    if (!confirm('Are you sure you want to delete this agent?')) return
+
+    setAgentAction('deleting')
+    try {
+      const res = await fetch(`/api/admin/agents/${agentId}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (data.success) {
+        loadAgents()
+      }
+    } catch (error) {
+      console.error('Error deleting agent:', error)
+    } finally {
+      setAgentAction('')
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+  }
+
+  useEffect(() => {
+    if (isAuthorized) {
+      loadAgents()
+    }
+  }, [isAuthorized])
 
   if (!isAuthorized) {
     return (
@@ -209,6 +282,97 @@ export function PalmpayAdminDashboard() {
                       <p className="text-xs text-muted-foreground">{txn.date}</p>
                     </div>
                     <p className="text-sm font-semibold text-foreground">{formatNaira(txn.amount)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Agent Management */}
+        <div className="bg-card border border-border rounded-lg overflow-hidden mb-8">
+          <div className="p-6 border-b border-border">
+            <h2 className="font-bold text-xl text-foreground mb-4">Agent Management</h2>
+            
+            {/* Add New Agent Form */}
+            <div className="bg-muted/50 rounded-lg p-4 mb-6">
+              <h3 className="font-semibold text-foreground mb-3">Add New Agent</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <input
+                  type="text"
+                  placeholder="Agent Name..."
+                  value={newAgent.name}
+                  onChange={(e) => setNewAgent({...newAgent, name: e.target.value})}
+                  className="px-3 py-2 border border-border rounded bg-background text-foreground placeholder:text-muted-foreground"
+                />
+                <input
+                  type="email"
+                  placeholder="Email..."
+                  value={newAgent.email}
+                  onChange={(e) => setNewAgent({...newAgent, email: e.target.value})}
+                  className="px-3 py-2 border border-border rounded bg-background text-foreground placeholder:text-muted-foreground"
+                />
+                <input
+                  type="text"
+                  placeholder="Region..."
+                  value={newAgent.region}
+                  onChange={(e) => setNewAgent({...newAgent, region: e.target.value})}
+                  className="px-3 py-2 border border-border rounded bg-background text-foreground placeholder:text-muted-foreground"
+                />
+                <button
+                  onClick={addAgent}
+                  disabled={agentAction === 'adding'}
+                  className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 disabled:opacity-50"
+                >
+                  {agentAction === 'adding' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="w-4 h-4" />
+                  )}
+                  Add Agent
+                </button>
+              </div>
+            </div>
+
+            {/* Agents List */}
+            {agentsLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : agents.length === 0 ? (
+              <p className="text-muted-foreground">No agents created yet.</p>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {agents.map((agent) => (
+                  <div key={agent.id} className="border border-border rounded-lg p-4 flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-foreground">{agent.name}</h4>
+                      <div className="flex items-center gap-4 mt-2 text-sm">
+                        <span className="text-muted-foreground">{agent.email}</span>
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <MapPin className="w-4 h-4" />
+                          <span>{agent.region}</span>
+                        </div>
+                        {agent.access_code && (
+                          <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded">
+                            <span className="font-mono text-xs text-foreground">{agent.access_code}</span>
+                            <button
+                              onClick={() => copyToClipboard(agent.access_code)}
+                              className="p-1 hover:bg-background rounded"
+                            >
+                              <Copy className="w-3 h-3 text-muted-foreground" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteAgent(agent.id)}
+                      disabled={agentAction === 'deleting'}
+                      className="text-red-600 hover:bg-red-50 p-2 rounded disabled:opacity-50"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
                   </div>
                 ))}
               </div>

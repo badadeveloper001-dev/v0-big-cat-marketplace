@@ -9,6 +9,7 @@ import { MerchantSetup } from "./merchant-setup"
 import { MerchantStoreSettings } from "./merchant-store-settings"
 import { AdminLogin } from "./admin-login"
 import { AdminDashboard } from "./admin-dashboard"
+import { AgentDashboard } from "./agent-dashboard"
 
 export function MarketplaceApp() {
   const { role, user, setUser, isLoading } = useRole()
@@ -97,6 +98,8 @@ export function MarketplaceApp() {
         return <AdminLogin onSuccess={() => setAdminAuthenticated(true)} />
       }
       return <AdminDashboard />
+    case "agent":
+      return <AgentDashboard />
     default:
       return <Onboarding />
   }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react"
+import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, XCircle, Clock, Loader2, UserPlus } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 
 export function BigcatAdminDashboard() {
@@ -25,11 +25,16 @@ export function BigcatAdminDashboard() {
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Agent management state - BigCat only sees count
+  const [agentCount, setAgentCount] = useState(0)
+  const [agentCountLoading, setAgentCountLoading] = useState(false)
+
   useEffect(() => {
     const adminAccess = sessionStorage.getItem("adminAccess")
     if (adminAccess === "BIGCAT_00") {
       setIsAuthorized(true)
       loadData()
+      loadAgentCount()
     } else {
       router.push("/")
     }
@@ -104,6 +109,19 @@ export function BigcatAdminDashboard() {
     return () => clearInterval(interval)
   }, [])
 
+  const loadAgentCount = async () => {
+    setAgentCountLoading(true)
+    try {
+      const res = await fetch('/api/admin/agents')
+      const data = await res.json()
+      if (data.success) setAgentCount((data.data || []).length)
+    } catch (error) {
+      console.error('Error loading agent count:', error)
+    } finally {
+      setAgentCountLoading(false)
+    }
+  }
+
   if (!isAuthorized) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -126,6 +144,12 @@ export function BigcatAdminDashboard() {
       value: platformStats.totalMerchants,
       icon: Store,
       color: "bg-purple-100 text-purple-600",
+    },
+    {
+      label: "Onboarding Agents",
+      value: agentCount,
+      icon: UserPlus,
+      color: "bg-cyan-100 text-cyan-600",
     },
     {
       label: "Total Orders",
@@ -222,7 +246,7 @@ export function BigcatAdminDashboard() {
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto">
         {/* Key Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           {stats.map((stat) => (
             <div
               key={stat.label}
@@ -398,6 +422,13 @@ export function BigcatAdminDashboard() {
               </table>
             </div>
           )}
+        </div>
+
+        {/* Agent Management - Managed by PalmPay */}
+        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-8">
+          <p className="text-sm text-muted-foreground">
+            <strong>Onboarding Agent Management:</strong> Agents are created and managed by PalmPay Admin. Total active agents shown in stats above.
+          </p>
         </div>
 
         {/* Recent Users & Orders Grid */}

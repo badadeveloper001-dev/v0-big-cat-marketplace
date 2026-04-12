@@ -7,8 +7,9 @@ interface User {
   email: string
   phone?: string
   name?: string
-  role: 'buyer' | 'merchant'
+  role: 'buyer' | 'merchant' | 'agent'
   merchantProfile?: any
+  region?: string
 }
 
 interface RoleContextType {
