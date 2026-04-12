@@ -20,7 +20,17 @@ export async function GET() {
     if (error) throw error
     return NextResponse.json({ success: true, agents: data || [] })
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    const msg = error.message || 'Unknown error'
+    if (msg.includes("Could not find the table 'public.agents'")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Agents table is missing. Run scripts/008-create-agents-table.sql in Supabase SQL Editor.',
+        },
+        { status: 500 }
+      )
+    }
+    return NextResponse.json({ success: false, error: msg }, { status: 500 })
   }
 }
 
@@ -68,6 +78,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, agent: data })
   } catch (error: any) {
     const msg = error.message || ''
+    if (msg.includes("Could not find the table 'public.agents'")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Agents table is missing. Run scripts/008-create-agents-table.sql in Supabase SQL Editor.',
+        },
+        { status: 500 }
+      )
+    }
     if (msg.includes('unique') || msg.includes('duplicate')) {
       return NextResponse.json(
         { success: false, error: 'An agent with that email already exists' },

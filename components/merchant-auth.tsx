@@ -11,7 +11,13 @@ declare global {
   }
 }
 
-export function MerchantAuth({ onBack }: { onBack: () => void }) {
+export function MerchantAuth({
+  onBack,
+  onNeedAgentOnboarding,
+}: {
+  onBack: () => void
+  onNeedAgentOnboarding?: () => void
+}) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
 
@@ -319,6 +325,16 @@ export function MerchantAuth({ onBack }: { onBack: () => void }) {
                         required
                       />
                     </div>
+                  </div>
+
+                  <div className="-mt-1">
+                    <button
+                      type="button"
+                      onClick={onNeedAgentOnboarding}
+                      className="text-xs text-primary hover:text-primary/80 underline underline-offset-2 transition-colors"
+                    >
+                      Don&apos;t have a SMEDAN/CAC ID? Click here to get onboarded by our onboarding agent.
+                    </button>
                   </div>
                 </>
               )}

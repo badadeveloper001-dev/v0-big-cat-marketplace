@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useRole } from "@/lib/role-context"
 import { Onboarding } from "./onboarding"
 import { BuyerDashboard } from "./buyer-dashboard"
@@ -9,9 +10,9 @@ import { MerchantSetup } from "./merchant-setup"
 import { MerchantStoreSettings } from "./merchant-store-settings"
 import { AdminLogin } from "./admin-login"
 import { AdminDashboard } from "./admin-dashboard"
-import { AgentDashboard } from "./agent-dashboard"
 
 export function MarketplaceApp() {
+  const router = useRouter()
   const { role, user, setUser, isLoading } = useRole()
   const [adminAuthenticated, setAdminAuthenticated] = useState(false)
   const [setupComplete, setSetupComplete] = useState(false)
@@ -30,6 +31,12 @@ export function MarketplaceApp() {
       setStoreSettingsComplete(true)
     }
   }, [merchantSetupCompleted])
+
+  useEffect(() => {
+    if (role === "agent") {
+      router.replace("/agent-dashboard")
+    }
+  }, [role, router])
 
   // Show loading state while restoring session
   if (isLoading) {
@@ -98,8 +105,6 @@ export function MarketplaceApp() {
         return <AdminLogin onSuccess={() => setAdminAuthenticated(true)} />
       }
       return <AdminDashboard />
-    case "agent":
-      return <AgentDashboard />
     default:
       return <Onboarding />
   }

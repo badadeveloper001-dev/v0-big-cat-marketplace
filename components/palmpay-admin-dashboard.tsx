@@ -22,6 +22,7 @@ export function PalmpayAdminDashboard() {
   const [newAgent, setNewAgent] = useState({ name: "", email: "", region: "" })
   const [agentAction, setAgentAction] = useState("")
   const [agentsLoading, setAgentsLoading] = useState(false)
+  const [agentFeedback, setAgentFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
 
   useEffect(() => {
     const adminAccess = sessionStorage.getItem("adminAccess")
@@ -57,39 +58,52 @@ export function PalmpayAdminDashboard() {
 
   const loadAgents = async () => {
     setAgentsLoading(true)
+    setAgentFeedback(null)
     try {
       const res = await fetch('/api/admin/agents')
       const data = await res.json()
       if (data.success) {
         setAgents(data.agents || [])
+      } else {
+        setAgentFeedback({ type: "error", message: data.error || 'Failed to load agents' })
       }
     } catch (error) {
       console.error('Error loading agents:', error)
+      setAgentFeedback({ type: "error", message: 'Failed to load agents. Please try again.' })
     } finally {
       setAgentsLoading(false)
     }
   }
 
   const addAgent = async () => {
-    if (!newAgent.name || !newAgent.email || !newAgent.region) {
+    if (!newAgent.name.trim() || !newAgent.email.trim() || !newAgent.region.trim()) {
       alert('Please fill in all fields')
       return
     }
 
     setAgentAction('adding')
+    setAgentFeedback(null)
     try {
       const res = await fetch('/api/admin/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newAgent)
+        body: JSON.stringify({
+          name: newAgent.name.trim(),
+          email: newAgent.email.trim(),
+          region: newAgent.region.trim(),
+        })
       })
       const data = await res.json()
       if (data.success) {
         setNewAgent({ name: "", email: "", region: "" })
+        setAgentFeedback({ type: "success", message: 'Agent added successfully.' })
         loadAgents()
+      } else {
+        setAgentFeedback({ type: "error", message: data.error || 'Failed to add agent.' })
       }
     } catch (error) {
       console.error('Error adding agent:', error)
+      setAgentFeedback({ type: "error", message: 'Failed to add agent. Please try again.' })
     } finally {
       setAgentAction('')
     }
@@ -293,6 +307,17 @@ export function PalmpayAdminDashboard() {
         <div className="bg-card border border-border rounded-lg overflow-hidden mb-8">
           <div className="p-6 border-b border-border">
             <h2 className="font-bold text-xl text-foreground mb-4">Agent Management</h2>
+            {agentFeedback && (
+              <div
+                className={`mb-4 rounded-md border px-3 py-2 text-sm ${
+                  agentFeedback.type === "success"
+                    ? "border-green-200 bg-green-50 text-green-700"
+                    : "border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                {agentFeedback.message}
+              </div>
+            )}
             
             {/* Add New Agent Form */}
             <div className="bg-muted/50 rounded-lg p-4 mb-6">

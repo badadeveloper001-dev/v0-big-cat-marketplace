@@ -2,9 +2,11 @@
 
 import { useState } from "react"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import { ShoppingBag, Store, Shield, ArrowRight, Lock, UserCheck, Loader2, AlertCircle } from "lucide-react"
 import { BuyerAuth } from "./buyer-auth"
 import { MerchantAuth } from "./merchant-auth"
+import { MerchantOnboardingIntake } from "./merchant-onboarding-intake"
 import { AdminAccessModal } from "./admin-access-modal"
 import { useRole } from "@/lib/role-context"
 
@@ -26,8 +28,10 @@ const roles = [
 ]
 
 export function Onboarding() {
+  const router = useRouter()
   const { setRole, setUser } = useRole()
   const [selectedAuth, setSelectedAuth] = useState<AuthType>(null)
+  const [showMerchantOnboarding, setShowMerchantOnboarding] = useState(false)
   const [showAdminModal, setShowAdminModal] = useState(false)
   const [showAgentLogin, setShowAgentLogin] = useState(false)
   const [agentCode, setAgentCode] = useState("")
@@ -55,6 +59,7 @@ export function Onboarding() {
           ...(data.agent.region ? { region: data.agent.region } : {}),
         } as any)
         setRole('agent')
+        router.push('/agent-dashboard')
       } else {
         setAgentError(data.error || 'Invalid access code')
       }
@@ -70,9 +75,28 @@ export function Onboarding() {
     return <BuyerAuth onBack={() => setSelectedAuth(null)} />
   }
 
+  if (showMerchantOnboarding) {
+    return (
+      <MerchantOnboardingIntake
+        onBack={() => {
+          setShowMerchantOnboarding(false)
+          setSelectedAuth("merchant")
+        }}
+      />
+    )
+  }
+
   // Show merchant auth if selected
   if (selectedAuth === "merchant") {
-    return <MerchantAuth onBack={() => setSelectedAuth(null)} />
+    return (
+      <MerchantAuth
+        onBack={() => setSelectedAuth(null)}
+        onNeedAgentOnboarding={() => {
+          setSelectedAuth(null)
+          setShowMerchantOnboarding(true)
+        }}
+      />
+    )
   }
 
   return (
