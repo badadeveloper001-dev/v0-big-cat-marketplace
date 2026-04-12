@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, CheckCircle2, Clock, XCircle, BarChart3, Users, Loader2 } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Clock, BarChart3, Users, Loader2 } from "lucide-react"
 
 export function SmedanAdminDashboard() {
   const router = useRouter()
@@ -10,7 +10,6 @@ export function SmedanAdminDashboard() {
   const [merchants, setMerchants] = useState<any[]>([])
   const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
-  const [approvingId, setApprovingId] = useState<string | null>(null)
 
   useEffect(() => {
     const adminAccess = sessionStorage.getItem("adminAccess")
@@ -50,52 +49,6 @@ export function SmedanAdminDashboard() {
       console.error('Error loading data:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleApprove = async (id: string) => {
-    setApprovingId(id)
-    try {
-      const res = await fetch('/api/admin/merchants', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
-      const result = await res.json()
-      if (result.success) {
-        setMerchants(merchants.map(m =>
-          m.id === id ? { ...m, status: 'approved' } : m
-        ))
-        setStats(prev => ({
-          ...prev,
-          pending: prev.pending - 1,
-          approved: prev.approved + 1
-        }))
-      }
-    } catch (error) {
-      console.error('Error approving merchant:', error)
-    } finally {
-      setApprovingId(null)
-    }
-  }
-
-  const handleReject = async (id: string) => {
-    setApprovingId(id)
-    try {
-      const res = await fetch(`/api/admin/merchants?id=${id}`, { method: 'DELETE' })
-      const result = await res.json()
-      if (result.success) {
-        setMerchants(merchants.filter(m => m.id !== id))
-        setStats(prev => ({
-          ...prev,
-          total: prev.total - 1,
-          pending: prev.pending - 1
-        }))
-      }
-    } catch (error) {
-      console.error('Error rejecting merchant:', error)
-    } finally {
-      setApprovingId(null)
     }
   }
 
@@ -241,9 +194,6 @@ export function SmedanAdminDashboard() {
                   <th className="text-left p-4 font-semibold text-sm text-foreground">
                     Status
                   </th>
-                  <th className="text-left p-4 font-semibold text-sm text-foreground">
-                    Actions
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -285,26 +235,6 @@ export function SmedanAdminDashboard() {
                             <Clock className="w-3 h-3" />
                             Pending
                           </span>
-                        )}
-                      </td>
-                      <td className="p-4 text-sm">
-                        {merchant.status === "pending" && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleApprove(merchant.id)}
-                              disabled={approvingId === merchant.id}
-                              className="px-3 py-1 bg-green-500 text-white rounded text-xs font-medium hover:bg-green-600 transition-colors disabled:opacity-50"
-                            >
-                              {approvingId === merchant.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Approve'}
-                            </button>
-                            <button
-                              onClick={() => handleReject(merchant.id)}
-                              disabled={approvingId === merchant.id}
-                              className="px-3 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
-                            >
-                              {approvingId === merchant.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Reject'}
-                            </button>
-                          </div>
                         )}
                       </td>
                     </tr>

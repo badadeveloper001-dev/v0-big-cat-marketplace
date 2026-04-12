@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, Loader2 } from "lucide-react"
+import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 
 export function BigcatAdminDashboard() {
@@ -21,6 +21,8 @@ export function BigcatAdminDashboard() {
   })
   const [recentUsers, setRecentUsers] = useState<any[]>([])
   const [recentOrders, setRecentOrders] = useState<any[]>([])
+  const [pendingMerchants, setPendingMerchants] = useState<any[]>([])
+  const [approvingId, setApprovingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -73,6 +75,22 @@ export function BigcatAdminDashboard() {
           date: new Date(o.created_at).toLocaleDateString(),
         }))
         setRecentOrders(orderData)
+      }
+
+      // Load pending merchants for approval
+      const merchantsRes = await fetch('/api/admin/merchants').then(r => r.json())
+      if (merchantsRes.success) {
+        const pending = (merchantsRes.data || [])
+          .filter((m: any) => !m.setup_completed)
+          .map((m: any) => ({
+            id: m.id,
+            name: m.business_name || m.full_name || 'Unknown',
+            email: m.email,
+            smedanId: m.smedan_id || 'N/A',
+            cacId: m.cac_id || 'N/A',
+            joined: new Date(m.created_at).toLocaleDateString(),
+          }))
+        setPendingMerchants(pending)
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -140,6 +158,41 @@ export function BigcatAdminDashboard() {
   const conversionRate = platformStats.totalUsers > 0
     ? ((platformStats.totalOrders / platformStats.totalUsers) * 100).toFixed(1)
     : "0.0"
+
+  const handleApprove = async (id: string) => {
+    setApprovingId(id)
+    try {
+      const res = await fetch('/api/admin/merchants', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const result = await res.json()
+      if (result.success) {
+        setPendingMerchants(prev => prev.filter(m => m.id !== id))
+        loadData()
+      }
+    } catch (error) {
+      console.error('Error approving merchant:', error)
+    } finally {
+      setApprovingId(null)
+    }
+  }
+
+  const handleReject = async (id: string) => {
+    setApprovingId(id)
+    try {
+      const res = await fetch(`/api/admin/merchants?id=${id}`, { method: 'DELETE' })
+      const result = await res.json()
+      if (result.success) {
+        setPendingMerchants(prev => prev.filter(m => m.id !== id))
+      }
+    } catch (error) {
+      console.error('Error rejecting merchant:', error)
+    } finally {
+      setApprovingId(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -275,6 +328,76 @@ export function BigcatAdminDashboard() {
               Trigger payout reconciliation
             </button>
           </div>
+        </div>
+
+        {/* Pending Merchant Approvals */}
+        <div className="bg-card border border-border rounded-lg overflow-hidden mb-8">
+          <div className="p-6 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h2 className="font-bold text-lg text-foreground">Pending Merchant Approvals</h2>
+              {pendingMerchants.length > 0 && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">
+                  {pendingMerchants.length} pending
+                </span>
+              )}
+            </div>
+          </div>
+          {pendingMerchants.length === 0 ? (
+            <div className="p-8 text-center">
+              <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">No pending approvals</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-left p-4 text-sm font-semibold text-foreground">Business Name</th>
+                    <th className="text-left p-4 text-sm font-semibold text-foreground">Email</th>
+                    <th className="text-left p-4 text-sm font-semibold text-foreground">SMEDAN ID</th>
+                    <th className="text-left p-4 text-sm font-semibold text-foreground">CAC ID</th>
+                    <th className="text-left p-4 text-sm font-semibold text-foreground">Joined</th>
+                    <th className="text-left p-4 text-sm font-semibold text-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingMerchants.map((merchant) => (
+                    <tr key={merchant.id} className="border-b border-border hover:bg-muted/30">
+                      <td className="p-4 text-sm font-medium text-foreground">{merchant.name}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{merchant.email}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{merchant.smedanId}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{merchant.cacId}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{merchant.joined}</td>
+                      <td className="p-4">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApprove(merchant.id)}
+                            disabled={approvingId === merchant.id}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded text-xs font-medium hover:bg-green-600 transition-colors disabled:opacity-50"
+                          >
+                            {approvingId === merchant.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-3 h-3" />
+                            )}
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleReject(merchant.id)}
+                            disabled={approvingId === merchant.id}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+                          >
+                            <XCircle className="w-3 h-3" />
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Recent Users & Orders Grid */}
