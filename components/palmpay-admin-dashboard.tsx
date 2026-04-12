@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, TrendingUp, Wallet, DollarSign, CheckCircle2, Clock, Loader2 } from "lucide-react"
-import { getTransactions, getTransactionStats } from "@/lib/admin-actions"
 import { formatNaira } from "@/lib/currency-utils"
 
 export function PalmpayAdminDashboard() {
@@ -33,25 +32,12 @@ export function PalmpayAdminDashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [txnResult, statsResult] = await Promise.all([
-        getTransactions(),
-        getTransactionStats()
-      ])
+      const res = await fetch('/api/admin/transactions')
+      const data = await res.json()
 
-      if (txnResult.success) {
-        const txnData = txnResult.data.map((t: any) => ({
-          id: t.id,
-          user: t.buyer_id || 'Unknown',
-          amount: t.grand_total || 0,
-          status: t.status === 'delivered' ? 'completed' : t.status || 'pending',
-          date: new Date(t.created_at).toLocaleDateString(),
-          type: 'payment',
-        }))
-        setTransactions(txnData)
-      }
-
-      if (statsResult.success) {
-        setStats(statsResult.stats)
+      if (data.success) {
+        setTransactions(data.transactions || [])
+        if (data.stats) setStats(data.stats)
       }
     } catch (error) {
       console.error('Error loading data:', error)

@@ -18,7 +18,6 @@ import {
   Loader2,
 } from "lucide-react"
 import { useState, useEffect } from "react"
-import { getMerchants, getPlatformStats, approveMerchant, rejectMerchant, getRecentUsers, getRecentOrders } from "@/lib/admin-actions"
 import { NotificationsPanel } from "./notifications-panel"
 
 export function AdminDashboard() {
@@ -46,13 +45,15 @@ export function AdminDashboard() {
   const loadStats = async () => {
     setLoadingStats(true)
     try {
-      const result = await getPlatformStats()
-      if (result.success && result.stats) {
+      const res = await fetch('/api/admin/stats')
+      const result = await res.json()
+      if (result.success && result.platform) {
+        const s = result.platform
         const stats = [
-          { label: "Total Users", value: result.stats.totalUsers || "0", change: "+12.5%", icon: Users },
-          { label: "Merchants", value: result.stats.totalMerchants || "0", change: "+8.2%", icon: Store },
-          { label: "Revenue", value: `₦${(result.stats.totalRevenue || 0).toLocaleString()}`, change: "+23.1%", icon: DollarSign },
-          { label: "Active Now", value: result.stats.activeNow || "0", change: "", icon: Activity },
+          { label: "Total Users", value: s.totalUsers || "0", change: "+12.5%", icon: Users },
+          { label: "Merchants", value: s.totalMerchants || "0", change: "+8.2%", icon: Store },
+          { label: "Revenue", value: `₦${(s.totalRevenue || 0).toLocaleString()}`, change: "+23.1%", icon: DollarSign },
+          { label: "Active Now", value: s.activeNow || "0", change: "", icon: Activity },
         ]
         setPlatformStats(stats)
       }
@@ -66,7 +67,8 @@ export function AdminDashboard() {
   const loadApprovals = async () => {
     setLoadingApprovals(true)
     try {
-      const result = await getMerchants()
+      const res = await fetch('/api/admin/merchants')
+      const result = await res.json()
       if (result.success && result.data) {
         const pending = result.data
           .filter((m: any) => !m.setup_completed)
@@ -89,7 +91,8 @@ export function AdminDashboard() {
   const loadUsers = async () => {
     setLoadingUsers(true)
     try {
-      const result = await getRecentUsers()
+      const res = await fetch('/api/admin/users')
+      const result = await res.json()
       if (result.success && result.data) {
         setUsers(result.data)
       }
@@ -103,7 +106,8 @@ export function AdminDashboard() {
   const loadAllMerchants = async () => {
     setLoadingMerchants(true)
     try {
-      const result = await getMerchants()
+      const res = await fetch('/api/admin/merchants')
+      const result = await res.json()
       if (result.success && result.data) {
         setAllMerchants(result.data)
       }
@@ -117,7 +121,12 @@ export function AdminDashboard() {
   const handleApprove = async (merchantId: string) => {
     setProcessingApproval(merchantId)
     try {
-      const result = await approveMerchant(merchantId)
+      const res = await fetch('/api/admin/merchants', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: merchantId }),
+      })
+      const result = await res.json()
       if (result.success) {
         setPendingApprovals(prev => prev.filter(m => m.id !== merchantId))
         loadStats()
@@ -133,7 +142,8 @@ export function AdminDashboard() {
   const handleReject = async (merchantId: string) => {
     setProcessingApproval(merchantId)
     try {
-      const result = await rejectMerchant(merchantId)
+      const res = await fetch(`/api/admin/merchants?id=${merchantId}`, { method: 'DELETE' })
+      const result = await res.json()
       if (result.success) {
         setPendingApprovals(prev => prev.filter(m => m.id !== merchantId))
         loadStats()

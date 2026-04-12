@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Clock, XCircle, BarChart3, Users, Loader2 } from "lucide-react"
-import { getMerchants, approveMerchant, rejectMerchant, getMerchantStats } from "@/lib/admin-actions"
 
 export function SmedanAdminDashboard() {
   const router = useRouter()
@@ -26,13 +25,13 @@ export function SmedanAdminDashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [merchantsResult, statsResult] = await Promise.all([
-        getMerchants(),
-        getMerchantStats()
+      const [merchantsRes, statsRes] = await Promise.all([
+        fetch('/api/admin/merchants').then(r => r.json()),
+        fetch('/api/admin/stats').then(r => r.json()),
       ])
 
-      if (merchantsResult.success) {
-        const merchantData = merchantsResult.data.map((m: any) => ({
+      if (merchantsRes.success) {
+        const merchantData = (merchantsRes.data || []).map((m: any) => ({
           id: m.id,
           name: m.business_name || m.full_name || 'Unknown',
           businessType: m.business_category || 'Not specified',
@@ -44,8 +43,8 @@ export function SmedanAdminDashboard() {
         setMerchants(merchantData)
       }
 
-      if (statsResult.success) {
-        setStats(statsResult.stats)
+      if (statsRes.success && statsRes.merchants) {
+        setStats(statsRes.merchants)
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -57,9 +56,14 @@ export function SmedanAdminDashboard() {
   const handleApprove = async (id: string) => {
     setApprovingId(id)
     try {
-      const result = await approveMerchant(id)
+      const res = await fetch('/api/admin/merchants', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const result = await res.json()
       if (result.success) {
-        setMerchants(merchants.map(m => 
+        setMerchants(merchants.map(m =>
           m.id === id ? { ...m, status: 'approved' } : m
         ))
         setStats(prev => ({
@@ -78,7 +82,8 @@ export function SmedanAdminDashboard() {
   const handleReject = async (id: string) => {
     setApprovingId(id)
     try {
-      const result = await rejectMerchant(id)
+      const res = await fetch(`/api/admin/merchants?id=${id}`, { method: 'DELETE' })
+      const result = await res.json()
       if (result.success) {
         setMerchants(merchants.filter(m => m.id !== id))
         setStats(prev => ({

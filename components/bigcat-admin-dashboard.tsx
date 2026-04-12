@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, Loader2 } from "lucide-react"
-import { getPlatformStats, getRecentUsers, getRecentOrders, getLogisticsStats } from "@/lib/admin-actions"
 import { formatNaira } from "@/lib/currency-utils"
 
 export function BigcatAdminDashboard() {
@@ -37,23 +36,25 @@ export function BigcatAdminDashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [statsResult, logisticsResult, usersResult, ordersResult] = await Promise.all([
-        getPlatformStats(),
-        getLogisticsStats(),
-        getRecentUsers(),
-        getRecentOrders()
+      const [statsRes, usersRes, ordersRes] = await Promise.all([
+        fetch('/api/admin/stats').then(r => r.json()),
+        fetch('/api/admin/users').then(r => r.json()),
+        fetch('/api/admin/orders').then(r => r.json()),
       ])
 
-      if (statsResult.success) {
-        setPlatformStats(statsResult.stats)
+      if (statsRes.success) {
+        setPlatformStats(statsRes.platform || statsRes.stats || {})
+        if (statsRes.logistics) {
+          setLogisticsStats({
+            activeDeliveries: statsRes.logistics.total - statsRes.logistics.completed || 0,
+            completedDeliveries: statsRes.logistics.completed || 0,
+            pendingDeliveries: statsRes.logistics.pending || 0,
+          })
+        }
       }
 
-      if (logisticsResult.success) {
-        setLogisticsStats(logisticsResult.stats)
-      }
-
-      if (usersResult.success) {
-        const userData = usersResult.data.map((u: any) => ({
+      if (usersRes.success) {
+        const userData = (usersRes.data || []).map((u: any) => ({
           id: u.id,
           name: u.full_name || u.email?.split('@')[0] || 'Unknown',
           email: u.email,
@@ -63,11 +64,11 @@ export function BigcatAdminDashboard() {
         setRecentUsers(userData)
       }
 
-      if (ordersResult.success) {
-        const orderData = ordersResult.data.map((o: any) => ({
+      if (ordersRes.success) {
+        const orderData = (ordersRes.data || []).map((o: any) => ({
           id: o.id,
-          user: o.buyerName || o.buyer_id?.substring(0, 8) || 'Unknown',
-          amount: o.grand_total || 0,
+          user: o.buyer_id?.substring(0, 8) || 'Unknown',
+          amount: o.grand_total || o.total_amount || 0,
           status: o.status || 'pending',
           date: new Date(o.created_at).toLocaleDateString(),
         }))
