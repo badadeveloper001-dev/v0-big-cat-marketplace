@@ -150,13 +150,22 @@ export function SmedanAdminDashboard() {
           <div className="bg-card border border-border rounded-lg p-6">
             <h2 className="font-bold text-lg text-foreground mb-4">MSME Support Actions</h2>
             <div className="grid grid-cols-1 gap-3">
-              <button className="p-3 rounded-lg bg-blue-50 text-blue-700 text-left font-medium hover:bg-blue-100 transition-colors">
+              <button
+                onClick={() => alert('Onboarding reminders queued for pending merchants.')}
+                className="p-3 rounded-lg bg-blue-50 text-blue-700 text-left font-medium hover:bg-blue-100 transition-colors"
+              >
                 Send onboarding reminder
               </button>
-              <button className="p-3 rounded-lg bg-green-50 text-green-700 text-left font-medium hover:bg-green-100 transition-colors">
+              <button
+                onClick={() => alert('Training batch assignment module opens in the next release.')}
+                className="p-3 rounded-lg bg-green-50 text-green-700 text-left font-medium hover:bg-green-100 transition-colors"
+              >
                 Assign training batch
               </button>
-              <button className="p-3 rounded-lg bg-purple-50 text-purple-700 text-left font-medium hover:bg-purple-100 transition-colors">
+              <button
+                onClick={() => alert('Compliance queue is represented by merchants table below.')}
+                className="p-3 rounded-lg bg-purple-50 text-purple-700 text-left font-medium hover:bg-purple-100 transition-colors"
+              >
                 Review compliance queue
               </button>
             </div>

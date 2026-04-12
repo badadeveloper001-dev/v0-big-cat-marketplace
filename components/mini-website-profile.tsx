@@ -89,10 +89,30 @@ export function MiniWebsiteProfile({ profile, isOwner = false, onEdit }: MiniWeb
 
                 {/* Action Buttons */}
                 <div className="flex gap-3">
-                  <button className="flex-1 py-2 px-4 bg-primary text-primary-foreground rounded-lg font-semibold hover:shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => {
+                      window.location.href = `mailto:support@bigcat.ng?subject=Inquiry%20for%20${encodeURIComponent(profile.business_name || 'store')}`
+                    }}
+                    className="flex-1 py-2 px-4 bg-primary text-primary-foreground rounded-lg font-semibold hover:shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
+                  >
                     <span>Contact Store</span>
                   </button>
-                  <button className="px-4 py-2 bg-secondary border border-border rounded-lg text-foreground hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2">
+                  <button
+                    onClick={async () => {
+                      const shareData = {
+                        title: profile.business_name || 'Store',
+                        text: `Check out ${profile.business_name || 'this store'} on BigCat Marketplace`,
+                        url: window.location.href,
+                      }
+                      if (navigator.share) {
+                        await navigator.share(shareData)
+                      } else {
+                        await navigator.clipboard.writeText(window.location.href)
+                        alert('Store link copied to clipboard.')
+                      }
+                    }}
+                    className="px-4 py-2 bg-secondary border border-border rounded-lg text-foreground hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2"
+                  >
                     <Share2 className="w-4 h-4" />
                     <span className="hidden sm:inline">Share</span>
                   </button>
@@ -126,7 +146,10 @@ export function MiniWebsiteProfile({ profile, isOwner = false, onEdit }: MiniWeb
               ))}
             </div>
             {isOwner && (
-              <button className="w-full mt-6 py-2 px-4 bg-secondary border border-border rounded-lg text-foreground hover:bg-secondary/80 transition-colors font-medium">
+              <button
+                onClick={onEdit}
+                className="w-full mt-6 py-2 px-4 bg-secondary border border-border rounded-lg text-foreground hover:bg-secondary/80 transition-colors font-medium"
+              >
                 Add Products
               </button>
             )}

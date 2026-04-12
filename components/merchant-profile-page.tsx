@@ -257,7 +257,10 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
                     <User className="w-12 h-12 text-primary" />
                   )}
                 </div>
-                <button className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-lg">
+                <button
+                  onClick={() => setMessage({ type: 'success', text: 'Profile photo upload will be available soon.' })}
+                  className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-lg"
+                >
                   <Camera className="w-4 h-4" />
                 </button>
               </div>

@@ -166,6 +166,24 @@ export function AdminDashboard() {
     },
   ]
 
+  const exportPlatformData = () => {
+    if (typeof window === "undefined") return
+    const payload = {
+      exported_at: new Date().toISOString(),
+      users,
+      merchants: allMerchants,
+      pendingApprovals,
+      recentActivity: recentActivity.length > 0 ? recentActivity : defaultRecentActivity,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `bigcat-admin-export-${Date.now()}.json`
+    link.click()
+    window.URL.revokeObjectURL(url)
+  }
+
   return (
     <>
     <NotificationsPanel 
@@ -309,7 +327,7 @@ export function AdminDashboard() {
         <section className="px-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-foreground">Recent Activity</h2>
-            <button className="text-sm text-primary">View all</button>
+            <button onClick={() => setActiveTab("users")} className="text-sm text-primary">View all</button>
           </div>
           <div className="flex flex-col gap-3">
             {(recentActivity.length > 0 ? recentActivity : defaultRecentActivity).map((activity) => (
@@ -491,7 +509,10 @@ export function AdminDashboard() {
             <div className="bg-card border border-border rounded-2xl overflow-hidden">
               <h3 className="font-semibold text-foreground p-4 border-b border-border">Actions</h3>
               <div className="divide-y divide-border">
-                <button className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
+                <button
+                  onClick={exportPlatformData}
+                  className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors"
+                >
                   <span className="text-sm text-muted-foreground">Export Data</span>
                   <span className="text-sm text-primary">Download</span>
                 </button>

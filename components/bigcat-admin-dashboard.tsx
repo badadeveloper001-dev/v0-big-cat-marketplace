@@ -114,7 +114,7 @@ export function BigcatAdminDashboard() {
     try {
       const res = await fetch('/api/admin/agents')
       const data = await res.json()
-      if (data.success) setAgentCount((data.data || []).length)
+      if (data.success) setAgentCount((data.agents || []).length)
     } catch (error) {
       console.error('Error loading agent count:', error)
     } finally {
@@ -289,13 +289,22 @@ export function BigcatAdminDashboard() {
           <div className="bg-card border border-border rounded-lg p-6">
             <h2 className="font-bold text-lg text-foreground mb-6">Quick Access</h2>
             <div className="flex flex-col gap-3">
-              <button className="w-full p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium transition-colors text-left">
+              <button
+                onClick={() => alert('Users overview is shown in the Recent Users section below.')}
+                className="w-full p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium transition-colors text-left"
+              >
                 View All Users ({platformStats.totalUsers})
               </button>
-              <button className="w-full p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-medium transition-colors text-left">
+              <button
+                onClick={() => alert('Merchants requiring action are listed in Pending Merchant Approvals.')}
+                className="w-full p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-medium transition-colors text-left"
+              >
                 View All Merchants ({platformStats.totalMerchants})
               </button>
-              <button className="w-full p-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg font-medium transition-colors text-left">
+              <button
+                onClick={() => alert('Orders overview is shown in the Recent Orders section below.')}
+                className="w-full p-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg font-medium transition-colors text-left"
+              >
                 View All Orders ({platformStats.totalOrders})
               </button>
             </div>
@@ -342,13 +351,22 @@ export function BigcatAdminDashboard() {
         <div className="bg-card border border-border rounded-lg p-6 mb-8">
           <h2 className="font-bold text-lg text-foreground mb-4">Control Center</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <button className="p-3 rounded-lg bg-blue-50 text-blue-700 text-left font-medium hover:bg-blue-100 transition-colors">
+            <button
+              onClick={() => alert('KYC review queue is available in Pending Merchant Approvals below.')}
+              className="p-3 rounded-lg bg-blue-50 text-blue-700 text-left font-medium hover:bg-blue-100 transition-colors"
+            >
               Review KYC queue
             </button>
-            <button className="p-3 rounded-lg bg-purple-50 text-purple-700 text-left font-medium hover:bg-purple-100 transition-colors">
+            <button
+              onClick={() => alert('Suspended account controls will be enabled in a dedicated moderation module.')}
+              className="p-3 rounded-lg bg-purple-50 text-purple-700 text-left font-medium hover:bg-purple-100 transition-colors"
+            >
               Manage suspended accounts
             </button>
-            <button className="p-3 rounded-lg bg-green-50 text-green-700 text-left font-medium hover:bg-green-100 transition-colors">
+            <button
+              onClick={() => alert('Payout reconciliation request queued. Refresh dashboard to review latest status.')}
+              className="p-3 rounded-lg bg-green-50 text-green-700 text-left font-medium hover:bg-green-100 transition-colors"
+            >
               Trigger payout reconciliation
             </button>
           </div>

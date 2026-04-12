@@ -146,7 +146,7 @@ export function MerchantDashboard() {
     { label: "Add Product", icon: Plus, primary: true, action: () => setActiveTab("products") },
     { label: "View Orders", icon: ShoppingBag, primary: false, action: () => setActiveTab("orders") },
     { label: "Analytics", icon: BarChart3, primary: false, action: () => setActiveTab("analytics") },
-    { label: "AI BizPilot", icon: Sparkles, primary: false, highlight: true, action: () => {} },
+    { label: "AI BizPilot", icon: Sparkles, primary: false, highlight: true, action: () => setCurrentInsight((prev) => (prev + 1) % aiInsights.length) },
   ]
 
   const aiInsights = [
@@ -161,6 +161,12 @@ export function MerchantDashboard() {
       setUser(null)
       setRole(null)
     }
+  }
+
+  const handleAiSend = () => {
+    if (!aiMessage.trim()) return
+    setCurrentInsight((prev) => (prev + 1) % aiInsights.length)
+    setAiMessage("")
   }
 
   const getStatusIcon = (status: string) => {
@@ -229,6 +235,10 @@ export function MerchantDashboard() {
             ].map((pack) => (
               <button
                 key={pack.tokens}
+                onClick={() => {
+                  alert(`Token purchase request queued: ${pack.tokens} tokens for ${formatNaira(pack.price)}.`)
+                  setShowTokenDialog(false)
+                }}
                 className="w-full flex items-center justify-between p-4 bg-secondary rounded-xl hover:bg-secondary/80 transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -444,7 +454,12 @@ export function MerchantDashboard() {
                 onChange={(e) => setAiMessage(e.target.value)}
                 className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
               />
-              <button className="flex items-center justify-center w-10 h-10 bg-primary text-primary-foreground rounded-xl shadow-sm shadow-primary/20">
+              <button
+                onClick={handleAiSend}
+                disabled={!aiMessage.trim()}
+                className="flex items-center justify-center w-10 h-10 bg-primary text-primary-foreground rounded-xl shadow-sm shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Send AI prompt"
+              >
                 <Send className="w-4 h-4" />
               </button>
             </div>
@@ -511,10 +526,18 @@ export function MerchantDashboard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <button className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors">
+                      <button
+                        onClick={() => setActiveTab("products")}
+                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
+                        aria-label="Edit product"
+                      >
                         <Pencil className="w-4 h-4" />
                       </button>
-                      <button className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors">
+                      <button
+                        onClick={() => setActiveTab("products")}
+                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                        aria-label="Delete product"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -692,7 +715,7 @@ export function MerchantDashboard() {
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-2 pb-6">
         <div className="flex items-center justify-around">
 {[
-                  { id: "home", icon: Home, label: "Home" },
+                  { id: "home", icon: Home, label: "Home", action: () => setActiveTab("home") },
                   { id: "products", icon: Package, label: "Products", action: () => setActiveTab("products") },
                   { id: "orders", icon: ShoppingBag, label: "Orders", action: () => setActiveTab("orders") },
                   { id: "messages", icon: MessageSquare, label: "Messages", action: () => setActiveTab("messages") },

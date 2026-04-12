@@ -89,6 +89,7 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   const [chatLoading, setChatLoading] = useState(false)
   const [isSuspended, setIsSuspended] = useState(false)
   const [policyNotice, setPolicyNotice] = useState("")
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     loadProducts()
@@ -155,6 +156,21 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
     }
   }
 
+  const handleShareVendor = async () => {
+    const shareData = {
+      title: vendor.name,
+      text: `Check out ${vendor.name} on BigCat Marketplace`,
+      url: window.location.href,
+    }
+
+    if (navigator.share) {
+      await navigator.share(shareData)
+    } else {
+      await navigator.clipboard.writeText(window.location.href)
+      setPolicyNotice("Vendor link copied to clipboard.")
+    }
+  }
+
   const handleAddToCart = (product: any) => {
     if (isSuspended) {
       setPolicyNotice("Your account has been temporarily suspended for violating platform policies.")
@@ -201,11 +217,22 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
           </button>
           <span className="font-semibold text-foreground">Vendor Profile</span>
           <div className="flex items-center gap-1">
-            <button className="p-2 text-muted-foreground hover:text-foreground transition-colors" aria-label="Share">
+            <button
+              onClick={handleShareVendor}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Share"
+            >
               <Share2 className="w-5 h-5" />
             </button>
-            <button className="p-2 text-muted-foreground hover:text-rose-500 transition-colors" aria-label="Save">
-              <Heart className="w-5 h-5" />
+            <button
+              onClick={() => {
+                setSaved((prev) => !prev)
+                setPolicyNotice(saved ? 'Vendor removed from saved list.' : 'Vendor saved to your favorites.')
+              }}
+              className="p-2 text-muted-foreground hover:text-rose-500 transition-colors"
+              aria-label="Save"
+            >
+              <Heart className={`w-5 h-5 ${saved ? 'fill-rose-500 text-rose-500' : ''}`} />
             </button>
           </div>
         </div>

@@ -262,6 +262,49 @@ export function BuyerDashboard() {
     setAiFullscreenOpen(true)
   }
 
+  const handleVoiceSearch = () => {
+    if (typeof window === "undefined") return
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      setPolicyNotice("Voice search is not supported on this browser.")
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = "en-US"
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+    recognition.onresult = (event: any) => {
+      const transcript = event?.results?.[0]?.[0]?.transcript
+      if (transcript) {
+        setSearchQuery(transcript)
+        setProductSearchQuery(transcript)
+        setShowProducts(true)
+      }
+    }
+    recognition.start()
+  }
+
+  const handleSupportAction = (label: string) => {
+    if (typeof window === "undefined") return
+    switch (label) {
+      case "Help Center":
+        window.open("https://help.netlify.com", "_blank")
+        break
+      case "Contact Us":
+        window.location.href = "mailto:support@bigcat.ng?subject=BigCat%20Support%20Request"
+        break
+      case "Terms of Service":
+        window.open("https://www.netlify.com/terms/", "_blank")
+        break
+      case "Privacy Policy":
+        window.open("https://www.netlify.com/privacy/", "_blank")
+        break
+      default:
+        break
+    }
+  }
+
   const openAiAssistant = () => {
     setAiFullscreenOpen(true)
   }
@@ -528,6 +571,7 @@ export function BuyerDashboard() {
                   className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none text-base"
                 />
                 <button
+                  onClick={handleVoiceSearch}
                   aria-label="Voice search"
                   className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex-shrink-0"
                 >
@@ -751,7 +795,11 @@ export function BuyerDashboard() {
                   { label: "Terms of Service", value: "Legal" },
                   { label: "Privacy Policy", value: "Your data" },
                 ].map((item) => (
-                  <button key={item.label} className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
+                  <button
+                    key={item.label}
+                    onClick={() => handleSupportAction(item.label)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors"
+                  >
                     <span className="text-sm text-foreground">{item.label}</span>
                     <span className="text-sm text-muted-foreground">{item.value}</span>
                   </button>

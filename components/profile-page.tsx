@@ -162,7 +162,10 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
                 {(profile?.name || 'U').charAt(0).toUpperCase()}
               </span>
             )}
-            <button className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <button
+              onClick={() => setMessage({ type: 'success', text: 'Profile photo upload will be available soon.' })}
+              className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+            >
               <Camera className="w-6 h-6 text-white" />
             </button>
           </div>

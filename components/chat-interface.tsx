@@ -77,19 +77,51 @@ function ChatListScreen({
   conversations,
   loading,
   onSelectConversation,
+  onRefresh,
 }: {
   conversations: Conversation[]
   loading: boolean
   onSelectConversation: (conv: Conversation) => void
+  onRefresh: () => void
 }) {
+  const [showMenu, setShowMenu] = useState(false)
+
   return (
     <div className="flex flex-col h-full">
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex items-center justify-between p-4">
           <h1 className="text-xl font-bold text-foreground">Messages</h1>
-          <button className="p-2 hover:bg-secondary rounded-xl transition-colors">
+          <div className="relative">
+          <button
+            onClick={() => setShowMenu((prev) => !prev)}
+            className="p-2 hover:bg-secondary rounded-xl transition-colors"
+            aria-label="Message options"
+          >
             <MoreVertical className="w-5 h-5 text-foreground" />
           </button>
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-44 rounded-xl border border-border bg-card shadow-lg z-20 overflow-hidden">
+                <button
+                  onClick={() => {
+                    onRefresh()
+                    setShowMenu(false)
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-secondary"
+                >
+                  Refresh messages
+                </button>
+                <button
+                  onClick={() => {
+                    alert("For your safety, use in-app chat for all buyer and merchant conversations.")
+                    setShowMenu(false)
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-secondary"
+                >
+                  Safety tips
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -168,6 +200,25 @@ function ChatConversationScreen({
   const [warning, setWarning] = useState("")
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
+
+  const handleVoiceInput = () => {
+    if (typeof window === "undefined") return
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      setWarning("Voice input is not supported on this browser.")
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = "en-US"
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+    recognition.onresult = (event: any) => {
+      const transcript = event?.results?.[0]?.[0]?.transcript
+      if (transcript) setNewMessage((prev) => `${prev} ${transcript}`.trim())
+    }
+    recognition.start()
+  }
 
   useEffect(() => {
     const userId = user?.userId
@@ -280,7 +331,13 @@ function ChatConversationScreen({
               <p className="text-xs text-muted-foreground">{conversation.vendorLocation}</p>
             </div>
           </div>
-          <button className="p-2 hover:bg-secondary rounded-xl transition-colors">
+          <button
+            onClick={() => {
+              setWarning("Voice calls are disabled. Please continue in-app chat for secure onboarding.")
+            }}
+            className="p-2 hover:bg-secondary rounded-xl transition-colors"
+            aria-label="Call merchant"
+          >
             <Phone className="w-5 h-5 text-foreground" />
           </button>
         </div>
@@ -335,11 +392,21 @@ function ChatConversationScreen({
       {showQuickActions && (
         <div className="border-t border-border bg-card p-4">
           <div className="grid grid-cols-2 gap-3">
-            <button className="flex items-center justify-center gap-2 p-3 bg-secondary hover:bg-secondary/80 rounded-xl transition-colors text-sm font-medium text-foreground">
+            <button
+              onClick={() => {
+                window.location.href = "/"
+              }}
+              className="flex items-center justify-center gap-2 p-3 bg-secondary hover:bg-secondary/80 rounded-xl transition-colors text-sm font-medium text-foreground"
+            >
               <Store className="w-4 h-4" />
               View Store
             </button>
-            <button className="flex items-center justify-center gap-2 p-3 bg-primary hover:bg-primary/90 rounded-xl transition-colors text-sm font-medium text-primary-foreground">
+            <button
+              onClick={() => {
+                window.location.href = "/"
+              }}
+              className="flex items-center justify-center gap-2 p-3 bg-primary hover:bg-primary/90 rounded-xl transition-colors text-sm font-medium text-primary-foreground"
+            >
               <ShoppingCart className="w-4 h-4" />
               Place Order
             </button>
@@ -369,7 +436,11 @@ function ChatConversationScreen({
               disabled={suspended}
               className="flex-1 bg-transparent outline-none text-foreground placeholder-muted-foreground text-sm"
             />
-            <button className="p-2 hover:bg-secondary rounded-lg transition-colors">
+            <button
+              onClick={handleVoiceInput}
+              className="p-2 hover:bg-secondary rounded-lg transition-colors"
+              aria-label="Voice input"
+            >
               <Mic className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
@@ -400,6 +471,39 @@ export function ChatInterface({ initialConversation = null }: { initialConversat
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
 
+  const loadConversations = async () => {
+    if (suspended) {
+      setLoading(false)
+      return
+    }
+
+    if (!user?.userId) {
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/messages/conversation?userId=${user.userId}`)
+      const result = await response.json()
+      if (result.success) {
+        const mapped = (result.data || []).map((conversation: any) => mapConversation(conversation, user.userId))
+        setConversations(mapped)
+
+        if (initialConversation) {
+          const matched = mapped.find((conversation: Conversation) => conversation.id === initialConversation.id)
+          if (matched) {
+            setSelectedConversation(matched)
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load conversations:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     setSuspended(isUserSuspended(user?.userId))
     setStrikeCount(getUserStrikeCount(user?.userId))
@@ -412,39 +516,6 @@ export function ChatInterface({ initialConversation = null }: { initialConversat
   }, [initialConversation])
 
   useEffect(() => {
-    const loadConversations = async () => {
-      if (suspended) {
-        setLoading(false)
-        return
-      }
-
-      if (!user?.userId) {
-        setLoading(false)
-        return
-      }
-
-      setLoading(true)
-      try {
-        const response = await fetch(`/api/messages/conversation?userId=${user.userId}`)
-        const result = await response.json()
-        if (result.success) {
-          const mapped = (result.data || []).map((conversation: any) => mapConversation(conversation, user.userId))
-          setConversations(mapped)
-
-          if (initialConversation) {
-            const matched = mapped.find((conversation: Conversation) => conversation.id === initialConversation.id)
-            if (matched) {
-              setSelectedConversation(matched)
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load conversations:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     loadConversations()
   }, [user?.userId, initialConversation, suspended])
 
@@ -477,7 +548,14 @@ export function ChatInterface({ initialConversation = null }: { initialConversat
     return <ChatConversationScreen conversation={selectedConversation} onBack={() => setSelectedConversation(null)} />
   }
 
-  return <ChatListScreen conversations={conversations} loading={loading} onSelectConversation={setSelectedConversation} />
+  return (
+    <ChatListScreen
+      conversations={conversations}
+      loading={loading}
+      onSelectConversation={setSelectedConversation}
+      onRefresh={loadConversations}
+    />
+  )
 }
 
 function formatTime(date: Date): string {
