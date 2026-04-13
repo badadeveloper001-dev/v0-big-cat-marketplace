@@ -94,6 +94,7 @@ export function BuyerDashboard() {
   const [isSuspended, setIsSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
   const [policyNotice, setPolicyNotice] = useState("")
+  const [aiSearching, setAiSearching] = useState(false)
 
   const cleanupStaleVoiceflowUi = (target?: HTMLElement | null) => {
     if (typeof document === "undefined") return
@@ -259,7 +260,59 @@ export function BuyerDashboard() {
 
   const handleSuggestionTap = (s: string) => {
     setSearchQuery(s)
-    setAiFullscreenOpen(true)
+    runAiSearch(s)
+  }
+
+  const runAiSearch = async (query: string) => {
+    const clean = query.trim()
+    if (!clean) return
+
+    setAiSearching(true)
+    try {
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: clean }),
+      })
+      const result = await response.json()
+
+      if (!result.success) {
+        setPolicyNotice(result.error || 'AI search failed. Please try again.')
+        return
+      }
+
+      const productCount = (result.data?.products || []).length
+      const vendorCount = (result.data?.vendors || []).length
+      setPolicyNotice(result.reply || `Found ${productCount} products and ${vendorCount} vendors.`)
+
+      if (productCount > 0) {
+        setProductSearchQuery(clean)
+        setShowProducts(true)
+        return
+      }
+
+      if (vendorCount > 0) {
+        const firstVendor = result.data.vendors[0]
+        setSelectedVendor({
+          id: firstVendor.id,
+          name: firstVendor.name,
+          category: firstVendor.category || 'General',
+          rating: 4.5,
+          reviews: 0,
+          location: firstVendor.location || 'Nigeria',
+          badge: 'Verified',
+          badgeColor: 'bg-primary/15 text-primary',
+          bgColor: 'bg-blue-100',
+          initials: (firstVendor.name || 'VN').substring(0, 2).toUpperCase(),
+          iconColor: 'text-blue-600',
+          description: firstVendor.description || 'Quality products and services',
+        })
+      }
+    } catch {
+      setPolicyNotice('AI search failed. Please try again.')
+    } finally {
+      setAiSearching(false)
+    }
   }
 
   const handleVoiceSearch = () => {
@@ -278,8 +331,7 @@ export function BuyerDashboard() {
       const transcript = event?.results?.[0]?.[0]?.transcript
       if (transcript) {
         setSearchQuery(transcript)
-        setProductSearchQuery(transcript)
-        setShowProducts(true)
+        runAiSearch(transcript)
       }
     }
     recognition.start()
@@ -563,8 +615,7 @@ export function BuyerDashboard() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && searchQuery.trim()) {
-                      setProductSearchQuery(searchQuery)
-                      setShowProducts(true)
+                      runAiSearch(searchQuery)
                     }
                   }}
                   placeholder="Ask anything... find products, vendors, services"
@@ -573,9 +624,10 @@ export function BuyerDashboard() {
                 <button
                   onClick={handleVoiceSearch}
                   aria-label="Voice search"
-                  className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex-shrink-0"
+                  className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex-shrink-0 disabled:opacity-50"
+                  disabled={aiSearching}
                 >
-                  <Mic className="w-5 h-5" />
+                  {aiSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mic className="w-5 h-5" />}
                 </button>
               </div>
             </div>
