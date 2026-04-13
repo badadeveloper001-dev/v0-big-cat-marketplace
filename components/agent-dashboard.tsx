@@ -40,7 +40,7 @@ export function AgentDashboard() {
   const [requests, setRequests] = useState<OnboardingRequest[]>([])
   const [selectedRequestId, setSelectedRequestId] = useState("")
 
-  const currentAgentId = user?.userId || ""
+  const currentAgentId = String(user?.userId || (user as any)?.id || "").trim()
 
   const selectedRequest = useMemo(
     () => requests.find((request) => request.id === selectedRequestId) || null,
@@ -98,7 +98,10 @@ export function AgentDashboard() {
   }, [role])
 
   const assignToMe = async (requestId: string) => {
-    if (!currentAgentId) return
+    if (!currentAgentId) {
+      setError("Unable to determine agent id for this session. Please logout and login again.")
+      return
+    }
 
     setActionLoading(`assign:${requestId}`)
     setError("")
@@ -106,7 +109,7 @@ export function AgentDashboard() {
       const response = await fetch(`/api/onboarding/requests/${requestId}/assign`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_id: currentAgentId }),
+        body: JSON.stringify({ agent_id: currentAgentId, agentId: currentAgentId }),
       })
 
       const result = await response.json()
@@ -124,7 +127,10 @@ export function AgentDashboard() {
   }
 
   const markCompleted = async (requestId: string) => {
-    if (!currentAgentId) return
+    if (!currentAgentId) {
+      setError("Unable to determine agent id for this session. Please logout and login again.")
+      return
+    }
 
     setActionLoading(`complete:${requestId}`)
     setError("")
@@ -132,7 +138,7 @@ export function AgentDashboard() {
       const response = await fetch(`/api/onboarding/requests/${requestId}/complete`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_id: currentAgentId }),
+        body: JSON.stringify({ agent_id: currentAgentId, agentId: currentAgentId }),
       })
 
       const result = await response.json()

@@ -3,9 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const requestId = params.id
+    const requestIdFromPath = request.nextUrl.pathname.split('/').filter(Boolean).at(-2) || ''
+    const requestId = String(params?.id || requestIdFromPath || '').trim()
     const body = await request.json()
-    const agent_id = String(body.agent_id || '').trim()
+    const agent_id = String(body.agent_id || body.agentId || body.assigned_agent_id || '').trim()
 
     if (!requestId || !agent_id) {
       return NextResponse.json({ success: false, error: 'Request id and agent id are required' }, { status: 400 })
