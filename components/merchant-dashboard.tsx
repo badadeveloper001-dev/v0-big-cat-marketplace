@@ -76,6 +76,12 @@ export function MerchantDashboard() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showTokenDialog, setShowTokenDialog] = useState(false)
   const [tokenBalance, setTokenBalance] = useState(0)
+  const [walletBalance, setWalletBalance] = useState(0)
+  const [cardBalance, setCardBalance] = useState(0)
+  const [bankBalance, setBankBalance] = useState(0)
+  const [tokenPaymentMethod, setTokenPaymentMethod] = useState<"wallet" | "card" | "bank">("wallet")
+  const [tokenDialogError, setTokenDialogError] = useState("")
+  const [tokenBuying, setTokenBuying] = useState(false)
   
   // Guard against undefined user during initial load - AFTER all hooks
   if (isLoading) {
@@ -245,21 +251,86 @@ export function MerchantDashboard() {
     setAiMessage("")
   }
 
-  const handleTokenTopUp = async (amount: number) => {
+  const openTokenDialog = () => {
+    setTokenDialogError("")
+    setTokenPaymentMethod("wallet")
+    setTokenBuying(false)
+    if (typeof window !== "undefined" && user?.userId) {
+      const stored = localStorage.getItem(`wallet_balance_${user.userId}`)
+      setWalletBalance(stored ? parseFloat(stored) : 0)
+      const card = localStorage.getItem(`demo_card_balance_${user.userId}`)
+      setCardBalance(card !== null ? parseFloat(card) : 50000)
+      const bank = localStorage.getItem(`demo_bank_balance_${user.userId}`)
+      setBankBalance(bank !== null ? parseFloat(bank) : 100000)
+    }
+    setShowTokenDialog(true)
+  }
+
+  const handleTokenTopUp = async (amount: number, price: number) => {
     if (!user?.userId) return
+    setTokenDialogError("")
+    setTokenBuying(true)
+
+    const methodLabel = tokenPaymentMethod === "wallet" ? "Wallet" : tokenPaymentMethod === "card" ? "Card" : "Bank Transfer"
+
+    // Check selected payment source balance
+    let currentBalance = 0
+    if (tokenPaymentMethod === "wallet") {
+      currentBalance = typeof window !== "undefined"
+        ? parseFloat(localStorage.getItem(`wallet_balance_${user.userId}`) || "0")
+        : 0
+    } else if (tokenPaymentMethod === "card") {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(`demo_card_balance_${user.userId}`) : null
+      currentBalance = raw !== null ? parseFloat(raw) : 50000
+    } else {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(`demo_bank_balance_${user.userId}`) : null
+      currentBalance = raw !== null ? parseFloat(raw) : 100000
+    }
+
+    if (currentBalance < price) {
+      setTokenDialogError(`Insufficient ${methodLabel} balance. Need ${formatNaira(price)}, have ${formatNaira(currentBalance)}.`)
+      setTokenBuying(false)
+      return
+    }
+
     try {
       const response = await fetch('/api/merchant/tokens/top-up', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ merchantId: user.userId, amount }),
       })
       const result = await response.json()
       if (!result.success) {
-        alert(result.error || 'Failed to top up tokens')
+        setTokenDialogError(result.error || 'Failed to top up tokens')
+        setTokenBuying(false)
         return
       }
+
+      // Deduct from the chosen payment source
+      const newBalance = currentBalance - price
+      if (tokenPaymentMethod === "wallet") {
+        localStorage.setItem(`wallet_balance_${user.userId}`, newBalance.toString())
+        setWalletBalance(newBalance)
+        // Record wallet transaction
+        const txKey = `wallet_balance_${user.userId}_transactions`
+        const txRaw = localStorage.getItem(txKey)
+        const transactions = txRaw ? JSON.parse(txRaw) : []
+        transactions.unshift({
+          id: crypto.randomUUID(),
+          type: "debit",
+          amount: price,
+          description: `Bought ${amount} tokens`,
+          date: new Date().toISOString(),
+        })
+        localStorage.setItem(txKey, JSON.stringify(transactions))
+      } else if (tokenPaymentMethod === "card") {
+        localStorage.setItem(`demo_card_balance_${user.userId}`, newBalance.toString())
+        setCardBalance(newBalance)
+      } else {
+        localStorage.setItem(`demo_bank_balance_${user.userId}`, newBalance.toString())
+        setBankBalance(newBalance)
+      }
+
       setTokenBalance(Number(result.balance || 0))
       setStats((prev) => {
         if (!Array.isArray(prev) || prev.length < 3) return prev
@@ -267,10 +338,11 @@ export function MerchantDashboard() {
         next[2] = { ...next[2], value: String(result.balance || 0) }
         return next
       })
-      alert(`Token purchase successful: ${amount} tokens added.`)
+      setTokenBuying(false)
       setShowTokenDialog(false)
     } catch {
-      alert('Failed to top up tokens')
+      setTokenDialogError('Payment failed. Please try again.')
+      setTokenBuying(false)
     }
   }
 
@@ -324,43 +396,90 @@ export function MerchantDashboard() {
     {showTokenDialog && (
       <div className="fixed inset-0 z-[60] bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm shadow-xl">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-chart-4/10 flex items-center justify-center mb-4">
-              <Coins className="w-8 h-8 text-chart-4" />
+          <div className="text-center mb-5">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-chart-4/10 flex items-center justify-center mb-3">
+              <Coins className="w-7 h-7 text-chart-4" />
             </div>
-            <h2 className="text-xl font-bold text-foreground mb-2">Buy Tokens</h2>
+            <h2 className="text-xl font-bold text-foreground mb-1">Buy Tokens</h2>
             <p className="text-sm text-muted-foreground">Boost your store visibility</p>
           </div>
-          
-          <div className="space-y-3 mb-6">
+
+          {/* Payment method selector */}
+          <div className="mb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-2">Pay with</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { id: "wallet" as const, label: "Wallet", balance: walletBalance },
+                { id: "card" as const, label: "Card", balance: cardBalance },
+                { id: "bank" as const, label: "Bank", balance: bankBalance },
+              ] as const).map((method) => (
+                <button
+                  key={method.id}
+                  onClick={() => { setTokenPaymentMethod(method.id); setTokenDialogError("") }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-medium transition-colors ${
+                    tokenPaymentMethod === method.id
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-secondary/40 text-muted-foreground hover:border-primary/40"
+                  }`}
+                >
+                  <span>{method.label}</span>
+                  <span className={`text-[10px] font-semibold ${
+                    tokenPaymentMethod === method.id ? "text-primary" : "text-foreground"
+                  }`}>{formatNaira(method.balance)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {tokenDialogError && (
+            <p className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2 mb-4 text-center">
+              {tokenDialogError}
+            </p>
+          )}
+
+          <div className="space-y-2 mb-5">
             {[
               { tokens: 100, price: 1000 },
               { tokens: 500, price: 4500 },
               { tokens: 1000, price: 8000 },
-            ].map((pack) => (
-              <button
-                key={pack.tokens}
-                onClick={() => {
-                  handleTokenTopUp(pack.tokens)
-                }}
-                className="w-full flex items-center justify-between p-4 bg-secondary rounded-xl hover:bg-secondary/80 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Coins className="w-5 h-5 text-chart-4" />
-                  <span className="font-semibold text-foreground">{pack.tokens} Tokens</span>
-                </div>
-                <span className="text-primary font-bold">{formatNaira(pack.price)}</span>
-              </button>
-            ))}
+            ].map((pack) => {
+              const selectedBalance = tokenPaymentMethod === "wallet" ? walletBalance : tokenPaymentMethod === "card" ? cardBalance : bankBalance
+              const canAfford = selectedBalance >= pack.price
+              return (
+                <button
+                  key={pack.tokens}
+                  onClick={() => handleTokenTopUp(pack.tokens, pack.price)}
+                  disabled={tokenBuying}
+                  className={`w-full flex items-center justify-between p-4 rounded-xl transition-colors ${
+                    tokenBuying
+                      ? 'bg-muted opacity-60 cursor-not-allowed'
+                      : canAfford
+                        ? 'bg-secondary hover:bg-secondary/80 cursor-pointer'
+                        : 'bg-secondary/50 cursor-pointer'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Coins className="w-5 h-5 text-chart-4" />
+                    <div className="text-left">
+                      <span className="font-semibold text-foreground text-sm">{pack.tokens} Tokens</span>
+                      {!canAfford && (
+                        <p className="text-[10px] text-destructive">Insufficient balance</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {tokenBuying && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" />}
+                    <span className={`font-bold text-sm ${canAfford ? 'text-primary' : 'text-muted-foreground'}`}>{formatNaira(pack.price)}</span>
+                  </div>
+                </button>
+              )
+            })}
           </div>
-          
-          <p className="text-xs text-center text-muted-foreground mb-4">
-            Tokens can be used to boost product visibility and unlock premium features.
-          </p>
-          
+
           <button
-            onClick={() => setShowTokenDialog(false)}
-            className="w-full py-3 bg-muted text-foreground rounded-xl font-medium"
+            onClick={() => { setShowTokenDialog(false); setTokenDialogError(""); setTokenBuying(false) }}
+            disabled={tokenBuying}
+            className="w-full py-3 bg-muted text-foreground rounded-xl font-medium disabled:opacity-60"
           >
             Close
           </button>
@@ -586,7 +705,7 @@ export function MerchantDashboard() {
                 </div>
               </div>
               <button 
-                onClick={() => setShowTokenDialog(true)}
+                onClick={openTokenDialog}
                 className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-xl shadow-sm shadow-primary/20"
               >
                 Buy Tokens
