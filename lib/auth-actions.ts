@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import bcrypt from 'bcrypt'
 
+const INITIAL_MERCHANT_TOKENS = 100
+
 function hashPassword(password: string): string {
   return bcrypt.hashSync(password, 10)
 }
@@ -29,8 +31,8 @@ export async function signup(email: string, password: string, name: string, phon
 
     // Create user
     const userData = role === 'merchant'
-      ? { email, password_hash: passwordHash, business_name: name, phone, role }
-      : { email, password_hash: passwordHash, name, phone, role }
+      ? { email, password_hash: passwordHash, business_name: name, phone, role, token_balance: INITIAL_MERCHANT_TOKENS }
+      : { email, password_hash: passwordHash, name, phone, role, token_balance: 0 }
 
     const { data, error } = await supabase
       .from('auth_users')
@@ -84,6 +86,7 @@ export async function signupEnhanced(params: {
           role,
           smedan_id: smedanId || null,
           cac_id: cacId || null,
+          token_balance: INITIAL_MERCHANT_TOKENS,
         }
       : {
           email,
@@ -91,6 +94,7 @@ export async function signupEnhanced(params: {
           name,
           phone,
           role,
+          token_balance: 0,
         }
 
     let { data, error } = await supabase
@@ -166,6 +170,7 @@ export async function loginWithGoogle(params: {
           role,
           password_hash: '',
           google_id: googleId,
+          token_balance: INITIAL_MERCHANT_TOKENS,
         }
       : {
           email,
@@ -174,6 +179,7 @@ export async function loginWithGoogle(params: {
           role,
           password_hash: '',
           google_id: googleId,
+          token_balance: 0,
         }
 
     let { data, error } = await supabase

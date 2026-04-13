@@ -75,6 +75,7 @@ export function MerchantDashboard() {
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showTokenDialog, setShowTokenDialog] = useState(false)
+  const [tokenBalance, setTokenBalance] = useState(0)
   
   // Guard against undefined user during initial load - AFTER all hooks
   if (isLoading) {
@@ -156,11 +157,23 @@ export function MerchantDashboard() {
   const loadStats = async () => {
     setLoadingStats(true)
     try {
+      let nextTokenBalance = 0
+      if (user?.userId) {
+        const tokenResponse = await fetch(`/api/merchant/tokens?merchantId=${encodeURIComponent(user.userId)}`, {
+          cache: 'no-store',
+        })
+        const tokenResult = await tokenResponse.json()
+        if (tokenResult.success) {
+          nextTokenBalance = Number(tokenResult.balance || 0)
+          setTokenBalance(nextTokenBalance)
+        }
+      }
+
       // Set default stats since getMerchantStats doesn't take parameters
       const statsData = [
         { label: "Total Sales", value: formatNaira(0), change: "+12%", trend: "up", icon: DollarSign },
         { label: "Active Orders", value: "0", change: "+2", trend: "up", icon: ShoppingBag },
-        { label: "Token Balance", value: "0", change: "0", trend: "up", icon: Coins },
+        { label: "Token Balance", value: String(nextTokenBalance), change: "0", trend: "up", icon: Coins },
         { label: "Escrow Balance", value: formatNaira(0), change: "0", trend: "up", icon: Clock },
       ]
       setStats(statsData)
@@ -232,6 +245,35 @@ export function MerchantDashboard() {
     setAiMessage("")
   }
 
+  const handleTokenTopUp = async (amount: number) => {
+    if (!user?.userId) return
+    try {
+      const response = await fetch('/api/merchant/tokens/top-up', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ merchantId: user.userId, amount }),
+      })
+      const result = await response.json()
+      if (!result.success) {
+        alert(result.error || 'Failed to top up tokens')
+        return
+      }
+      setTokenBalance(Number(result.balance || 0))
+      setStats((prev) => {
+        if (!Array.isArray(prev) || prev.length < 3) return prev
+        const next = [...prev]
+        next[2] = { ...next[2], value: String(result.balance || 0) }
+        return next
+      })
+      alert(`Token purchase successful: ${amount} tokens added.`)
+      setShowTokenDialog(false)
+    } catch {
+      alert('Failed to top up tokens')
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "pending": return <Clock className="w-3.5 h-3.5" />
@@ -299,8 +341,7 @@ export function MerchantDashboard() {
               <button
                 key={pack.tokens}
                 onClick={() => {
-                  alert(`Token purchase request queued: ${pack.tokens} tokens for ${formatNaira(pack.price)}.`)
-                  setShowTokenDialog(false)
+                  handleTokenTopUp(pack.tokens)
                 }}
                 className="w-full flex items-center justify-between p-4 bg-secondary rounded-xl hover:bg-secondary/80 transition-colors"
               >
@@ -541,7 +582,7 @@ export function MerchantDashboard() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Token Balance</p>
-                  <p className="text-xl font-bold text-foreground">{stats[2]?.value || "0"}</p>
+                  <p className="text-xl font-bold text-foreground">{tokenBalance}</p>
                 </div>
               </div>
               <button 

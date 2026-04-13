@@ -728,8 +728,28 @@ export function BuyerDashboard() {
               {displayMerchants.map((vendor) => (
                 <button
                   key={vendor.id}
-                  onClick={() => {
+                  onClick={async () => {
                     if (guardSuspendedAction()) return
+
+                    try {
+                      const response = await fetch('/api/merchant/tokens/charge-view', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ merchantId: String(vendor.id) }),
+                      })
+
+                      const result = await response.json()
+                      if (!result.success) {
+                        setPolicyNotice(result.error || 'This merchant has exhausted tokens and is temporarily unavailable.')
+                        return
+                      }
+                    } catch {
+                      setPolicyNotice('Unable to open vendor right now. Please try again.')
+                      return
+                    }
+
                     setSelectedVendor(vendor)
                   }}
                   className="flex items-center gap-4 p-4 bg-card border border-border rounded-2xl shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left"

@@ -100,6 +100,23 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     }
 
     setIsSubmitting(true)
+    const merchantIdsInCart = Array.from(new Set(items.map((item) => String(item.merchantId || '').trim()).filter(Boolean)))
+
+    const tokenChargeResponse = await fetch('/api/merchant/tokens/charge-order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ merchantIds: merchantIdsInCart }),
+    })
+    const tokenChargeResult = await tokenChargeResponse.json()
+
+    if (!tokenChargeResult.success && Array.isArray(tokenChargeResult.failed) && tokenChargeResult.failed.length > 0) {
+      const firstFailed = tokenChargeResult.failed[0]
+      setIsSubmitting(false)
+      setError(`This merchant cannot receive orders right now (${firstFailed.merchantId}) because token balance is exhausted.`)
+      return
+    }
 
     if (isWalletPayment) {
       const createdOrders = createDemoOrdersFromCheckout({
@@ -111,6 +128,15 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       })
 
       if (createdOrders.length === 0) {
+        await Promise.all(
+          merchantIdsInCart.map((merchantId) =>
+            fetch('/api/merchant/tokens/top-up', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ merchantId, amount: tokenChargeResult.tokenCostPerMerchant || 0 }),
+            }).catch(() => null)
+          )
+        )
         setIsSubmitting(false)
         setError('Could not create order from cart items')
         return
@@ -164,6 +190,15 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         onSuccess(orderId)
       }, isWalletPayment ? 700 : 0)
     } else {
+      await Promise.all(
+        merchantIdsInCart.map((merchantId) =>
+          fetch('/api/merchant/tokens/top-up', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ merchantId, amount: tokenChargeResult.tokenCostPerMerchant || 0 }),
+          }).catch(() => null)
+        )
+      )
       setError(result.error || 'Failed to place order')
     }
   }
