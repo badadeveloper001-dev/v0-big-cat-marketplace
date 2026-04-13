@@ -100,15 +100,54 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   }, [user?.userId])
 
   const loadProducts = async () => {
+    const merchantId = String(vendor?.id || '').trim()
+    if (!merchantId) {
+      setProducts([])
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
-      const response = await fetch(`/api/products/merchant?merchantId=${vendor.id}`)
-      const result = await response.json()
-      if (result.success && result.data) {
-        setProducts(result.data)
+      const response = await fetch(`/api/products/merchant?merchantId=${encodeURIComponent(merchantId)}`, {
+        cache: 'no-store',
+      })
+
+      if (!response.ok) {
+        throw new Error(`Merchant products endpoint returned ${response.status}`)
       }
+
+      const result = await response.json()
+      if (result.success && Array.isArray(result.data)) {
+        setProducts(result.data)
+        return
+      }
+
+      throw new Error(result.error || 'Merchant products endpoint failed')
     } catch (error) {
-      console.error("Error loading products:", error)
+      console.error("Error loading products from merchant endpoint:", error)
+
+      // Fallback path: fetch marketplace products and filter by merchant_id.
+      try {
+        const fallbackResponse = await fetch('/api/products', { cache: 'no-store' })
+        if (!fallbackResponse.ok) throw new Error(`Fallback products endpoint returned ${fallbackResponse.status}`)
+
+        const fallbackResult = await fallbackResponse.json()
+        if (fallbackResult.success && Array.isArray(fallbackResult.data)) {
+          const filtered = fallbackResult.data.filter((product: any) => String(product.merchant_id) === merchantId)
+          setProducts(filtered)
+          if (filtered.length === 0) {
+            setPolicyNotice('No products found for this vendor yet.')
+          }
+        } else {
+          setProducts([])
+          setPolicyNotice('Could not load vendor products right now. Please try again.')
+        }
+      } catch (fallbackError) {
+        console.error('Fallback product load failed:', fallbackError)
+        setProducts([])
+        setPolicyNotice('Could not load vendor products right now. Please try again.')
+      }
     } finally {
       setLoading(false)
     }

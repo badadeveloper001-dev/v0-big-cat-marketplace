@@ -1,6 +1,18 @@
 "use client"
 
 // Force rebuild
+
+declare global {
+  interface Window {
+    voiceflow?: {
+      chat?: {
+        load?: (config: Record<string, unknown>) => void
+      }
+    }
+    __voiceflowMerchantLoaded?: boolean
+  }
+}
+
 import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-client"
 import { MerchantProducts } from "@/components/merchant-products"
@@ -48,6 +60,7 @@ export function MerchantDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
   const [activeTab, setActiveTab] = useState("home")
   const [aiMessage, setAiMessage] = useState("")
+  const [voiceflowMerchantReady, setVoiceflowMerchantReady] = useState(false)
   const [currentInsight, setCurrentInsight] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -89,6 +102,56 @@ export function MerchantDashboard() {
       loadOrders()
     }
   }, [user])
+
+  // Suppress Voiceflow inline prop warning
+  useEffect(() => {
+    const pattern = "Received `true` for a non-boolean attribute `inline`"
+    const originalError = console.error
+    const originalWarn = console.warn
+    const shouldSuppress = (args: unknown[]) =>
+      args.some((arg) => typeof arg === "string" && arg.includes(pattern))
+    console.error = (...args: any[]) => { if (shouldSuppress(args)) return; originalError(...args) }
+    console.warn = (...args: any[]) => { if (shouldSuppress(args)) return; originalWarn(...args) }
+    return () => { console.error = originalError; console.warn = originalWarn }
+  }, [])
+
+  // Load Voiceflow script
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (window.__voiceflowMerchantLoaded) {
+      setVoiceflowMerchantReady(Boolean(window.voiceflow?.chat?.load))
+      return
+    }
+    const existingScript = document.getElementById("voiceflow-merchant-script")
+    if (existingScript) {
+      setVoiceflowMerchantReady(Boolean(window.voiceflow?.chat?.load))
+      return
+    }
+    const script = document.createElement("script")
+    script.id = "voiceflow-merchant-script"
+    script.src = "https://cdn.voiceflow.com/widget-next/bundle.mjs"
+    script.type = "text/javascript"
+    script.onload = () => {
+      window.__voiceflowMerchantLoaded = true
+      setVoiceflowMerchantReady(true)
+    }
+    document.body.appendChild(script)
+  }, [])
+
+  // Mount Voiceflow widget when AI tab is active
+  useEffect(() => {
+    if (activeTab !== "ai" || !voiceflowMerchantReady) return
+    const target = document.getElementById("merchant-ai-embed-target")
+    if (!target) return
+    target.innerHTML = ""
+    window.voiceflow?.chat?.load?.({
+      verify: { projectID: "69dd08062ba6b506cadb4f4e" },
+      url: "https://general-runtime.voiceflow.com",
+      versionID: "production",
+      voice: { url: "https://runtime-api.voiceflow.com" },
+      render: { mode: "embedded", target },
+    })
+  }, [activeTab, voiceflowMerchantReady])
 
   const loadStats = async () => {
     setLoadingStats(true)
@@ -146,7 +209,7 @@ export function MerchantDashboard() {
     { label: "Add Product", icon: Plus, primary: true, action: () => setActiveTab("products") },
     { label: "View Orders", icon: ShoppingBag, primary: false, action: () => setActiveTab("orders") },
     { label: "Analytics", icon: BarChart3, primary: false, action: () => setActiveTab("analytics") },
-    { label: "AI BizPilot", icon: Sparkles, primary: false, highlight: true, action: () => setCurrentInsight((prev) => (prev + 1) % aiInsights.length) },
+    { label: "AI BizPilot", icon: Sparkles, primary: false, highlight: true, action: () => setActiveTab("ai") },
   ]
 
   const aiInsights = [
@@ -340,6 +403,19 @@ export function MerchantDashboard() {
             Messages
           </div>
         </button>
+        <button
+          onClick={() => setActiveTab("ai")}
+          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "ai"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            AI
+          </div>
+        </button>
       </div>
 
       {/* Main Content */}
@@ -412,15 +488,21 @@ export function MerchantDashboard() {
 
         {/* AI BizPilot Section */}
         <section className="px-4 mb-6">
-          <div className="bg-gradient-to-br from-primary/5 via-card to-chart-4/5 border border-primary/20 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-primary">
-                <Sparkles className="w-4 h-4 text-primary-foreground" />
+          <button
+            onClick={() => setActiveTab("ai")}
+            className="w-full text-left bg-gradient-to-br from-primary/5 via-card to-chart-4/5 border border-primary/20 rounded-2xl p-4 shadow-sm hover:border-primary/40 transition-colors"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-primary">
+                  <Sparkles className="w-4 h-4 text-primary-foreground" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground text-sm">AI BizPilot</h3>
+                  <p className="text-[10px] text-muted-foreground">Your intelligent business assistant</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-foreground text-sm">AI BizPilot</h3>
-                <p className="text-[10px] text-muted-foreground">Your intelligent business assistant</p>
-              </div>
+              <span className="text-xs text-primary font-medium">Open →</span>
             </div>
             
             {/* AI Insight Card */}
@@ -434,36 +516,16 @@ export function MerchantDashboard() {
               <div className="flex items-center justify-between mt-3">
                 <div className="flex gap-1">
                   {aiInsights.map((_, i) => (
-                    <button
+                    <span
                       key={i}
-                      onClick={() => setCurrentInsight(i)}
-                      className={`w-1.5 h-1.5 rounded-full transition-colors ${i === currentInsight ? "bg-primary" : "bg-border"}`}
+                      className={`w-1.5 h-1.5 rounded-full inline-block ${i === currentInsight ? "bg-primary" : "bg-border"}`}
                     />
                   ))}
                 </div>
-                <span className="text-[10px] text-muted-foreground">Insight {currentInsight + 1} of {aiInsights.length}</span>
+                <span className="text-[10px] text-muted-foreground">Tap to chat with BizPilot</span>
               </div>
             </div>
-
-            {/* AI Chat Input */}
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Ask BizPilot anything..."
-                value={aiMessage}
-                onChange={(e) => setAiMessage(e.target.value)}
-                className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-              />
-              <button
-                onClick={handleAiSend}
-                disabled={!aiMessage.trim()}
-                className="flex items-center justify-center w-10 h-10 bg-primary text-primary-foreground rounded-xl shadow-sm shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label="Send AI prompt"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          </button>
         </section>
 
 
@@ -600,6 +662,29 @@ export function MerchantDashboard() {
           <MerchantOrders onBack={() => setActiveTab("home")} />
         ) : activeTab === "messages" ? (
           <ChatInterface />
+        ) : activeTab === "ai" ? (
+          <div className="flex flex-col h-full">
+            <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+              <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-primary">
+                <Sparkles className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-foreground">AI BizPilot</h2>
+                <p className="text-[11px] text-muted-foreground">Your intelligent business assistant</p>
+              </div>
+            </div>
+            {!voiceflowMerchantReady ? (
+              <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Loading AI assistant…</span>
+              </div>
+            ) : null}
+            <div
+              id="merchant-ai-embed-target"
+              className="flex-1 w-full overflow-hidden"
+              style={{ minHeight: "calc(100vh - 180px)" }}
+            />
+          </div>
         ) : activeTab === "analytics" ? (
           <div className="px-4 py-6">
             <div className="text-center mb-6">
@@ -719,6 +804,7 @@ export function MerchantDashboard() {
                   { id: "products", icon: Package, label: "Products", action: () => setActiveTab("products") },
                   { id: "orders", icon: ShoppingBag, label: "Orders", action: () => setActiveTab("orders") },
                   { id: "messages", icon: MessageSquare, label: "Messages", action: () => setActiveTab("messages") },
+                  { id: "ai", icon: Sparkles, label: "AI", action: () => setActiveTab("ai") },
                   { id: "profile", icon: User, label: "Profile", action: () => setShowProfile(true) },
                   { id: "settings", icon: Settings, label: "Settings", action: () => setActiveTab("settings") },
                 ].map((item) => (

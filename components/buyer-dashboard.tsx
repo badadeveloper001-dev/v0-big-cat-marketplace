@@ -134,6 +134,32 @@ export function BuyerDashboard() {
   }, [user])
 
   useEffect(() => {
+    // Voiceflow currently triggers a known React warning for `inline`.
+    // Filter only that message so genuine warnings still surface.
+    const pattern = "Received `true` for a non-boolean attribute `inline`"
+    const originalError = console.error
+    const originalWarn = console.warn
+
+    const shouldSuppress = (args: unknown[]) =>
+      args.some((arg) => typeof arg === "string" && arg.includes(pattern))
+
+    console.error = (...args: any[]) => {
+      if (shouldSuppress(args)) return
+      originalError(...args)
+    }
+
+    console.warn = (...args: any[]) => {
+      if (shouldSuppress(args)) return
+      originalWarn(...args)
+    }
+
+    return () => {
+      console.error = originalError
+      console.warn = originalWarn
+    }
+  }, [])
+
+  useEffect(() => {
     if (typeof window === "undefined") return
 
     if (window.__voiceflowLoaded) {
