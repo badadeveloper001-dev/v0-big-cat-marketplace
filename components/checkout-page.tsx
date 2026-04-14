@@ -11,6 +11,7 @@ import { PaymentMethodSelector, type PaymentMethod } from "@/components/payment-
 import { getUserStrikeCount, isUserSuspended, resetSafetyState } from "@/lib/trust-safety"
 import { createEscrowRecord } from "@/lib/escrow"
 import { createDemoOrdersFromCheckout } from "@/lib/demo-orders"
+import { sendOrderToLogistics } from "@/lib/logistics"
 
 interface CheckoutPageProps {
   onBack: () => void
@@ -145,6 +146,18 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       const firstOrderId = String(createdOrders[0].id)
       createEscrowRecord(firstOrderId, grandTotal, deliveryFee)
 
+      // Send to logistics system (fire-and-forget)
+      sendOrderToLogistics({
+        order_id: firstOrderId,
+        customer_name: user?.name || user?.email || "Customer",
+        customer_phone: user?.phone || "",
+        delivery_address: deliveryAddress.trim(),
+        items: items.map((item) => ({ product_name: item.name, quantity: item.quantity })),
+        total_amount: grandTotal,
+        delivery_fee: deliveryFee,
+        status: "pending",
+      })
+
       const updatedBalance = Math.max(0, currentWalletBalance - grandTotal)
       localStorage.setItem(getWalletStorageKey(), updatedBalance.toString())
       setWalletBalance(updatedBalance)
@@ -178,6 +191,18 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     if (result.success && result.data) {
       const orderId = String(result.data.orderId || result.data.id || `order_${Date.now()}`)
       createEscrowRecord(orderId, grandTotal, deliveryFee)
+
+      // Send to logistics system (fire-and-forget)
+      sendOrderToLogistics({
+        order_id: orderId,
+        customer_name: user?.name || user?.email || "Customer",
+        customer_phone: user?.phone || "",
+        delivery_address: deliveryAddress.trim(),
+        items: items.map((item) => ({ product_name: item.name, quantity: item.quantity })),
+        total_amount: grandTotal,
+        delivery_fee: deliveryFee,
+        status: "pending",
+      })
 
       if (isWalletPayment) {
         const updatedBalance = Math.max(0, currentWalletBalance - grandTotal)
