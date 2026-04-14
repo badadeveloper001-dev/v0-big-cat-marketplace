@@ -1,5 +1,5 @@
-import { MarketplaceApp } from "@/components/marketplace-app"
+import { LandingPage } from "@/components/landing-page"
 
 export default function Home() {
-  return <MarketplaceApp />
+  return <LandingPage />
 }

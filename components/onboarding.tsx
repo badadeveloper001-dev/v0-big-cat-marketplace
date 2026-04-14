@@ -37,7 +37,6 @@ export function Onboarding({ onGuestBrowse }: { onGuestBrowse?: () => void } = {
   const [agentCode, setAgentCode] = useState("")
   const [agentError, setAgentError] = useState("")
   const [agentLoading, setAgentLoading] = useState(false)
-  const [logoSrc, setLogoSrc] = useState("/bigcat-logo.png")
 
   const handleAgentLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -102,25 +101,37 @@ export function Onboarding({ onGuestBrowse }: { onGuestBrowse?: () => void } = {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-sans">
       <div className="w-full max-w-md">
-        {/* Logo */}
+        {/* Logos */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-28 h-28 rounded-3xl bg-[#DDB85A] mb-4 shadow-md">
+          {/* Primary: SMEDAN — dark background so white logo text is visible */}
+          <div className="inline-flex items-center justify-center bg-gray-900 rounded-2xl px-6 py-3 mb-4 shadow-md">
             <Image
-              src={logoSrc}
-              alt="BigCat logo"
-              width={112}
-              height={112}
-              className="w-24 h-24 object-contain"
-              onError={() => {
-                if (logoSrc === "/bigcat-logo.png") {
-                  setLogoSrc("/bigcat-logo.jpg")
-                  return
-                }
+              src="/SMEDAN_ido8Y4OzuL_0.png"
+              alt="SMEDAN logo"
+              width={160}
+              height={70}
+              className="object-contain"
+              priority
+            />
+          </div>
 
-                if (logoSrc !== "/placeholder-logo.png") {
-                  setLogoSrc("/placeholder-logo.png")
-                }
-              }}
+          {/* Secondary partners */}
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Powered By</p>
+          <div className="flex items-center justify-center gap-6 mb-6">
+            <Image
+              src="/palmpay-seeklogo.png"
+              alt="PalmPay logo"
+              width={90}
+              height={70}
+              className="object-contain mix-blend-multiply dark:mix-blend-screen"
+              priority
+            />
+            <Image
+              src="/image.png"
+              alt="BigCat logo"
+              width={80}
+              height={70}
+              className="object-contain mix-blend-multiply dark:mix-blend-screen"
               priority
             />
           </div>
