@@ -109,10 +109,11 @@ export function MerchantAuth({
             setRole("merchant")
           }, 1500)
         } else {
-          // Establish the Supabase session in the browser
-          if (result.data.session) {
-            await supabase.auth.setSession(result.data.session)
-          }
+          // Establish browser session directly — more reliable than setSession()
+          await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password,
+          })
           setUser(normalizeMerchantUser(user))
           setRole("merchant")
         }
