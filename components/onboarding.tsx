@@ -69,7 +69,7 @@ export function Onboarding({ onGuestBrowse }: { onGuestBrowse?: () => void } = {
     }
   }
 
-  // Show buyer auth if selected
+  // Show buyer auth if selected (only when no guest browse available)
   if (selectedAuth === "buyer") {
     return <BuyerAuth onBack={() => setSelectedAuth(null)} />
   }
@@ -148,7 +148,7 @@ export function Onboarding({ onGuestBrowse }: { onGuestBrowse?: () => void } = {
           {roles.map((role) => (
             <button
               key={role.id}
-              onClick={() => setSelectedAuth(role.id)}
+              onClick={() => role.id === "buyer" && onGuestBrowse ? onGuestBrowse() : setSelectedAuth(role.id)}
               className="group flex items-center gap-4 p-4 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-sm transition-all duration-200 shadow-sm"
             >
               <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-secondary text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
@@ -212,16 +212,6 @@ export function Onboarding({ onGuestBrowse }: { onGuestBrowse?: () => void } = {
               {agentLoading ? "Verifying..." : "Login as Agent"}
             </button>
           </form>
-        )}
-
-        {/* Guest Browse */}
-        {onGuestBrowse && (
-          <button
-            onClick={onGuestBrowse}
-            className="w-full mt-5 text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
-          >
-            Browse without signing in →
-          </button>
         )}
 
         {/* Footer */}
