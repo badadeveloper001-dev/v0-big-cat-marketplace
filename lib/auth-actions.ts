@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAnonClient } from '@supabase/supabase-js'
+import bcrypt from 'bcrypt'
 
 const INITIAL_MERCHANT_TOKENS = 100
 
@@ -219,35 +220,76 @@ export async function loginWithGoogle(params: {
 
 export async function login(email: string, password: string) {
   try {
-    // Use anon client — signInWithPassword does not require service role
-    const supabase = getAnonClient()
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const anonClient = getAnonClient()
 
-    if (authError || !authData.user) {
+    // --- Fast path: user already has a Supabase Auth account ---
+    const { data: authData, error: authError } = await anonClient.auth.signInWithPassword({ email, password })
+
+    if (!authError && authData.user) {
+      const admin = createClient()
+      const { data: profile, error: profileError } = await admin
+        .from('auth_users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single()
+
+      if (profileError || !profile) {
+        return { success: false, error: 'User profile not found.' }
+      }
+
+      const { password_hash, ...userData } = profile
+      return { success: true, data: { user: userData, session: authData.session } }
+    }
+
+    // --- Legacy path: user was created before Supabase Auth migration ---
+    // Look up by email and verify their old bcrypt hash
+    const admin = createClient()
+    const { data: legacyUser, error: legacyError } = await admin
+      .from('auth_users')
+      .select('*')
+      .eq('email', email)
+      .single()
+
+    if (legacyError || !legacyUser) {
       return { success: false, error: 'Invalid email or password.' }
     }
 
-    // Fetch the profile row
-    const admin = createClient()
-    const { data: profile, error: profileError } = await admin
-      .from('auth_users')
-      .select('*')
-      .eq('id', authData.user.id)
-      .single()
-
-    if (profileError || !profile) {
-      return { success: false, error: 'User profile not found.' }
+    // No hash means they're a new Supabase Auth user but signInWithPassword failed → wrong password
+    if (!legacyUser.password_hash) {
+      return { success: false, error: 'Invalid email or password.' }
     }
 
-    const { password_hash, ...userData } = profile
-    return {
-      success: true,
-      data: {
-        user: userData,
-        // Include session so client can call supabase.auth.setSession()
-        session: authData.session,
-      },
+    const passwordMatches = await bcrypt.compare(password, legacyUser.password_hash)
+    if (!passwordMatches) {
+      return { success: false, error: 'Invalid email or password.' }
     }
+
+    // Migrate on the fly: create Supabase Auth account with the SAME UUID
+    // so all existing FK references (orders, products, etc.) remain valid
+    const { data: createData, error: createError } = await admin.auth.admin.createUser({
+      id: legacyUser.id, // preserve the existing UUID
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { role: legacyUser.role, name: legacyUser.name },
+    })
+
+    if (createError && !createError.message?.toLowerCase().includes('already')) {
+      console.error('Migration createUser error:', createError)
+      return { success: false, error: 'An unexpected error occurred. Please try again.' }
+    }
+
+    // Clear the bcrypt hash now that Supabase Auth owns the password
+    await admin.from('auth_users').update({ password_hash: '' }).eq('id', legacyUser.id)
+
+    // Sign in to obtain a real session
+    const { data: sessionData, error: sessionError } = await anonClient.auth.signInWithPassword({ email, password })
+    if (sessionError || !sessionData.user) {
+      return { success: false, error: 'An unexpected error occurred. Please try again.' }
+    }
+
+    const { password_hash, ...userData } = legacyUser
+    return { success: true, data: { user: userData, session: sessionData.session } }
   } catch (error) {
     console.error('Login error:', error)
     return { success: false, error: 'An unexpected error occurred. Please try again.' }
