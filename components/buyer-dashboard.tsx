@@ -2,6 +2,7 @@
 
 import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-client"
+import { BuyerAuth } from "@/components/buyer-auth"
 import { VendorPage } from "@/components/vendor-page"
 import { ChatInterface } from "@/components/chat-interface"
 import { ProductsMarketplace } from "@/components/products-marketplace"
@@ -65,7 +66,7 @@ const aiSuggestions = [
   "Compare prices for iPhone 15",
 ]
 
-export function BuyerDashboard() {
+export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () => void } = {}) {
   const { setRole, setUser, user, isLoading } = useRole()
   const [activeTab, setActiveTab] = useState("home")
   const [searchQuery, setSearchQuery] = useState("")
@@ -95,6 +96,8 @@ export function BuyerDashboard() {
   const [strikeCount, setStrikeCount] = useState(0)
   const [policyNotice, setPolicyNotice] = useState("")
   const [aiSearching, setAiSearching] = useState(false)
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false)
+  const [pendingCheckout, setPendingCheckout] = useState(false)
 
   const cleanupStaleVoiceflowUi = (target?: HTMLElement | null) => {
     if (typeof document === "undefined") return
@@ -107,25 +110,6 @@ export function BuyerDashboard() {
 
     const launchers = Array.from(document.querySelectorAll<HTMLElement>(".vfrc-launcher"))
     launchers.forEach((launcher) => launcher.remove())
-  }
-  
-  // Guard against undefined user during initial load - AFTER all hooks
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-6 h-6 text-primary animate-spin" />
-      </div>
-    )
-  }
-  
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground mb-2">No user session found</p>
-        </div>
-      </div>
-    )
   }
 
   useEffect(() => {
@@ -212,6 +196,25 @@ export function BuyerDashboard() {
     setIsSuspended(suspended)
     setStrikeCount(getUserStrikeCount(user?.userId))
   }, [user?.userId])
+
+  // After guest signs in with checkout pending, automatically proceed
+  useEffect(() => {
+    if (user && pendingCheckout) {
+      setPendingCheckout(false)
+      setShowAuthPrompt(false)
+      setShowCheckout(true)
+    }
+  }, [user, pendingCheckout])
+
+  // Show loading spinner while session restores
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+      </div>
+    )
+  }
+
 
   const guardSuspendedAction = () => {
     if (!isSuspended) return false
@@ -480,7 +483,23 @@ export function BuyerDashboard() {
         onCheckout={() => {
           if (guardSuspendedAction()) return
           setShowCart(false)
+          if (!user) {
+            setPendingCheckout(true)
+            setShowAuthPrompt(true)
+            return
+          }
           setShowCheckout(true)
+        }}
+      />
+    )
+  }
+
+  if (showAuthPrompt) {
+    return (
+      <BuyerAuth
+        onBack={() => {
+          setShowAuthPrompt(false)
+          setPendingCheckout(false)
         }}
       />
     )
@@ -504,7 +523,7 @@ export function BuyerDashboard() {
     return <BuyerOrders onBack={() => setShowOrders(false)} />
   }
 
-  const displayName = user?.name || "Customer"
+  const displayName = user?.name || (user ? "Customer" : "Guest")
   const displayMerchants = merchants.slice(0, 3)
 
   return (
@@ -543,14 +562,25 @@ export function BuyerDashboard() {
       {/* Compact Header */}
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
-          <button
-            onClick={handleLogout}
-            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Logout"
-            title="Logout"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
+          {user ? (
+            <button
+              onClick={handleLogout}
+              className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Logout"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowAuthPrompt(true)}
+              className="p-2 -ml-2 text-primary hover:text-primary/80 transition-colors text-xs font-semibold"
+              aria-label="Sign In"
+              title="Sign In"
+            >
+              Sign In
+            </button>
+          )}
           <div className="flex flex-col items-center">
             <span className="text-xs text-muted-foreground leading-none">Good morning</span>
             <span className="font-semibold text-foreground text-sm">{displayName}</span>
@@ -731,23 +761,25 @@ export function BuyerDashboard() {
                   onClick={async () => {
                     if (guardSuspendedAction()) return
 
-                    try {
-                      const response = await fetch('/api/merchant/tokens/charge-view', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ merchantId: String(vendor.id) }),
-                      })
+                    if (user) {
+                      try {
+                        const response = await fetch('/api/merchant/tokens/charge-view', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ merchantId: String(vendor.id) }),
+                        })
 
-                      const result = await response.json()
-                      if (!result.success) {
-                        setPolicyNotice(result.error || 'This merchant has exhausted tokens and is temporarily unavailable.')
+                        const result = await response.json()
+                        if (!result.success) {
+                          setPolicyNotice(result.error || 'This merchant has exhausted tokens and is temporarily unavailable.')
+                          return
+                        }
+                      } catch {
+                        setPolicyNotice('Unable to open vendor right now. Please try again.')
                         return
                       }
-                    } catch {
-                      setPolicyNotice('Unable to open vendor right now. Please try again.')
-                      return
                     }
 
                     setSelectedVendor(vendor)
@@ -848,6 +880,34 @@ export function BuyerDashboard() {
         {/* Profile Tab */}
         {activeTab === "profile" && (
           <div className="p-4 space-y-4">
+            {/* Guest sign-in prompt */}
+            {!user && (
+              <div className="bg-card border border-border rounded-2xl p-6 text-center">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <User className="w-8 h-8 text-primary" />
+                </div>
+                <h2 className="text-lg font-bold text-foreground mb-1">You're browsing as a guest</h2>
+                <p className="text-sm text-muted-foreground mb-4">Sign in or create an account to access your profile, orders, and more.</p>
+                <button
+                  onClick={() => setShowAuthPrompt(true)}
+                  className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold"
+                >
+                  Sign In / Sign Up
+                </button>
+                {onNeedsOnboarding && (
+                  <button
+                    onClick={onNeedsOnboarding}
+                    className="w-full mt-3 py-3 bg-secondary text-foreground rounded-xl font-medium text-sm"
+                  >
+                    Are you a merchant? Go to merchant login →
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Signed-in profile */}
+            {user && (
+              <>
             {/* Profile Header */}
             <div className="bg-card border border-border rounded-2xl p-6 text-center">
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -912,6 +972,8 @@ export function BuyerDashboard() {
             >
               Log Out
             </button>
+            </>
+            )}
           </div>
         )}
       </main>

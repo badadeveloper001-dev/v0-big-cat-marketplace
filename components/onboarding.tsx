@@ -27,7 +27,7 @@ const roles = [
   },
 ]
 
-export function Onboarding() {
+export function Onboarding({ onGuestBrowse }: { onGuestBrowse?: () => void } = {}) {
   const router = useRouter()
   const { setRole, setUser } = useRole()
   const [selectedAuth, setSelectedAuth] = useState<AuthType>(null)
@@ -203,8 +203,18 @@ export function Onboarding() {
           </form>
         )}
 
+        {/* Guest Browse */}
+        {onGuestBrowse && (
+          <button
+            onClick={onGuestBrowse}
+            className="w-full mt-5 text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
+          >
+            Browse without signing in →
+          </button>
+        )}
+
         {/* Footer */}
-        <p className="text-center text-xs text-muted-foreground mt-8">
+        <p className="text-center text-xs text-muted-foreground mt-6">
           By continuing, you agree to our Terms of Service and Privacy Policy
         </p>
       </div>

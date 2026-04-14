@@ -17,6 +17,7 @@ export function MarketplaceApp() {
   const [adminAuthenticated, setAdminAuthenticated] = useState(false)
   const [setupComplete, setSetupComplete] = useState(false)
   const [storeSettingsComplete, setStoreSettingsComplete] = useState(false)
+  const [guestBrowsing, setGuestBrowsing] = useState(false)
 
   const merchantSetupCompleted = Boolean(
     user?.merchantProfile?.setup_completed ?? (user as any)?.setup_completed
@@ -52,7 +53,10 @@ export function MarketplaceApp() {
 
   // Show onboarding if no role selected
   if (!role) {
-    return <Onboarding />
+    if (guestBrowsing) {
+      return <BuyerDashboard onNeedsOnboarding={() => setGuestBrowsing(false)} />
+    }
+    return <Onboarding onGuestBrowse={() => setGuestBrowsing(true)} />
   }
 
   // Handle merchant setup flow - only show if setup not completed
