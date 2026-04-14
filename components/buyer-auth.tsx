@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRole } from "@/lib/role-context"
+import { createClient } from "@/lib/supabase/client"
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Loader2, CheckCircle2, ShoppingBag } from "lucide-react"
 
 declare global {
@@ -65,7 +66,14 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
           return
         }
 
+        const supabase = createClient()
+
         if (isSignUp) {
+          // Auto-login after signup to establish the Supabase session
+          await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password,
+          })
           setSuccessMessage("Account created successfully! Redirecting...")
           setTimeout(() => {
             setUser({
@@ -78,6 +86,10 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
             setRole("buyer")
           }, 1500)
         } else {
+          // Establish the Supabase session in the browser
+          if (result.data.session) {
+            await supabase.auth.setSession(result.data.session)
+          }
           setUser({
             userId: user.id,
             email: user.email,

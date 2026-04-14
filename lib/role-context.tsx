@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 interface User {
   userId: string
@@ -28,17 +29,41 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    const supabase = createClient()
+
+    // Read localStorage immediately for a fast first render
     const stored = localStorage.getItem('userRole')
     const storedUser = localStorage.getItem('userData')
-
     if (stored) setRoleState(stored)
     if (storedUser) {
-      try {
-        setUserState(JSON.parse(storedUser))
-      } catch {}
+      try { setUserState(JSON.parse(storedUser)) } catch {}
     }
 
-    setIsLoading(false)
+    // Validate the stored session against Supabase Auth
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        // No valid session — clear stale localStorage data
+        localStorage.removeItem('userRole')
+        localStorage.removeItem('userData')
+        setRoleState(null)
+        setUserState(null)
+      }
+      setIsLoading(false)
+    })
+
+    // Sync logout events across tabs / token expiry
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        if (event === 'SIGNED_OUT') {
+          localStorage.removeItem('userRole')
+          localStorage.removeItem('userData')
+          setRoleState(null)
+          setUserState(null)
+        }
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const setRole = (newRole: string | null) => {
@@ -47,6 +72,8 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('userRole', newRole)
     } else {
       localStorage.removeItem('userRole')
+      // Sign out from Supabase Auth when clearing role
+      createClient().auth.signOut()
     }
   }
 

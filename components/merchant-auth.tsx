@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRole } from "@/lib/role-context"
+import { createClient } from "@/lib/supabase/client"
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Hash, Loader2, CheckCircle2, Store } from "lucide-react"
 
 declare global {
@@ -94,13 +95,24 @@ export function MerchantAuth({
           return
         }
 
+        const supabase = createClient()
+
         if (isSignUp) {
+          // Auto-login after signup to establish the Supabase session
+          await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password,
+          })
           setSuccessMessage("Account created successfully! Redirecting...")
           setTimeout(() => {
             setUser(normalizeMerchantUser(user))
             setRole("merchant")
           }, 1500)
         } else {
+          // Establish the Supabase session in the browser
+          if (result.data.session) {
+            await supabase.auth.setSession(result.data.session)
+          }
           setUser(normalizeMerchantUser(user))
           setRole("merchant")
         }
