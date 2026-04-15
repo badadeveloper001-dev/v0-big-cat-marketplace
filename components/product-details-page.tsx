@@ -3,16 +3,17 @@
 import { useState, useEffect } from 'react'
 import { formatNaira } from '@/lib/currency-utils'
 import { useCart } from '@/lib/cart-context'
-import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2, ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react'
+import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2, ChevronLeft, ChevronRight, ImageIcon, Store } from 'lucide-react'
 import { ProductReviews, StarRating } from './product-reviews'
 import Image from 'next/image'
 
 interface ProductDetailsPageProps {
   productId: string
   onBack?: () => void
+  onViewMerchant?: (merchant: any) => void
 }
 
-export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProps) {
+export function ProductDetailsPage({ productId, onBack, onViewMerchant }: ProductDetailsPageProps) {
   const [product, setProduct] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -190,13 +191,32 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
 
         {/* Merchant Info */}
         <div className="bg-card border border-border rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-foreground mb-3">Seller Information</h2>
-          <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-foreground mb-3">SME/Merchant Information</h2>
+          <button
+            type="button"
+            onClick={() => onViewMerchant?.({
+              id: String(product.merchant_id || ''),
+              name: merchant.business_name || merchant.name || 'Merchant',
+              category: merchant.business_category || product.category || 'General',
+              rating: product.average_rating || 4.5,
+              reviews: product.review_count || 0,
+              location: merchant.location || 'Nigeria',
+              badge: 'Verified',
+              badgeColor: 'bg-primary/15 text-primary',
+              bgColor: 'bg-blue-100',
+              initials: (merchant.business_name || merchant.name || 'M').substring(0, 2).toUpperCase(),
+              iconColor: 'text-blue-600',
+              description: merchant.business_description || 'Quality products and services',
+            })}
+            className="w-full flex items-center gap-3 text-left rounded-lg hover:bg-secondary/40 transition-colors p-1"
+          >
             <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-sm font-semibold text-primary">
-              {merchant.business_name?.charAt(0)}
+              {(merchant.business_name || merchant.name || 'M').charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-foreground">{merchant.business_name}</p>
+              <p className="font-medium text-foreground underline-offset-2 hover:underline">
+                {merchant.business_name || merchant.name || 'Merchant'}
+              </p>
               {merchant.location && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                   <MapPin className="w-3 h-3" />
@@ -204,7 +224,11 @@ export function ProductDetailsPage({ productId, onBack }: ProductDetailsPageProp
                 </div>
               )}
             </div>
-          </div>
+            <div className="flex items-center gap-1 text-xs text-primary font-medium flex-shrink-0">
+              <Store className="w-4 h-4" />
+              <span>View Store</span>
+            </div>
+          </button>
         </div>
 
         {/* Quantity Selector */}

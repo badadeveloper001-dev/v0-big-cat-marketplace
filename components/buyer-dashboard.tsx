@@ -437,7 +437,11 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     return (
       <ProductDetailsPage 
         productId={selectedProductId} 
-        onBack={() => setSelectedProductId(null)} 
+        onBack={() => setSelectedProductId(null)}
+        onViewMerchant={(merchant) => {
+          setSelectedProductId(null)
+          setSelectedVendor(merchant)
+        }}
       />
     )
   }
@@ -792,10 +796,10 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           />
         </section>
 
-        {/* Trusted Sellers */}
+        {/* SME/Merchants */}
         <section className="px-4 mb-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-foreground text-lg">Trusted Sellers</h2>
+            <h2 className="font-semibold text-foreground text-lg">SME/Merchants</h2>
             <button 
               onClick={() => setShowProducts(true)}
               className="text-sm text-primary font-medium flex items-center gap-0.5"
@@ -810,7 +814,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           ) : displayMerchants.length === 0 ? (
             <div className="p-8 text-center">
               <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No sellers yet</p>
+              <p className="text-sm text-muted-foreground">No SME/Merchants yet</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
