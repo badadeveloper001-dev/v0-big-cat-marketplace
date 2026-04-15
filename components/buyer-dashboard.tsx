@@ -38,6 +38,7 @@ import { useState, useEffect } from "react"
 import { formatNaira } from "@/lib/currency-utils"
 import { NotificationsPanel } from "./notifications-panel"
 import { ProductGrid } from "./product-card"
+import { BrandWordmark } from "./brand-wordmark"
 import { getUserStrikeCount, isUserSuspended, resetSafetyState } from "@/lib/trust-safety"
 
 declare global {
@@ -594,31 +595,31 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Compact Header */}
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between">
-          {user ? (
-            <button
-              onClick={handleLogout}
-              className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Logout"
-              title="Logout"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowAuthPrompt(true)}
-              className="p-2 -ml-2 text-primary hover:text-primary/80 transition-colors text-xs font-semibold"
-              aria-label="Sign In"
-              title="Sign In"
-            >
-              Sign In
-            </button>
-          )}
-          <div className="flex flex-col items-center">
-            <span className="text-xs text-muted-foreground leading-none">Good morning</span>
-            <span className="font-semibold text-foreground text-sm">{displayName}</span>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <BrandWordmark compact />
+            <p className="text-xs text-muted-foreground mt-1">Good morning, {displayName}</p>
           </div>
           <div className="flex items-center gap-1">
+            {user ? (
+              <button
+                onClick={handleLogout}
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Logout"
+                title="Logout"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowAuthPrompt(true)}
+                className="px-2 py-1 text-primary hover:text-primary/80 transition-colors text-xs font-semibold"
+                aria-label="Sign In"
+                title="Sign In"
+              >
+                Sign In
+              </button>
+            )}
             <button 
               onClick={() => setShowNotifications(true)}
               className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"

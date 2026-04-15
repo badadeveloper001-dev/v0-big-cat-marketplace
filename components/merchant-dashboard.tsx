@@ -23,6 +23,7 @@ import { SettingsPage } from "@/components/settings-page"
 import { PaymentMethodsPage } from "@/components/payment-methods-page"
 import { ChatInterface } from "@/components/chat-interface"
 import { formatNaira } from "@/lib/currency-utils"
+import { BrandWordmark } from "./brand-wordmark"
 import { ClipboardList } from "lucide-react"
 import {
   ArrowLeft,
@@ -489,23 +490,27 @@ export function MerchantDashboard() {
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={handleLogout}
-            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Logout"
-            title="Logout"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
-          <h1 className="font-semibold text-foreground">Merchant Dashboard</h1>
-          <button 
-            onClick={() => setShowNotifications(true)}
-            className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
-          </button>
+        <div className="flex items-center justify-between gap-3">
+          <BrandWordmark compact />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleLogout}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Logout"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setShowNotifications(true)}
+              className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
+            </button>
+          </div>
         </div>
       </header>
 

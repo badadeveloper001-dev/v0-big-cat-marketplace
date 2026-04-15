@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRole } from "@/lib/role-context"
 import { createClient } from "@/lib/supabase/client"
+import { BrandWordmark } from "./brand-wordmark"
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Loader2, CheckCircle2, ShoppingBag } from "lucide-react"
 
 declare global {
@@ -211,12 +212,15 @@ export function BuyerAuth({ onBack, onSuccess }: { onBack: () => void; onSuccess
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30 flex flex-col font-sans">
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border px-4 py-3">
-        <button
-          onClick={onBack}
-          className="p-2 -ml-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all rounded-lg"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="p-2 -ml-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all rounded-lg"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <BrandWordmark compact />
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-4">

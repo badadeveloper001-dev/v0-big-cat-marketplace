@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import { formatNaira } from "@/lib/currency-utils"
+import { BrandWordmark } from "./brand-wordmark"
 import { useCart } from "@/lib/cart-context"
 import { isUserSuspended } from "@/lib/trust-safety"
 
@@ -246,15 +247,17 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={onBack}
-            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <span className="font-semibold text-foreground">Vendor Profile</span>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={onBack}
+              className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <BrandWordmark compact />
+          </div>
           <div className="flex items-center gap-1">
             <button
               onClick={handleShareVendor}
