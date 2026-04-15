@@ -594,9 +594,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     )}
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Compact Header */}
-      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3 relative">
-        <PoweredByMarquee />
-        <div className="flex items-center justify-between gap-3 relative z-10">
+      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <BrandWordmark compact />
             <p className="text-xs text-muted-foreground mt-1">Good morning, {displayName}</p>
@@ -661,6 +660,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             </button>
           </div>
         </div>
+        <PoweredByMarquee />
       </header>
 
       {/* Main Content */}

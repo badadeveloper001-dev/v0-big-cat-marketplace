@@ -489,9 +489,8 @@ export function MerchantDashboard() {
     )}
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3 relative">
-        <PoweredByMarquee />
-        <div className="flex items-center justify-between gap-3 relative z-10">
+      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
           <BrandWordmark compact />
           <div className="flex items-center gap-1">
             <button
@@ -513,6 +512,7 @@ export function MerchantDashboard() {
             </button>
           </div>
         </div>
+        <PoweredByMarquee />
       </header>
 
       {/* Tab Navigation */}

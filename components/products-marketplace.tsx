@@ -99,9 +99,8 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       {onBack && (
-        <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3 relative">
-          <PoweredByMarquee />
-          <div className="flex items-center justify-between gap-3 relative z-10">
+        <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               <button
                 onClick={onBack}
@@ -114,6 +113,7 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
             </div>
             <h1 className="font-semibold text-foreground">Products</h1>
           </div>
+          <PoweredByMarquee />
         </header>
       )}
 

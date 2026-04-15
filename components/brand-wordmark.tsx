@@ -31,16 +31,18 @@ export function PoweredByMarquee() {
   ]
 
   return (
-    <div className="absolute left-1/2 top-1/2 hidden md:block -translate-x-1/2 -translate-y-1/2 w-[320px] overflow-hidden pointer-events-none">
-      <div className="flex items-center gap-6 whitespace-nowrap animate-[marquee_14s_linear_infinite]">
-        {[...logos, ...logos].map((logo, index) => (
-          <div key={`${logo.alt}-${index}`} className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium">powered by</span>
-            <div className="h-7 px-2 rounded-full bg-background/80 border border-border flex items-center">
-              <Image src={logo.src} alt={logo.alt} width={72} height={20} className={logo.className} />
+    <div className="mt-2 flex justify-center w-full">
+      <div className="w-full max-w-[360px] overflow-hidden rounded-full border border-border bg-background/80 px-3 py-1.5">
+        <div className="flex min-w-max items-center gap-5 whitespace-nowrap animate-[marquee_14s_linear_infinite]">
+          {[...logos, ...logos].map((logo, index) => (
+            <div key={`${logo.alt}-${index}`} className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium">powered by</span>
+              <div className="h-7 px-2 rounded-full bg-white border border-border flex items-center">
+                <Image src={logo.src} alt={logo.alt} width={72} height={20} className={logo.className} />
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   )
