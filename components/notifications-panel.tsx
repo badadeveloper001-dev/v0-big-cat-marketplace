@@ -26,9 +26,10 @@ interface Notification {
 interface NotificationsPanelProps {
   isOpen: boolean
   onClose: () => void
+  onUnreadChange?: (count: number) => void
 }
 
-export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps) {
+export function NotificationsPanel({ isOpen, onClose, onUnreadChange }: NotificationsPanelProps) {
   const { role } = useRole()
   const [notifications, setNotifications] = useState<Notification[]>([])
 
@@ -147,6 +148,10 @@ export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps)
   }
 
   const unreadCount = notifications.filter(n => !n.read).length
+
+  useEffect(() => {
+    onUnreadChange?.(unreadCount)
+  }, [unreadCount, onUnreadChange])
 
   if (!isOpen) return null
 

@@ -90,6 +90,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [notificationCount, setNotificationCount] = useState(0)
   const [showChat, setShowChat] = useState(false)
   const [initialConversation, setInitialConversation] = useState<any | null>(null)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
@@ -592,7 +593,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     <>
     <NotificationsPanel 
       isOpen={showNotifications} 
-      onClose={() => setShowNotifications(false)} 
+      onClose={() => setShowNotifications(false)}
+      onUnreadChange={setNotificationCount}
     />
     {isSuspended && (
       <div className="mx-4 mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
@@ -655,7 +657,9 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               title="Notifications"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
+              {notificationCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
+              )}
             </button>
             <button 
               onClick={() => setShowOrders(true)}

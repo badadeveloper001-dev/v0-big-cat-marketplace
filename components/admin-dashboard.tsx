@@ -34,6 +34,7 @@ export function AdminDashboard() {
   const [allMerchants, setAllMerchants] = useState<any[]>([])
   const [loadingMerchants, setLoadingMerchants] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [notificationCount, setNotificationCount] = useState(0)
 
   useEffect(() => {
     loadStats()
@@ -188,7 +189,8 @@ export function AdminDashboard() {
     <>
     <NotificationsPanel 
       isOpen={showNotifications} 
-      onClose={() => setShowNotifications(false)} 
+      onClose={() => setShowNotifications(false)}
+      onUnreadChange={setNotificationCount}
     />
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -206,7 +208,9 @@ export function AdminDashboard() {
             className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground"
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
+            {notificationCount > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
+            )}
           </button>
         </div>
       </header>

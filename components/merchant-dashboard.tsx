@@ -75,6 +75,7 @@ export function MerchantDashboard() {
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [notificationCount, setNotificationCount] = useState(0)
   const [showTokenDialog, setShowTokenDialog] = useState(false)
   const [tokenBalance, setTokenBalance] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
@@ -390,7 +391,8 @@ export function MerchantDashboard() {
     <>
     <NotificationsPanel 
       isOpen={showNotifications} 
-      onClose={() => setShowNotifications(false)} 
+      onClose={() => setShowNotifications(false)}
+      onUnreadChange={setNotificationCount}
     />
     
     {/* Token Purchase Dialog */}
@@ -508,7 +510,9 @@ export function MerchantDashboard() {
               title="Notifications"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
+              {notificationCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
+              )}
             </button>
           </div>
         </div>
