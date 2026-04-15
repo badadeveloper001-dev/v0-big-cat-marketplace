@@ -253,6 +253,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           initials: (m.business_name || m.full_name || "UN").substring(0, 2).toUpperCase(),
           iconColor: "text-blue-600",
           description: m.business_description || "Quality products and services",
+          logo_url: m.logo_url || m.avatar_url || "",
+          avatar_url: m.avatar_url || m.logo_url || "",
         }))
         setMerchants(merchantsData)
       }

@@ -40,6 +40,8 @@ interface VendorPageProps {
     initials: string
     iconColor: string
     description: string
+    logo_url?: string
+    avatar_url?: string
   }
   onBack: () => void
   onChatVendor?: (conversation?: any) => void
@@ -242,6 +244,12 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   }
 
   const aiRec = getAiRecommendation()
+  const vendorImage =
+    vendor.logo_url ||
+    vendor.avatar_url ||
+    products.find((product: any) => product?.merchant_profiles?.logo_url || product?.merchant_profiles?.avatar_url)?.merchant_profiles?.logo_url ||
+    products.find((product: any) => product?.merchant_profiles?.logo_url || product?.merchant_profiles?.avatar_url)?.merchant_profiles?.avatar_url ||
+    null
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
@@ -304,8 +312,18 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
           <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
             <div className="flex items-start gap-4">
               {/* Avatar */}
-              <div className={`w-20 h-20 rounded-2xl ${vendor.bgColor} flex items-center justify-center flex-shrink-0 shadow-md`}>
-                <span className={`font-bold text-2xl ${vendor.iconColor}`}>{vendor.initials}</span>
+              <div className={`w-20 h-20 rounded-2xl ${vendor.bgColor} flex items-center justify-center flex-shrink-0 shadow-md overflow-hidden`}>
+                {vendorImage ? (
+                  <Image
+                    src={vendorImage}
+                    alt={vendor.name}
+                    width={80}
+                    height={80}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className={`font-bold text-2xl ${vendor.iconColor}`}>{vendor.initials}</span>
+                )}
               </div>
 
               {/* Info */}

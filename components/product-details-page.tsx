@@ -213,6 +213,8 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant }: Produc
               initials: (merchant.business_name || merchant.name || 'M').substring(0, 2).toUpperCase(),
               iconColor: 'text-blue-600',
               description: merchant.business_description || 'Quality products and services',
+              logo_url: merchant.logo_url || merchant.avatar_url || '',
+              avatar_url: merchant.avatar_url || merchant.logo_url || '',
             })}
             className="w-full flex items-center gap-3 text-left rounded-lg hover:bg-secondary/40 transition-colors p-1"
           >
