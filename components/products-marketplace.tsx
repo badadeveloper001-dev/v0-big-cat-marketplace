@@ -8,14 +8,14 @@ import { BrandWordmark } from './brand-wordmark'
 const CATEGORIES = [
   'Electronics',
   'Fashion',
-  'Food & Beverages',
-  'Home & Garden',
-  'Sports & Outdoors',
-  'Books & Media',
-  'Beauty & Personal Care',
-  'Toys & Games',
+  'Food & Drinks',
+  'Health & Beauty',
+  'Home & Living',
+  'Agriculture',
+  'Sports',
+  'Baby & Kids',
   'Automotive',
-  'Health & Wellness',
+  'Books & Media',
   'Other'
 ]
 
@@ -34,7 +34,7 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || '')
   const [showFilters, setShowFilters] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const ITEMS_PER_PAGE = 12
+  const ITEMS_PER_PAGE = 24
 
   // Load all products on mount
   useEffect(() => {

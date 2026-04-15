@@ -54,15 +54,24 @@ export function ProductCard({
       className="group bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer"
     >
       {/* Product Image */}
-      <div className="aspect-square bg-gradient-to-br from-secondary to-secondary/50 flex items-center justify-center overflow-hidden relative">
+      <div className="aspect-[4/3] bg-gradient-to-br from-secondary to-secondary/50 flex items-center justify-center overflow-hidden relative">
         {image ? (
-          <Image
-            src={image}
-            alt={name}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform"
-            sizes="(max-width: 768px) 50vw, 33vw"
-          />
+          image.startsWith('http') ? (
+            <img
+              src={image}
+              alt={name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+              loading="lazy"
+            />
+          ) : (
+            <Image
+              src={image}
+              alt={name}
+              fill
+              className="object-cover group-hover:scale-105 transition-transform"
+              sizes="(max-width: 768px) 50vw, (max-width: 1280px) 25vw, 16vw"
+            />
+          )
         ) : (
           <div className="flex flex-col items-center justify-center text-muted-foreground group-hover:scale-110 transition-transform">
             <Package className="w-12 h-12 opacity-50" />
@@ -72,19 +81,19 @@ export function ProductCard({
       </div>
 
       {/* Product Info */}
-      <div className="p-4 space-y-3">
+      <div className="p-3 space-y-2.5">
         <div>
-          <h3 className="font-semibold text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+          <h3 className="font-semibold text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors min-h-[2.5rem]">
             {name}
           </h3>
-          <p className="text-2xl font-bold text-foreground mt-2">
+          <p className="text-lg font-bold text-foreground mt-1.5">
             {formatNaira(price)}
           </p>
         </div>
 
         {/* Merchant Info */}
         <div className="flex items-center gap-2 py-2 border-t border-border">
-          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary flex-shrink-0">
+          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-semibold text-primary flex-shrink-0">
             {merchant.business_name.charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
@@ -103,7 +112,7 @@ export function ProductCard({
         {/* Add to Cart Button */}
         <button 
           onClick={handleAddToCart}
-          className={`w-full py-2 rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2 ${
+          className={`w-full py-2 rounded-lg transition-colors font-medium text-xs flex items-center justify-center gap-1.5 ${
             addedToCart 
               ? 'bg-green-500 text-white' 
               : 'bg-primary text-primary-foreground hover:bg-primary/90'
@@ -139,8 +148,8 @@ export function ProductGrid({
 }: ProductGridProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array(6)
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+        {Array(12)
           .fill(0)
           .map((_, i) => (
             <div
@@ -162,7 +171,7 @@ export function ProductGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
       {products.map((product) => (
         <ProductCard
           key={product.id}
