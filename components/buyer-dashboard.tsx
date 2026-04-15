@@ -76,6 +76,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [voiceflowReady, setVoiceflowReady] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState<any | null>(null)
   const [showProducts, setShowProducts] = useState(false)
+  const [showAllMerchants, setShowAllMerchants] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [productSearchQuery, setProductSearchQuery] = useState("")
   const [showCart, setShowCart] = useState(false)
@@ -587,7 +588,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   }
 
   const displayName = user?.name || (user ? "Customer" : "Guest")
-  const displayMerchants = merchants.slice(0, 3)
+  const displayMerchants = showAllMerchants ? merchants : merchants.slice(0, 6)
 
   return (
     <>
@@ -834,10 +835,10 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-foreground text-lg">SME/Merchants</h2>
             <button 
-              onClick={() => setShowProducts(true)}
+              onClick={() => setShowAllMerchants((current) => !current)}
               className="text-sm text-primary font-medium flex items-center gap-0.5"
             >
-              Browse all <ChevronRight className="w-4 h-4" />
+              {showAllMerchants ? 'Show less' : 'Browse all'} <ChevronRight className="w-4 h-4" />
             </button>
           </div>
           {loadingMerchants ? (
