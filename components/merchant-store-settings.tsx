@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Store, Phone, Mail, MapPin, Image, Globe, Save, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Store, Phone, Mail, MapPin, Globe, Save, Loader2, CheckCircle2, AlertCircle, Copy, ExternalLink, Palette } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
-import { formatNaira } from '@/lib/currency-utils'
+import { getMerchantMiniWebsitePath, getMerchantMiniWebsiteStorageKey, WEBSITE_LAYOUTS, WEBSITE_THEMES, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
 
 interface MerchantStoreSettingsProps {
   onComplete?: () => void
@@ -22,12 +22,35 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
     storePhone: user?.phone || '',
     storeLocation: user?.merchantProfile?.location || '',
     storeWebsite: '',
+    websiteTheme: 'emerald' as WebsiteTheme,
+    websiteLayout: 'classic' as WebsiteLayout,
     bankAccountName: '',
     bankAccountNumber: '',
     bankCode: '',
     minimumOrder: 1000,
     commissionRate: 5,
   })
+
+  useEffect(() => {
+    if (!user?.userId) return
+
+    const savedSettings = typeof window !== 'undefined'
+      ? localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId))
+      : null
+
+    const parsed = savedSettings ? JSON.parse(savedSettings) : null
+
+    setStoreSettings((prev) => ({
+      ...prev,
+      storeName: user?.merchantProfile?.business_name || user?.name || prev.storeName,
+      storeDescription: user?.merchantProfile?.business_description || prev.storeDescription,
+      storeEmail: user?.email || prev.storeEmail,
+      storePhone: user?.phone || prev.storePhone,
+      storeLocation: user?.merchantProfile?.location || prev.storeLocation,
+      websiteTheme: parsed?.theme || prev.websiteTheme,
+      websiteLayout: parsed?.layout || prev.websiteLayout,
+    }))
+  }, [user])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -38,24 +61,83 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
   }
 
   const handleSave = async () => {
+    if (!user?.userId) {
+      setError('You need to be signed in to save store settings.')
+      return
+    }
+
     setSaving(true)
     setError('')
     setSuccess(false)
 
     try {
-      // In a real app, you would save these settings to the database
-      // For now, we'll just simulate saving
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.userId,
+          updates: {
+            business_name: storeSettings.storeName,
+            business_description: storeSettings.storeDescription,
+            phone: storeSettings.storePhone,
+            location: storeSettings.storeLocation,
+            email: storeSettings.storeEmail,
+          },
+        }),
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save store settings')
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(
+          getMerchantMiniWebsiteStorageKey(user.userId),
+          JSON.stringify({
+            theme: storeSettings.websiteTheme,
+            layout: storeSettings.websiteLayout,
+          })
+        )
+      }
+
       setSuccess(true)
       setTimeout(() => {
         setSuccess(false)
         onComplete?.()
-      }, 2000)
+      }, 1500)
     } catch (err) {
       setError('Failed to save store settings. Please try again.')
     } finally {
       setSaving(false)
     }
+  }
+
+  const generatedWebsitePath = user?.userId
+    ? getMerchantMiniWebsitePath({
+        merchantId: user.userId,
+        businessName: storeSettings.storeName || user?.name || 'store',
+        theme: storeSettings.websiteTheme,
+        layout: storeSettings.websiteLayout,
+      })
+    : ''
+
+  const generatedWebsiteUrl = typeof window !== 'undefined' && generatedWebsitePath
+    ? `${window.location.origin}${generatedWebsitePath}`
+    : generatedWebsitePath
+
+  const handleCopyWebsiteLink = async () => {
+    if (!generatedWebsiteUrl) return
+    await navigator.clipboard.writeText(generatedWebsiteUrl)
+    setSuccess(true)
+    setTimeout(() => setSuccess(false), 1500)
+  }
+
+  const handlePreviewWebsite = () => {
+    if (!generatedWebsitePath || typeof window === 'undefined') return
+    window.open(generatedWebsitePath, '_blank')
   }
 
   return (
@@ -158,6 +240,76 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
                   placeholder="https://example.com"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Mini Website */}
+        <div className="bg-card rounded-2xl border border-border p-6 mb-6">
+          <h2 className="text-xl font-semibold text-foreground mb-2 flex items-center gap-2">
+            <Globe className="w-5 h-5" />
+            Mini Website
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Your store gets a mini website automatically. Customize the look and share the link with customers.
+          </p>
+
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 mb-4">
+            <p className="text-xs font-semibold text-primary mb-2">Generated website link</p>
+            <p className="text-sm text-foreground break-all">{generatedWebsiteUrl || 'Your link will appear here'}</p>
+            <div className="mt-3 flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={handleCopyWebsiteLink}
+                className="flex-1 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                <Copy className="w-4 h-4" />
+                Copy Link
+              </button>
+              <button
+                type="button"
+                onClick={handlePreviewWebsite}
+                className="flex-1 rounded-lg border border-border bg-secondary px-4 py-2 text-sm font-semibold text-foreground flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Preview Website
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                <Palette className="w-4 h-4" />
+                Theme
+              </label>
+              <select
+                name="websiteTheme"
+                value={storeSettings.websiteTheme}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
+              >
+                {WEBSITE_THEMES.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Layout Style</label>
+              <select
+                name="websiteLayout"
+                value={storeSettings.websiteLayout}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
+              >
+                {WEBSITE_LAYOUTS.map((layout) => (
+                  <option key={layout.id} value={layout.id}>
+                    {layout.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

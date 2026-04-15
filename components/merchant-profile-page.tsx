@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useRole } from '@/lib/role-context'
-import { ArrowLeft, Camera, Loader2, Check, AlertCircle, Store, MapPin, FileText, User, Phone, Mail } from 'lucide-react'
+import { ArrowLeft, Camera, Loader2, Check, AlertCircle, Store, MapPin, FileText, User, Phone, Mail, Globe, Copy, ExternalLink, Palette } from 'lucide-react'
 import Image from 'next/image'
+import { getMerchantMiniWebsitePath, getMerchantMiniWebsiteStorageKey, WEBSITE_LAYOUTS, WEBSITE_THEMES, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
 
 interface MerchantProfile {
   id: string
@@ -52,6 +53,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
     business_description: '',
     business_category: 'General Merchandise',
     location: '',
+    website_theme: 'emerald' as WebsiteTheme,
+    website_layout: 'classic' as WebsiteLayout,
   })
 
   useEffect(() => {
@@ -68,6 +71,16 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
 
       if (result.success && result.data) {
         setProfile(result.data)
+
+        let savedWebsiteSettings: { theme?: WebsiteTheme; layout?: WebsiteLayout } = {}
+        if (typeof window !== 'undefined' && user?.userId) {
+          try {
+            savedWebsiteSettings = JSON.parse(localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId)) || '{}')
+          } catch {
+            savedWebsiteSettings = {}
+          }
+        }
+
         setFormData({
           full_name: result.data.full_name || result.data.name || user?.name || '',
           phone: result.data.phone || user?.phone || '',
@@ -76,6 +89,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
           business_description: result.data.business_description || user?.merchantProfile?.business_description || '',
           business_category: result.data.business_category || user?.merchantProfile?.business_category || 'General Merchandise',
           location: result.data.location || user?.merchantProfile?.location || '',
+          website_theme: savedWebsiteSettings.theme || 'emerald',
+          website_layout: savedWebsiteSettings.layout || 'classic',
         })
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to load profile' })
@@ -124,7 +139,17 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
 
       if (result.success) {
         setProfile(result.data)
-        setMessage({ type: 'success', text: activeTab === 'personal' ? 'Profile updated successfully' : 'Store updated successfully' })
+        setMessage({ type: 'success', text: activeTab === 'personal' ? 'Profile updated successfully' : 'Store and mini website updated successfully' })
+
+        if (user && activeTab === 'store' && typeof window !== 'undefined') {
+          localStorage.setItem(
+            getMerchantMiniWebsiteStorageKey(user.userId),
+            JSON.stringify({
+              theme: formData.website_theme,
+              layout: formData.website_layout,
+            })
+          )
+        }
 
         if (user) {
           setUser({
@@ -153,6 +178,31 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  const generatedWebsitePath = user?.userId
+    ? getMerchantMiniWebsitePath({
+        merchantId: user.userId,
+        businessName: formData.business_name || user?.name || 'store',
+        theme: formData.website_theme,
+        layout: formData.website_layout,
+      })
+    : ''
+
+  const generatedWebsiteUrl = typeof window !== 'undefined' && generatedWebsitePath
+    ? `${window.location.origin}${generatedWebsitePath}`
+    : generatedWebsitePath
+
+  const handleCopyWebsiteLink = async () => {
+    if (!generatedWebsiteUrl) return
+    await navigator.clipboard.writeText(generatedWebsiteUrl)
+    setMessage({ type: 'success', text: 'Mini website link copied successfully' })
+    setTimeout(() => setMessage(null), 2000)
+  }
+
+  const handlePreviewWebsite = () => {
+    if (!generatedWebsitePath || typeof window === 'undefined') return
+    window.open(generatedWebsitePath, '_blank')
   }
 
   if (loading) {
@@ -326,6 +376,73 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
                   rows={3}
                   className="w-full pl-10 pr-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
                 />
+              </div>
+            </div>
+
+            {/* Mini Website */}
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Globe className="w-4 h-4 text-primary" />
+                  <h3 className="font-semibold text-foreground">Mini Website</h3>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Your store website is generated automatically. Customize it and share the link with customers.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card px-3 py-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Website link</p>
+                <p className="text-sm text-foreground break-all">{generatedWebsiteUrl || 'Website link will appear here'}</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                    <Palette className="w-4 h-4" />
+                    Theme
+                  </label>
+                  <select
+                    value={formData.website_theme}
+                    onChange={(e) => setFormData({ ...formData, website_theme: e.target.value as WebsiteTheme })}
+                    className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
+                    {WEBSITE_THEMES.map((theme) => (
+                      <option key={theme.id} value={theme.id}>{theme.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Layout</label>
+                  <select
+                    value={formData.website_layout}
+                    onChange={(e) => setFormData({ ...formData, website_layout: e.target.value as WebsiteLayout })}
+                    className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
+                    {WEBSITE_LAYOUTS.map((layout) => (
+                      <option key={layout.id} value={layout.id}>{layout.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyWebsiteLink}
+                  className="flex-1 py-3 bg-secondary text-foreground rounded-xl font-semibold flex items-center justify-center gap-2"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy Link
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePreviewWebsite}
+                  className="flex-1 py-3 bg-card border border-border text-foreground rounded-xl font-semibold flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Preview Site
+                </button>
               </div>
             </div>
 
