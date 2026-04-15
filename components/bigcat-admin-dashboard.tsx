@@ -22,6 +22,12 @@ export function BigcatAdminDashboard() {
   const [recentUsers, setRecentUsers] = useState<any[]>([])
   const [recentOrders, setRecentOrders] = useState<any[]>([])
   const [pendingMerchants, setPendingMerchants] = useState<any[]>([])
+  const [paymentStats, setPaymentStats] = useState({
+    totalEscrow: 0,
+    disbursedAmount: 0,
+    pendingOrders: 0,
+    completedOrders: 0,
+  })
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -44,13 +50,19 @@ export function BigcatAdminDashboard() {
     setLoading(true)
     try {
       const [statsRes, usersRes, ordersRes] = await Promise.all([
-        fetch('/api/admin/stats').then(r => r.json()),
-        fetch('/api/admin/users').then(r => r.json()),
-        fetch('/api/admin/orders').then(r => r.json()),
+        fetch('/api/admin/stats', { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/admin/users', { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/admin/orders', { cache: 'no-store' }).then(r => r.json()),
       ])
 
       if (statsRes.success) {
         setPlatformStats(statsRes.platform || statsRes.stats || {})
+        setPaymentStats({
+          totalEscrow: Number(statsRes.transactions?.totalEscrow || 0),
+          disbursedAmount: Number(statsRes.transactions?.disbursedAmount || 0),
+          pendingOrders: Number(statsRes.transactions?.pendingOrders || 0),
+          completedOrders: Number(statsRes.transactions?.completedOrders || 0),
+        })
         if (statsRes.logistics) {
           setLogisticsStats({
             activeDeliveries: statsRes.logistics.total - statsRes.logistics.completed || 0,
@@ -311,6 +323,28 @@ export function BigcatAdminDashboard() {
           </div>
         </div>
 
+        <div className="bg-card border border-border rounded-lg p-6 mb-8">
+          <h2 className="font-bold text-lg text-foreground mb-4">Finance Snapshot</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Held in escrow</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{formatNaira(paymentStats.totalEscrow)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Disbursed funds</p>
+              <p className="text-2xl font-bold text-green-600 mt-1">{formatNaira(paymentStats.disbursedAmount)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Pending orders</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1">{paymentStats.pendingOrders}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Completed orders</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{paymentStats.completedOrders}</p>
+            </div>
+          </div>
+        </div>
+
         {/* Risk & Marketplace Health */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-card border border-border rounded-lg p-6">
@@ -342,7 +376,7 @@ export function BigcatAdminDashboard() {
               </div>
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">Escrow active orders</p>
-                <p className="font-bold text-foreground">{pendingOrders}</p>
+                <p className="font-bold text-foreground">{paymentStats.pendingOrders}</p>
               </div>
             </div>
           </div>

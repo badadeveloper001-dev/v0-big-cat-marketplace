@@ -14,8 +14,12 @@ export function PalmpayAdminDashboard() {
     totalRevenue: 0,
     productEscrow: 0,
     deliveryEscrow: 0,
+    totalEscrow: 0,
     completedPayments: 0,
-    pendingPayments: 0
+    pendingPayments: 0,
+    pendingOrders: 0,
+    completedOrders: 0,
+    disbursedAmount: 0,
   })
   const [loading, setLoading] = useState(true)
   const [agents, setAgents] = useState<any[]>([])
@@ -37,7 +41,7 @@ export function PalmpayAdminDashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/transactions')
+      const res = await fetch('/api/admin/transactions', { cache: 'no-store' })
       const data = await res.json()
 
       if (data.success) {
@@ -162,16 +166,16 @@ export function PalmpayAdminDashboard() {
       color: "bg-green-100 text-green-600",
     },
     {
-      label: "Product Escrow",
-      value: formatNaira(stats.productEscrow),
+      label: "Total In Escrow",
+      value: formatNaira(stats.totalEscrow),
       icon: Wallet,
       color: "bg-purple-100 text-purple-600",
     },
     {
-      label: "Delivery Escrow",
-      value: formatNaira(stats.deliveryEscrow),
-      icon: Wallet,
-      color: "bg-orange-100 text-orange-600",
+      label: "Disbursed Amount",
+      value: formatNaira(stats.disbursedAmount),
+      icon: CheckCircle2,
+      color: "bg-emerald-100 text-emerald-600",
     },
   ]
 
@@ -238,9 +242,23 @@ export function PalmpayAdminDashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Clock className="w-5 h-5 text-yellow-600" />
-                  <span className="text-muted-foreground">Pending</span>
+                  <span className="text-muted-foreground">Pending Payments</span>
                 </div>
                 <span className="font-bold text-foreground">{stats.pendingPayments}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  <span className="text-muted-foreground">Pending Orders</span>
+                </div>
+                <span className="font-bold text-foreground">{stats.pendingOrders}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  <span className="text-muted-foreground">Completed Orders</span>
+                </div>
+                <span className="font-bold text-foreground">{stats.completedOrders}</span>
               </div>
             </div>
           </div>
@@ -258,7 +276,11 @@ export function PalmpayAdminDashboard() {
               </div>
               <div className="border-t border-border pt-3 flex items-center justify-between">
                 <span className="font-semibold text-foreground">Total Held</span>
-                <span className="font-bold text-foreground">{formatNaira(stats.productEscrow + stats.deliveryEscrow)}</span>
+                <span className="font-bold text-foreground">{formatNaira(stats.totalEscrow)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">Total Disbursed</span>
+                <span className="font-bold text-foreground">{formatNaira(stats.disbursedAmount)}</span>
               </div>
             </div>
           </div>

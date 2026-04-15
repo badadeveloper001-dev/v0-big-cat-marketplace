@@ -166,23 +166,52 @@ export function MerchantDashboard() {
     setLoadingStats(true)
     try {
       let nextTokenBalance = 0
+      let merchantOrders: any[] = []
+
       if (user?.userId) {
-        const tokenResponse = await fetch(`/api/merchant/tokens?merchantId=${encodeURIComponent(user.userId)}`, {
-          cache: 'no-store',
-        })
+        const [tokenResponse, ordersResponse] = await Promise.all([
+          fetch(`/api/merchant/tokens?merchantId=${encodeURIComponent(user.userId)}`, {
+            cache: 'no-store',
+          }),
+          fetch(`/api/orders/merchant?merchantId=${encodeURIComponent(user.userId)}`, {
+            cache: 'no-store',
+          }),
+        ])
+
         const tokenResult = await tokenResponse.json()
+        const ordersResult = await ordersResponse.json()
+
         if (tokenResult.success) {
           nextTokenBalance = Number(tokenResult.balance || 0)
           setTokenBalance(nextTokenBalance)
         }
+
+        merchantOrders = Array.isArray(ordersResult.data)
+          ? ordersResult.data
+          : Array.isArray(ordersResult.orders)
+            ? ordersResult.orders
+            : []
       }
 
-      // Set default stats since getMerchantStats doesn't take parameters
+      const getMerchantAmount = (order: any) => {
+        const deliveryFee = Number(order?.delivery_fee || 0)
+        const productTotal = Number(order?.product_total || 0)
+        const grandTotal = Number(order?.grand_total || order?.total_amount || 0)
+        return Math.max(0, productTotal || (grandTotal - deliveryFee))
+      }
+
+      const totalSales = merchantOrders.reduce((sum, order) => sum + getMerchantAmount(order), 0)
+      const activeOrders = merchantOrders.filter((order) => !['delivered', 'completed'].includes(String(order?.status || '').toLowerCase())).length
+      const paidOrders = merchantOrders.filter((order) => String(order?.payment_status || '').toLowerCase() === 'completed').length
+      const escrowBalance = merchantOrders
+        .filter((order) => String(order?.escrow_status || '').toLowerCase() === 'held')
+        .reduce((sum, order) => sum + getMerchantAmount(order), 0)
+
       const statsData = [
-        { label: "Total Sales", value: formatNaira(0), change: "+12%", trend: "up", icon: DollarSign },
-        { label: "Active Orders", value: "0", change: "+2", trend: "up", icon: ShoppingBag },
-        { label: "Token Balance", value: String(nextTokenBalance), change: "0", trend: "up", icon: Coins },
-        { label: "Escrow Balance", value: formatNaira(0), change: "0", trend: "up", icon: Clock },
+        { label: "Total Sales", value: formatNaira(totalSales), change: `${paidOrders} paid`, trend: "up", icon: DollarSign },
+        { label: "Active Orders", value: String(activeOrders), change: `${merchantOrders.length} total`, trend: "up", icon: ShoppingBag },
+        { label: "Token Balance", value: String(nextTokenBalance), change: "Live", trend: "up", icon: Coins },
+        { label: "Escrow Balance", value: formatNaira(escrowBalance), change: escrowBalance > 0 ? "Held safely" : "No funds held", trend: "up", icon: Clock },
       ]
       setStats(statsData)
     } catch (error) {
@@ -213,10 +242,11 @@ export function MerchantDashboard() {
     setLoadingOrders(true)
     try {
       if (user?.userId) {
-        const response = await fetch(`/api/orders/merchant?merchantId=${user.userId}`)
+        const response = await fetch(`/api/orders/merchant?merchantId=${user.userId}`, { cache: 'no-store' })
         const result = await response.json()
-        if (result.success && result.orders) {
-          setRecentOrders(result.orders.slice(0, 3))
+        const nextOrders = Array.isArray(result.data) ? result.data : Array.isArray(result.orders) ? result.orders : []
+        if (result.success) {
+          setRecentOrders(nextOrders.slice(0, 3))
         }
       }
     } catch (error) {
