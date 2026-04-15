@@ -17,6 +17,21 @@ interface ProductInput {
 
 const MAX_DECIMAL_VALUE = 99999999.99
 
+function isBigZeeWears(value: unknown) {
+  const normalized = String(value || '').toLowerCase()
+  return normalized.includes('big zee wears') || normalized.includes('big zee')
+}
+
+function sortBigZeeFirst<T>(items: T[], getText: (item: T) => string) {
+  return [...items].sort((a, b) => {
+    const aIsBigZee = isBigZeeWears(getText(a))
+    const bIsBigZee = isBigZeeWears(getText(b))
+
+    if (aIsBigZee === bIsBigZee) return 0
+    return aIsBigZee ? -1 : 1
+  })
+}
+
 function sanitizeDecimal(
   value: number | undefined,
   fieldName: string,
@@ -106,7 +121,14 @@ export async function getAllProducts() {
       .select('*, merchant_profiles:auth_users!merchant_id(business_name, business_category, business_description, name, location, avatar_url)')
       .eq('is_active', true)
     if (error) throw error
-    return { success: true, data: (data || []).map(normalizeProduct) }
+
+    const normalizedProducts = (data || []).map(normalizeProduct)
+    const sortedProducts = sortBigZeeFirst(
+      normalizedProducts,
+      (product: any) => `${product?.merchant_profiles?.business_name || ''} ${product?.merchant_profiles?.name || ''} ${product?.name || ''}`
+    )
+
+    return { success: true, data: sortedProducts }
   } catch (error: any) {
     return { success: false, error: error.message, data: [] }
   }

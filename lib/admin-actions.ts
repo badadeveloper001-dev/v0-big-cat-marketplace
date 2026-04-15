@@ -5,6 +5,21 @@ function toAmount(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function isBigZeeWears(value: unknown) {
+  const normalized = String(value || '').toLowerCase()
+  return normalized.includes('big zee wears') || normalized.includes('big zee')
+}
+
+function sortBigZeeFirst<T>(items: T[], getText: (item: T) => string) {
+  return [...items].sort((a, b) => {
+    const aIsBigZee = isBigZeeWears(getText(a))
+    const bIsBigZee = isBigZeeWears(getText(b))
+
+    if (aIsBigZee === bIsBigZee) return 0
+    return aIsBigZee ? -1 : 1
+  })
+}
+
 export async function getMerchants() {
   try {
     const supabase = await createClient()
@@ -13,7 +28,9 @@ export async function getMerchants() {
       .select('*')
       .eq('role', 'merchant')
     if (error) throw error
-    return { success: true, data: data || [] }
+
+    const merchants = sortBigZeeFirst(data || [], (merchant: any) => `${merchant?.business_name || ''} ${merchant?.name || ''}`)
+    return { success: true, data: merchants }
   } catch (error: any) {
     return { success: false, error: error.message, data: [] }
   }
