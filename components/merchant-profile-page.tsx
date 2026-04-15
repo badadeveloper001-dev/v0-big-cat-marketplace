@@ -551,6 +551,23 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
               </div>
             </div>
 
+            {/* Website Link */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Store Website Link
+              </label>
+              <div className="relative">
+                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={generatedWebsiteUrl}
+                  readOnly
+                  className="w-full pl-10 pr-4 py-3 bg-secondary border border-border rounded-xl text-foreground"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">This is the buyer-facing website link for your store.</p>
+            </div>
+
             {/* SMEDAN ID (read-only) */}
             {profile?.smedan_id && (
               <div>

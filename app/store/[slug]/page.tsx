@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
-import { Loader2, MapPin, Share2, Store, Tag, ShoppingBag, ExternalLink } from 'lucide-react'
+import { Loader2, MapPin, Share2, Store, Tag, ShoppingBag, ExternalLink, ShoppingCart, CheckCircle2 } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
 import { extractMerchantIdFromSlug, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
+import { useCart } from '@/lib/cart-context'
 
 const themeMap: Record<WebsiteTheme, { hero: string; button: string; badge: string; soft: string }> = {
   emerald: {
@@ -34,11 +35,16 @@ export default function MerchantMiniWebsitePage() {
   const [profile, setProfile] = useState<any | null>(null)
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [addedProduct, setAddedProduct] = useState<any | null>(null)
+  const { addItem, getItemCount, getTotal } = useCart()
 
   const merchantId = useMemo(() => extractMerchantIdFromSlug(params?.slug || ''), [params])
   const theme = (searchParams.get('theme') || 'emerald') as WebsiteTheme
   const layout = (searchParams.get('layout') || 'classic') as WebsiteLayout
   const themeStyle = themeMap[theme] || themeMap.emerald
+  const cartCount = getItemCount()
+  const cartTotal = getTotal()
+  const marketplaceCheckoutPath = '/marketplace?view=cart'
 
   useEffect(() => {
     const loadStorefront = async () => {
@@ -82,6 +88,19 @@ export default function MerchantMiniWebsitePage() {
       await navigator.clipboard.writeText(currentUrl)
       alert('Store link copied to clipboard.')
     }
+  }
+
+  const handleAddToCart = (product: any) => {
+    addItem({
+      id: String(product.id),
+      productId: String(product.id),
+      name: product.name,
+      price: Number(product.price || 0),
+      quantity: 1,
+      merchantId,
+      merchantName: profile?.business_name || profile?.full_name || 'Merchant',
+    })
+    setAddedProduct(product)
   }
 
   if (loading) {
@@ -155,6 +174,26 @@ export default function MerchantMiniWebsitePage() {
       </section>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <ShoppingCart className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Cart</p>
+                <p className="text-xs text-muted-foreground">{cartCount} item{cartCount !== 1 ? 's' : ''} ready for checkout</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-bold text-primary">{formatNaira(cartTotal)}</p>
+              <Link href={marketplaceCheckoutPath} className={`rounded-xl ${themeStyle.button} px-4 py-2 text-sm font-semibold text-white`}>
+                Checkout on Marketplace
+              </Link>
+            </div>
+          </div>
+        </div>
+
         <div className={`rounded-2xl border p-4 ${themeStyle.soft}`}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
@@ -198,6 +237,20 @@ export default function MerchantMiniWebsitePage() {
                   <div className="p-3">
                     <p className="font-semibold text-sm text-foreground line-clamp-2">{product.name}</p>
                     <p className="text-primary font-bold mt-1">{formatNaira(Number(product.price || 0))}</p>
+                    <div className="mt-3 space-y-2">
+                      <button
+                        onClick={() => handleAddToCart(product)}
+                        className={`w-full rounded-xl ${themeStyle.button} py-2 text-sm font-semibold text-white`}
+                      >
+                        Add to Cart
+                      </button>
+                      <Link
+                        href={marketplaceCheckoutPath}
+                        className="block w-full rounded-xl border border-border bg-secondary py-2 text-center text-sm font-medium text-foreground"
+                      >
+                        Checkout
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -205,6 +258,48 @@ export default function MerchantMiniWebsitePage() {
           )}
         </div>
       </main>
+
+      {addedProduct && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="w-16 h-16 rounded-xl bg-secondary overflow-hidden flex-shrink-0">
+                {addedProduct.images?.[0] ? (
+                  <img src={addedProduct.images[0]} alt={addedProduct.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
+                    Item
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  <p className="font-semibold text-foreground">Added to cart</p>
+                </div>
+                <p className="text-sm font-medium text-foreground line-clamp-2">{addedProduct.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">{profile.business_name || 'Merchant store'}</p>
+                <p className="text-sm font-bold text-primary mt-2">{formatNaira(Number(addedProduct.price || 0))}</p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              <Link
+                href={marketplaceCheckoutPath}
+                onClick={() => setAddedProduct(null)}
+                className={`block w-full rounded-xl ${themeStyle.button} py-3 text-center text-sm font-semibold text-white`}
+              >
+                Proceed to Marketplace Checkout
+              </Link>
+              <button
+                onClick={() => setAddedProduct(null)}
+                className="w-full rounded-xl bg-secondary py-3 text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+              >
+                Continue Shopping
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -234,8 +234,8 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
                 <input
                   type="url"
                   name="storeWebsite"
-                  value={storeSettings.storeWebsite}
-                  onChange={handleInputChange}
+                  value={generatedWebsiteUrl}
+                  readOnly
                   className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
                   placeholder="https://example.com"
                 />

@@ -20,12 +20,15 @@ import {
   Package,
   ImageIcon,
   ShoppingCart,
+  Globe,
+  ExternalLink,
 } from "lucide-react"
 import Image from "next/image"
 import { formatNaira } from "@/lib/currency-utils"
 import { BrandWordmark } from "./brand-wordmark"
 import { useCart } from "@/lib/cart-context"
 import { isUserSuspended } from "@/lib/trust-safety"
+import { getMerchantMiniWebsitePath } from "@/lib/merchant-website"
 
 interface VendorPageProps {
   vendor: {
@@ -251,6 +254,10 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   const aiRec = getAiRecommendation()
   const cartCount = getItemCount()
   const cartTotal = getTotal()
+  const merchantWebsitePath = getMerchantMiniWebsitePath({
+    merchantId: String(vendor.id),
+    businessName: vendor.name,
+  })
   const vendorImage =
     vendor.logo_url ||
     vendor.avatar_url ||
@@ -369,6 +376,19 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                href={merchantWebsitePath}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Globe className="w-4 h-4" />
+                Visit Website
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
             </div>
 
             {/* Trust Indicators */}

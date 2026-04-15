@@ -227,6 +227,18 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     }
   }, [user, pendingCheckout])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    const view = params.get('view')
+
+    if (view === 'cart') {
+      setShowCart(true)
+      window.history.replaceState({}, '', '/marketplace')
+    }
+  }, [])
+
   // Show loading spinner while session restores
   if (isLoading) {
     return (

@@ -39,6 +39,14 @@ export function MarketplaceApp() {
     }
   }, [role, router])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const requestedView = new URLSearchParams(window.location.search).get("view")
+    if (!role && (requestedView === "cart" || requestedView === "checkout")) {
+      setGuestBrowsing(true)
+    }
+  }, [role])
+
   // Show loading state while restoring session
   if (isLoading) {
     return (
