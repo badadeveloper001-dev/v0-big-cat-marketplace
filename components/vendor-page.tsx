@@ -19,6 +19,7 @@ import {
   Loader2,
   Package,
   ImageIcon,
+  ShoppingCart,
 } from "lucide-react"
 import Image from "next/image"
 import { formatNaira } from "@/lib/currency-utils"
@@ -47,6 +48,8 @@ interface VendorPageProps {
   onChatVendor?: (conversation?: any) => void
   onBrowseMore?: () => void
   onViewProduct?: (productId: string) => void
+  onOpenCart?: () => void
+  onCheckout?: () => void
 }
 
 const portfolioImages = [
@@ -83,10 +86,11 @@ const reviews = [
   },
 ]
 
-export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewProduct }: VendorPageProps) {
+export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewProduct, onOpenCart, onCheckout }: VendorPageProps) {
   const { user } = useRole()
   const [addedToCart, setAddedToCart] = useState<string | null>(null)
-  const { addItem } = useCart()
+  const [popupProduct, setPopupProduct] = useState<any | null>(null)
+  const { addItem, getItemCount, getTotal } = useCart()
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [chatLoading, setChatLoading] = useState(false)
@@ -228,6 +232,7 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
       merchantId: String(vendor.id),
       merchantName: vendor.name,
     })
+    setPopupProduct(product)
     setAddedToCart(product.id)
     setTimeout(() => setAddedToCart(null), 2000)
   }
@@ -244,6 +249,8 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   }
 
   const aiRec = getAiRecommendation()
+  const cartCount = getItemCount()
+  const cartTotal = getTotal()
   const vendorImage =
     vendor.logo_url ||
     vendor.avatar_url ||
@@ -267,6 +274,18 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
             <BrandWordmark compact />
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => onOpenCart?.()}
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Cart"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              {cartCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-4 h-4 px-1 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center font-bold">
+                  {cartCount}
+                </span>
+              )}
+            </button>
             <button
               onClick={handleShareVendor}
               className="p-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -388,6 +407,25 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
               Every order is handled with care and attention to detail.
             </p>
           </div>
+        </section>
+
+        {/* Cart Summary */}
+        <section className="px-4 mb-6">
+          <button
+            onClick={() => onOpenCart?.()}
+            className="w-full flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-sm hover:border-primary/30 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <ShoppingCart className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Cart</p>
+                <p className="text-xs text-muted-foreground">{cartCount} item{cartCount !== 1 ? 's' : ''} in cart</p>
+              </div>
+            </div>
+            <p className="text-sm font-bold text-primary">{formatNaira(cartTotal)}</p>
+          </button>
         </section>
 
         {/* Portfolio Gallery */}
@@ -547,6 +585,38 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
           </div>
         </section>
       </main>
+
+      {popupProduct && (
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-2xl">
+            <p className="font-semibold text-foreground mb-1">Added to cart</p>
+            <p className="text-sm font-medium text-foreground line-clamp-2">{popupProduct.name}</p>
+            <p className="text-xs text-muted-foreground mt-1">{vendor.name}</p>
+            <p className="text-sm font-bold text-primary mt-2">{formatNaira(parseFloat(popupProduct.price || 0))}</p>
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={() => {
+                  setPopupProduct(null)
+                  if (onCheckout) {
+                    onCheckout()
+                    return
+                  }
+                  onOpenCart?.()
+                }}
+                className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Proceed to Checkout
+              </button>
+              <button
+                onClick={() => setPopupProduct(null)}
+                className="w-full rounded-xl bg-secondary py-3 text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+              >
+                Continue Shopping
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sticky CTA Footer */}
       <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border px-4 py-4 shadow-lg">

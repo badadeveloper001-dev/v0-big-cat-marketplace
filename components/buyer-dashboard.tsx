@@ -98,6 +98,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showPaymentMethods, setShowPaymentMethods] = useState(false)
+  const [cartPopupProduct, setCartPopupProduct] = useState<any | null>(null)
   const [isSuspended, setIsSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
   const [policyNotice, setPolicyNotice] = useState("")
@@ -528,6 +529,19 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           setSelectedVendor(null)
           setShowProducts(true)
         }}
+        onOpenCart={() => {
+          setSelectedVendor(null)
+          setShowCart(true)
+        }}
+        onCheckout={() => {
+          setSelectedVendor(null)
+          if (!user) {
+            setPendingCheckout(true)
+            setShowAuthPrompt(true)
+            return
+          }
+          setShowCheckout(true)
+        }}
       />
     )
   }
@@ -852,6 +866,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               },
             }))}
             onProductClick={(productId) => setSelectedProductId(productId)}
+            onAddToCart={setCartPopupProduct}
             loading={loadingProducts}
           />
         </section>
@@ -1111,6 +1126,39 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             </button>
           </div>
           <div id="bigcat-ai-embed-target" className="h-full w-full" />
+        </div>
+      )}
+
+      {cartPopupProduct && (
+        <div className="fixed inset-0 z-[72] bg-black/40 flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-2xl">
+            <p className="font-semibold text-foreground mb-1">Added to cart</p>
+            <p className="text-sm font-medium text-foreground line-clamp-2">{cartPopupProduct.name}</p>
+            <p className="text-xs text-muted-foreground mt-1">{cartPopupProduct.merchant.business_name}</p>
+            <p className="text-sm font-bold text-primary mt-2">{formatNaira(cartPopupProduct.price)}</p>
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={() => {
+                  setCartPopupProduct(null)
+                  if (!user) {
+                    setPendingCheckout(true)
+                    setShowAuthPrompt(true)
+                    return
+                  }
+                  setShowCheckout(true)
+                }}
+                className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Proceed to Checkout
+              </button>
+              <button
+                onClick={() => setCartPopupProduct(null)}
+                className="w-full rounded-xl bg-secondary py-3 text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+              >
+                Continue Shopping
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
