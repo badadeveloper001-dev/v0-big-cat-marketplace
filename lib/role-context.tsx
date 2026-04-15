@@ -30,6 +30,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const supabase = createClient()
+    let isActive = true
 
     // Read localStorage immediately for a fast first render
     const stored = localStorage.getItem('userRole')
@@ -39,31 +40,46 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       try { setUserState(JSON.parse(storedUser)) } catch {}
     }
 
-    // Validate the stored session against Supabase Auth
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        // No valid session — clear stale localStorage data
+    const initializeSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!isActive) return
+
+      const latestStoredRole = localStorage.getItem('userRole')
+      const latestStoredUser = localStorage.getItem('userData')
+
+      // Avoid clearing freshly logged-in state while the initial session check is still resolving.
+      if (!session && !latestStoredRole && !latestStoredUser) {
+        setRoleState(null)
+        setUserState(null)
+      }
+
+      setIsLoading(false)
+    }
+
+    initializeSession()
+
+    // Sync auth events across tabs and after sign-in/sign-out
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isActive) return
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        setIsLoading(false)
+        return
+      }
+
+      if (event === 'SIGNED_OUT' || !session) {
         localStorage.removeItem('userRole')
         localStorage.removeItem('userData')
         setRoleState(null)
         setUserState(null)
-      }
-      setIsLoading(false)
-    })
-
-    // Sync logout events across tabs / token expiry
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-        if (event === 'SIGNED_OUT') {
-          localStorage.removeItem('userRole')
-          localStorage.removeItem('userData')
-          setRoleState(null)
-          setUserState(null)
-        }
+        setIsLoading(false)
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isActive = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const setRole = (newRole: string | null) => {
