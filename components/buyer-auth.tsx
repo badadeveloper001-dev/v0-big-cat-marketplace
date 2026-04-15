@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRole } from "@/lib/role-context"
 import { createClient } from "@/lib/supabase/client"
 import { BrandWordmark } from "./brand-wordmark"
-import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Loader2, CheckCircle2, ShoppingBag } from "lucide-react"
+import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Loader2, CheckCircle2, ShoppingBag, X } from "lucide-react"
 
 declare global {
   interface Window {
@@ -13,7 +13,15 @@ declare global {
   }
 }
 
-export function BuyerAuth({ onBack, onSuccess }: { onBack: () => void; onSuccess?: () => void }) {
+export function BuyerAuth({
+  onBack,
+  onSuccess,
+  mode = "page",
+}: {
+  onBack: () => void
+  onSuccess?: () => void
+  mode?: "page" | "modal"
+}) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -202,6 +210,7 @@ export function BuyerAuth({ onBack, onSuccess }: { onBack: () => void; onSuccess
         role: 'buyer',
       })
       setRole('buyer')
+      onSuccess?.()
     } catch (err: any) {
       setError(err?.message || 'Google sign-in failed')
     } finally {
@@ -209,32 +218,48 @@ export function BuyerAuth({ onBack, onSuccess }: { onBack: () => void; onSuccess
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30 flex flex-col font-sans">
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onBack}
-            className="p-2 -ml-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all rounded-lg"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <BrandWordmark compact />
-        </div>
-      </header>
+  const isModal = mode === "modal"
 
-      <main className="flex-1 flex flex-col items-center justify-center p-4">
+  return (
+    <div className={isModal ? "w-full max-w-sm" : "min-h-screen bg-gradient-to-br from-background via-background to-secondary/30 flex flex-col font-sans"}>
+      {!isModal && (
+        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onBack}
+              className="p-2 -ml-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all rounded-lg"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <BrandWordmark compact />
+          </div>
+        </header>
+      )}
+
+      <main className={isModal ? "" : "flex-1 flex flex-col items-center justify-center p-4"}>
         <div className="w-full max-w-sm">
           <div className="bg-card rounded-3xl shadow-2xl border border-border/50 p-8">
+            {isModal && (
+              <div className="flex items-center justify-between mb-6">
+                <BrandWordmark compact />
+                <button
+                  onClick={onBack}
+                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all rounded-lg"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            )}
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-5 shadow-lg shadow-primary/25">
                 <ShoppingBag className="w-8 h-8 text-primary-foreground" />
               </div>
               <h1 className="text-2xl font-bold text-foreground mb-2">
-                {isSignUp ? "Create Buyer Account" : "Welcome Back"}
+                {isSignUp ? "Create Buyer Account" : isModal ? "Login to continue" : "Welcome Back"}
               </h1>
               <p className="text-muted-foreground text-sm">
-                {isSignUp ? "Start shopping on our marketplace" : "Sign in to your account"}
+                {isSignUp ? "Start shopping on our marketplace" : isModal ? "Continue your checkout without leaving this page" : "Sign in to your account"}
               </p>
             </div>
 
@@ -351,7 +376,7 @@ export function BuyerAuth({ onBack, onSuccess }: { onBack: () => void; onSuccess
                 disabled={googleLoading || loading}
                 className="w-full py-3 px-4 bg-white border border-border text-foreground font-semibold rounded-xl hover:bg-muted/50 transition-colors disabled:opacity-50"
               >
-                {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
+                {googleLoading ? 'Connecting to Google...' : 'Login with Google'}
               </button>
             </div>
 

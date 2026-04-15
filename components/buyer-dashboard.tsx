@@ -223,6 +223,10 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     if (user && pendingCheckout) {
       setPendingCheckout(false)
       setShowAuthPrompt(false)
+      setShowCart(false)
+      setShowProducts(false)
+      setSelectedProductId(null)
+      setSelectedVendor(null)
       setShowCheckout(true)
     }
   }, [user, pendingCheckout])
@@ -465,6 +469,21 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     cleanupStaleVoiceflowUi(null)
   }
 
+  const authModal = showAuthPrompt ? (
+    <div className="fixed inset-0 z-[85] bg-black/50 p-4 flex items-end sm:items-center justify-center">
+      <BuyerAuth
+        mode="modal"
+        onBack={() => {
+          setShowAuthPrompt(false)
+          setPendingCheckout(false)
+        }}
+        onSuccess={() => {
+          setShowAuthPrompt(false)
+        }}
+      />
+    </div>
+  ) : null
+
   if (showProfile) {
     return <ProfilePage onBack={() => setShowProfile(false)} />
   }
@@ -479,27 +498,30 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
   if (selectedProductId) {
     return (
-      <ProductDetailsPage 
-        productId={selectedProductId} 
-        onBack={() => setSelectedProductId(null)}
-        onViewMerchant={(merchant) => {
-          setSelectedProductId(null)
-          setSelectedVendor(merchant)
-        }}
-        onOpenCart={() => {
-          setSelectedProductId(null)
-          setShowCart(true)
-        }}
-        onCheckout={() => {
-          setSelectedProductId(null)
-          if (!user) {
-            setPendingCheckout(true)
-            setShowAuthPrompt(true)
-            return
-          }
-          setShowCheckout(true)
-        }}
-      />
+      <>
+        <ProductDetailsPage 
+          productId={selectedProductId} 
+          onBack={() => setSelectedProductId(null)}
+          onViewMerchant={(merchant) => {
+            setSelectedProductId(null)
+            setSelectedVendor(merchant)
+          }}
+          onOpenCart={() => {
+            setSelectedProductId(null)
+            setShowCart(true)
+          }}
+          onCheckout={() => {
+            if (!user) {
+              setPendingCheckout(true)
+              setShowAuthPrompt(true)
+              return
+            }
+            setSelectedProductId(null)
+            setShowCheckout(true)
+          }}
+        />
+        {authModal}
+      </>
     )
   }
 
@@ -528,96 +550,91 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
   if (selectedVendor) {
     return (
-      <VendorPage 
-        vendor={selectedVendor} 
-        onBack={() => setSelectedVendor(null)}
-        onChatVendor={(conversation) => {
-          if (guardSuspendedAction()) return
-          setSelectedVendor(null)
-          setInitialConversation(conversation || null)
-          setShowChat(true)
-        }}
-        onBrowseMore={() => {
-          setSelectedVendor(null)
-          setShowProducts(true)
-        }}
-        onOpenCart={() => {
-          setSelectedVendor(null)
-          setShowCart(true)
-        }}
-        onCheckout={() => {
-          setSelectedVendor(null)
-          if (!user) {
-            setPendingCheckout(true)
-            setShowAuthPrompt(true)
-            return
-          }
-          setShowCheckout(true)
-        }}
-      />
+      <>
+        <VendorPage 
+          vendor={selectedVendor} 
+          onBack={() => setSelectedVendor(null)}
+          onChatVendor={(conversation) => {
+            if (guardSuspendedAction()) return
+            setSelectedVendor(null)
+            setInitialConversation(conversation || null)
+            setShowChat(true)
+          }}
+          onBrowseMore={() => {
+            setSelectedVendor(null)
+            setShowProducts(true)
+          }}
+          onOpenCart={() => {
+            setSelectedVendor(null)
+            setShowCart(true)
+          }}
+          onCheckout={() => {
+            if (!user) {
+              setPendingCheckout(true)
+              setShowAuthPrompt(true)
+              return
+            }
+            setSelectedVendor(null)
+            setShowCheckout(true)
+          }}
+        />
+        {authModal}
+      </>
     )
   }
 
   if (showProducts) {
     return (
-      <ProductsMarketplace 
-        onBack={() => {
-          setShowProducts(false)
-          setSelectedCategory(null)
-          setProductSearchQuery("")
-        }}
-        onProductClick={(productId) => {
-          setShowProducts(false)
-          setSelectedProductId(productId)
-        }}
-        onOpenCart={() => {
-          setShowProducts(false)
-          setShowCart(true)
-        }}
-        onCheckout={() => {
-          setShowProducts(false)
-          if (!user) {
-            setPendingCheckout(true)
-            setShowAuthPrompt(true)
-            return
-          }
-          setShowCheckout(true)
-        }}
-        initialCategory={selectedCategory}
-        initialSearch={productSearchQuery}
-      />
+      <>
+        <ProductsMarketplace 
+          onBack={() => {
+            setShowProducts(false)
+            setSelectedCategory(null)
+            setProductSearchQuery("")
+          }}
+          onProductClick={(productId) => {
+            setShowProducts(false)
+            setSelectedProductId(productId)
+          }}
+          onOpenCart={() => {
+            setShowProducts(false)
+            setShowCart(true)
+          }}
+          onCheckout={() => {
+            if (!user) {
+              setPendingCheckout(true)
+              setShowAuthPrompt(true)
+              return
+            }
+            setShowProducts(false)
+            setShowCheckout(true)
+          }}
+          initialCategory={selectedCategory}
+          initialSearch={productSearchQuery}
+        />
+        {authModal}
+      </>
     )
   }
 
   if (showCart) {
     return (
-      <CartView 
-        onBack={() => setShowCart(false)} 
-        onCheckout={() => {
-          if (guardSuspendedAction()) return
-          setShowCart(false)
-          if (!user) {
-            setPendingCheckout(true)
-            setShowAuthPrompt(true)
-            return
-          }
-          setShowCheckout(true)
-        }}
-      />
-    )
-  }
-
-  if (showAuthPrompt) {
-    return (
-      <BuyerAuth
-        onBack={() => {
-          setShowAuthPrompt(false)
-          setPendingCheckout(false)
-        }}
-        onSuccess={() => {
-          setShowAuthPrompt(false)
-        }}
-      />
+      <>
+        <CartView 
+          onBack={() => setShowCart(false)} 
+          onCheckout={() => {
+            if (guardSuspendedAction()) return
+            if (!user) {
+              setPendingCheckout(true)
+              setShowAuthPrompt(true)
+              return
+            }
+            setShowCart(false)
+            setShowCheckout(true)
+          }}
+        />
+        {authModal}
+      </>
     )
   }
 
@@ -1173,6 +1190,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           </div>
         </div>
       )}
+
+      {authModal}
 
         {/* Bottom Navigation */}
         <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around px-2 py-3 max-w-2xl mx-auto">
