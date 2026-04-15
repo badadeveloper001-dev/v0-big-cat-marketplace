@@ -159,65 +159,129 @@ export function LandingPage() {
       </nav>
 
       {/* ── HERO ── */}
-      <section className="relative overflow-hidden pt-20 pb-32 px-5">
-        {/* Background glow orbs */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] rounded-full bg-[#00A651]/15 blur-[120px] pointer-events-none" />
-        <div className="absolute top-40 right-0 w-96 h-96 rounded-full bg-violet-600/10 blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-[#00A651]/10 blur-[100px] pointer-events-none" />
+      <section className="relative overflow-hidden pt-14 pb-24 px-5">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[980px] h-[520px] rounded-full bg-[#00A651]/15 blur-[120px] pointer-events-none" />
+        <div className="absolute top-24 right-0 w-96 h-96 rounded-full bg-violet-600/10 blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-sky-500/10 blur-[100px] pointer-events-none" />
 
-        <div className="relative max-w-4xl mx-auto text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 mb-8">
-            <span className="w-2 h-2 rounded-full bg-[#00A651] animate-pulse" />
-            <span className="text-xs font-semibold text-gray-300 uppercase tracking-widest">
-              Nigeria&apos;s #1 Business Marketplace
-            </span>
-          </div>
+        <div className="relative max-w-6xl mx-auto grid lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center">
+          <div className="text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 mb-7">
+              <span className="w-2 h-2 rounded-full bg-[#00A651] animate-pulse" />
+              <span className="text-xs font-semibold text-gray-300 uppercase tracking-widest">
+                Nigeria&apos;s smart commerce platform
+              </span>
+            </div>
 
-          <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white leading-[1.05] tracking-tight mb-6">
-            Buy. Sell.{" "}
-            <span className="bg-gradient-to-r from-[#00A651] to-[#45c76c] bg-clip-text text-transparent">
-              Grow.
-            </span>
-            <br />
-            <span className="bg-gradient-to-r from-violet-400 to-purple-300 bg-clip-text text-transparent">
-              All in One
-            </span>{" "}
-            Place.
-          </h1>
+            <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white leading-[1.02] tracking-tight mb-5">
+              Shop local.
+              <br />
+              Sell smarter.
+              <br />
+              <span className="bg-gradient-to-r from-[#00A651] via-[#72d38e] to-violet-300 bg-clip-text text-transparent">
+                Grow beautifully.
+              </span>
+            </h1>
 
-          <p className="text-gray-400 text-lg sm:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-            A smart marketplace powered by AI, secured by PalmPay escrow, and backed by SMEDAN — built for every Nigerian business to thrive.
-          </p>
+            <p className="text-gray-300/90 text-lg sm:text-xl max-w-2xl lg:max-w-xl mx-auto lg:mx-0 mb-8 leading-relaxed">
+              A premium marketplace powered by AI, secured by PalmPay escrow, and backed by SMEDAN — designed for modern Nigerian buyers and merchants.
+            </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/marketplace"
-              className="group inline-flex items-center gap-2 bg-[#00A651] hover:bg-[#17bd49] text-white text-base font-bold px-8 py-4 rounded-full shadow-2xl shadow-black/40 transition-all hover:-translate-y-0.5"
-            >
-              Start Selling Today
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-            </Link>
-            <Link
-              href="/marketplace"
-              className="inline-flex items-center gap-2 text-gray-300 hover:text-white text-base font-semibold px-6 py-4 rounded-full border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all"
-            >
-              <ShoppingBag className="w-4 h-4" /> Browse Products
-            </Link>
-          </div>
-
-          {/* Stats pills */}
-          <div className="flex flex-wrap items-center justify-center gap-3 mt-12">
-            {stats.map((stat) => (
-              <div
-                key={stat.label}
-                className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2"
+            <div className="flex flex-col sm:flex-row items-center lg:items-center justify-center lg:justify-start gap-4">
+              <Link
+                href="/marketplace"
+                className="group inline-flex items-center gap-2 bg-[#00A651] hover:bg-[#17bd49] text-white text-base font-bold px-8 py-4 rounded-full shadow-2xl shadow-black/40 transition-all hover:-translate-y-0.5"
               >
-                <stat.icon className="w-3.5 h-3.5 text-[#45c76c] flex-shrink-0" />
-                <span className="text-white font-bold text-sm">{stat.value}</span>
-                <span className="text-gray-500 text-xs">{stat.label}</span>
+                Start Selling Today
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+              <Link
+                href="/marketplace"
+                className="inline-flex items-center gap-2 text-gray-200 hover:text-white text-base font-semibold px-6 py-4 rounded-full border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all"
+              >
+                <ShoppingBag className="w-4 h-4" /> Browse Products
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-8 text-left">
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                  <Shield className="w-4 h-4 text-[#45c76c]" /> Escrow Protected
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Payments stay safe until delivery is confirmed.</p>
               </div>
-            ))}
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                  <Brain className="w-4 h-4 text-violet-300" /> AI Discovery
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Shoppers find the right products faster.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                  <CreditCard className="w-4 h-4 text-sky-300" /> Fast Checkout
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Smooth card, bank, wallet, and delivery flows.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mt-8">
+              {stats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2"
+                >
+                  <stat.icon className="w-3.5 h-3.5 text-[#45c76c] flex-shrink-0" />
+                  <span className="text-white font-bold text-sm">{stat.value}</span>
+                  <span className="text-gray-500 text-xs">{stat.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="absolute -inset-4 rounded-[36px] bg-gradient-to-br from-[#00A651]/20 via-transparent to-violet-500/20 blur-2xl" />
+            <div className="relative rounded-[32px] border border-white/10 bg-white/5 p-2 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+              <div className="relative aspect-[4/5] overflow-hidden rounded-[26px] bg-[#0a1b0f]">
+                <Image
+                  src="/Picture1.jpg"
+                  alt="A buyer shopping confidently in a vibrant local market"
+                  fill
+                  priority
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#03160a]/85 via-[#032c0e]/15 to-transparent" />
+
+                <div className="absolute top-4 left-4 rounded-full border border-white/15 bg-[#032c0e]/80 px-3 py-1.5 text-[11px] font-semibold text-white backdrop-blur-md">
+                  Live marketplace energy ✨
+                </div>
+
+                <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-md">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[#72d38e]">Built for real commerce</p>
+                  <p className="text-white text-lg font-bold mt-1">From neighborhood markets to nationwide growth.</p>
+                  <p className="text-gray-300 text-sm mt-1">Beautiful storefronts, secure escrow, and AI tools that help merchants sell more.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden sm:flex absolute -left-4 top-10 rounded-2xl border border-white/10 bg-[#07120b]/90 px-4 py-3 shadow-xl backdrop-blur-md items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#00A651]/20 flex items-center justify-center">
+                <ShoppingBag className="w-5 h-5 text-[#72d38e]" />
+              </div>
+              <div>
+                <p className="text-white text-sm font-semibold">Verified local sellers</p>
+                <p className="text-gray-400 text-xs">Trusted SMEs across Nigeria</p>
+              </div>
+            </div>
+
+            <div className="hidden sm:flex absolute -right-3 bottom-16 rounded-2xl border border-white/10 bg-[#07120b]/90 px-4 py-3 shadow-xl backdrop-blur-md items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center">
+                <Brain className="w-5 h-5 text-violet-300" />
+              </div>
+              <div>
+                <p className="text-white text-sm font-semibold">AI-powered growth</p>
+                <p className="text-gray-400 text-xs">Smarter product discovery</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
