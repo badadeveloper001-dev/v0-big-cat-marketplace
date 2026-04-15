@@ -7,13 +7,16 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  ExternalLink,
   Loader2,
   LogOut,
   Mail,
   MapPin,
+  Paperclip,
   RefreshCw,
   UserRound,
   Users,
+  X,
 } from "lucide-react"
 
 type OnboardingStatus = "not_started" | "in_progress" | "completed"
@@ -39,6 +42,11 @@ export function AgentDashboard() {
   const [error, setError] = useState("")
   const [requests, setRequests] = useState<OnboardingRequest[]>([])
   const [selectedRequestId, setSelectedRequestId] = useState("")
+  const [showEmailComposer, setShowEmailComposer] = useState(false)
+  const [emailSubject, setEmailSubject] = useState("")
+  const [emailBody, setEmailBody] = useState("")
+  const [emailAttachments, setEmailAttachments] = useState<File[]>([])
+  const [emailHint, setEmailHint] = useState("")
 
   const currentAgentId = String(user?.userId || (user as any)?.id || "").trim()
 
@@ -126,12 +134,56 @@ export function AgentDashboard() {
     }
   }
 
-  const startChat = (request: OnboardingRequest) => {
-    const subject = encodeURIComponent(`BigCat Onboarding Support: ${request.business_name}`)
-    const body = encodeURIComponent(
-      `Hello ${request.owner_name},\n\nI am your assigned onboarding agent on BigCat. Let's continue your onboarding process.`
+  const openSmedanWebsite = () => {
+    window.open("https://smedan.gov.ng/", "_blank", "noopener,noreferrer")
+  }
+
+  const openEmailComposer = (request: OnboardingRequest) => {
+    const agentName = user?.name || "Assigned Agent"
+    setSelectedRequestId(request.id)
+    setEmailAttachments([])
+    setEmailHint("")
+    setEmailSubject(`Your SMEDAN ID and CAC certificate are ready - ${request.business_name}`)
+    setEmailBody(
+      `Hello ${request.owner_name},\n\nThis is ${agentName}, your onboarding agent for ${request.business_name} on BigCat Marketplace.\n\nWe are pleased to let you know that your SMEDAN ID and CAC ID/certificate are now available. Please find the certificate image attachments attached for your records.\n\nIf you need any clarification or support with the next onboarding step, kindly reply to this email and I will assist you.\n\nBest regards,\n${agentName}\nBigCat Onboarding Agent`
     )
-    window.open(`mailto:${request.email}?subject=${subject}&body=${body}`, "_blank")
+    setShowEmailComposer(true)
+  }
+
+  const sendEmailTemplate = async () => {
+    if (!selectedRequest) return
+
+    const attachmentNames = emailAttachments.map((file) => file.name).join(", ")
+
+    try {
+      const canShareFiles =
+        emailAttachments.length > 0 &&
+        typeof navigator !== "undefined" &&
+        Boolean((navigator as any).canShare?.({ files: emailAttachments }))
+
+      if (canShareFiles && typeof navigator !== "undefined" && (navigator as any).share) {
+        await (navigator as any).share({
+          title: emailSubject,
+          text: emailBody,
+          files: emailAttachments,
+        })
+        setShowEmailComposer(false)
+        return
+      }
+
+      const finalBody = `${emailBody}${attachmentNames ? `\n\nAttachments selected: ${attachmentNames}\nPlease attach these certificate images before sending.` : ""}`
+      const subject = encodeURIComponent(emailSubject)
+      const body = encodeURIComponent(finalBody)
+      window.open(`mailto:${selectedRequest.email}?subject=${subject}&body=${body}`, "_blank")
+      setEmailHint(
+        attachmentNames
+          ? "Your email app has been opened. Please attach the selected certificate images before sending."
+          : "Your email app has been opened with the prepared message."
+      )
+      setShowEmailComposer(false)
+    } catch {
+      setEmailHint("Unable to open the email draft right now. Please try again.")
+    }
   }
 
   const logout = () => {
@@ -211,6 +263,12 @@ export function AgentDashboard() {
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
           ) : null}
 
+          {emailHint ? (
+            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {emailHint}
+            </div>
+          ) : null}
+
           <div className="mt-5 grid grid-cols-2 xl:grid-cols-4 gap-3">
             <StatCard label="Total Merchants" value={stats.totalMerchants} icon={<Users className="w-4 h-4" />} />
             <StatCard label="Pending" value={stats.pendingOnboarding} icon={<Clock className="w-4 h-4" />} />
@@ -260,10 +318,10 @@ export function AgentDashboard() {
                             </span>
                           ) : isAssignedToCurrent ? (
                             <button
-                              onClick={() => setSelectedRequestId(request.id)}
+                              onClick={() => openEmailComposer(request)}
                               className="text-xs px-3 py-2 rounded-lg border border-border hover:bg-secondary"
                             >
-                              Continue Chat
+                              Send Email
                             </button>
                           ) : (
                             <button
@@ -300,14 +358,21 @@ export function AgentDashboard() {
                     <StatusBadge status={selectedRequest.onboarding_status} />
                   </div>
 
-                  <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="pt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button
-                      onClick={() => startChat(selectedRequest)}
+                      onClick={openSmedanWebsite}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-secondary"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Get Started
+                    </button>
+                    <button
+                      onClick={() => openEmailComposer(selectedRequest)}
                       disabled={selectedRequest.assigned_agent_id !== currentAgentId}
                       className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Mail className="w-4 h-4" />
-                      Start Chat
+                      Send Email
                     </button>
                     <button
                       onClick={() => markCompleted(selectedRequest.id)}
@@ -327,6 +392,100 @@ export function AgentDashboard() {
           </div>
         </main>
       </div>
+
+      {showEmailComposer && selectedRequest ? (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Send Email</h3>
+                <p className="text-sm text-muted-foreground">Prepared for {selectedRequest.owner_name} at {selectedRequest.business_name}</p>
+              </div>
+              <button
+                onClick={() => setShowEmailComposer(false)}
+                className="rounded-lg p-2 hover:bg-secondary"
+                aria-label="Close email composer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-4">
+              <div className="rounded-lg border border-border px-3 py-2">
+                <p className="text-xs text-muted-foreground">To</p>
+                <p className="text-sm font-medium text-foreground mt-1 break-all">{selectedRequest.email}</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground">Subject</label>
+                <input
+                  value={emailSubject}
+                  onChange={(event) => setEmailSubject(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground">Message</label>
+                <textarea
+                  value={emailBody}
+                  onChange={(event) => setEmailBody(event.target.value)}
+                  rows={10}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground">Certificate Attachments</label>
+                <label className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground hover:bg-secondary/50">
+                  <Paperclip className="w-4 h-4" />
+                  Add SMEDAN and CAC certificate images
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                      setEmailAttachments(Array.from(event.target.files || []))
+                    }}
+                  />
+                </label>
+
+                {emailAttachments.length > 0 ? (
+                  <div className="mt-2 rounded-lg bg-secondary/50 p-3 text-sm text-foreground">
+                    <p className="font-medium">Selected files</p>
+                    <ul className="mt-1 space-y-1 text-muted-foreground">
+                      {emailAttachments.map((file) => (
+                        <li key={`${file.name}-${file.size}`}>• {file.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Your browser may open the default mail app with the message prefilled. On supported devices, selected images can also be shared directly.
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                <button
+                  onClick={() => setShowEmailComposer(false)}
+                  className="px-4 py-2 rounded-lg border border-border hover:bg-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={sendEmailTemplate}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90"
+                >
+                  <Mail className="w-4 h-4" />
+                  Open Email Draft
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
