@@ -14,6 +14,7 @@ import { ProfilePage } from "@/components/profile-page"
 import { SettingsPage } from "@/components/settings-page"
 import { PaymentMethodsPage } from "@/components/payment-methods-page"
 import { useCart } from "@/lib/cart-context"
+import { useWishlist } from "@/lib/wishlist-context"
 import {
   Home,
   Search,
@@ -21,6 +22,7 @@ import {
   User,
   Bell,
   MessageSquare,
+  Heart,
   ArrowLeft,
   Mic,
   Sparkles,
@@ -83,7 +85,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [showCheckout, setShowCheckout] = useState(false)
   const [showOrders, setShowOrders] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null)
-  const { items: cartItems, getItemCount } = useCart()
+  const { items: cartItems, getItemCount: getCartItemCount } = useCart()
+  const { items: wishlistItems, getItemCount: getWishlistCount, clearWishlist } = useWishlist()
   const [merchants, setMerchants] = useState<any[]>([])
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([])
   const [recentOrders, setRecentOrders] = useState<any[]>([])
@@ -721,6 +724,19 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               </button>
             )}
             <button 
+              onClick={() => setActiveTab("wishlist")}
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Wishlist"
+              title="Wishlist"
+            >
+              <Heart className="w-5 h-5" />
+              {getWishlistCount() > 0 && (
+                <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-rose-500 text-white rounded-full">
+                  {getWishlistCount()}
+                </span>
+              )}
+            </button>
+            <button 
               onClick={() => setShowNotifications(true)}
               className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Notifications"
@@ -756,7 +772,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               <ShoppingBag className="w-5 h-5" />
               {cartItems.length > 0 && (
                 <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full">
-                  {getItemCount()}
+                  {getCartItemCount()}
                 </span>
               )}
             </button>
@@ -1037,6 +1053,51 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           <ChatInterface onUnreadChange={setUnreadMessages} />
         )}
 
+        {/* Wishlist Tab */}
+        {activeTab === "wishlist" && (
+          <div className="p-4 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold text-foreground">My Wishlist</h2>
+                <p className="text-sm text-muted-foreground">
+                  {getWishlistCount()} saved product{getWishlistCount() !== 1 ? 's' : ''}
+                </p>
+              </div>
+              {wishlistItems.length > 0 && (
+                <button
+                  onClick={clearWishlist}
+                  className="rounded-xl border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
+            {wishlistItems.length === 0 ? (
+              <div className="bg-card border border-border rounded-2xl p-8 text-center">
+                <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-foreground mb-1">Your wishlist is empty</h3>
+                <p className="text-sm text-muted-foreground mb-4">Save products you love and come back to them anytime.</p>
+                <button
+                  onClick={() => {
+                    setActiveTab("home")
+                    setShowProducts(true)
+                  }}
+                  className="px-4 py-3 rounded-xl bg-primary text-primary-foreground font-semibold"
+                >
+                  Browse Products
+                </button>
+              </div>
+            ) : (
+              <ProductGrid
+                products={wishlistItems}
+                onProductClick={(productId) => setSelectedProductId(productId)}
+                onAddToCart={setCartPopupProduct}
+              />
+            )}
+          </div>
+        )}
+
         {/* Orders Tab */}
         {activeTab === "orders" && (
           <BuyerOrders onBack={() => setActiveTab("home")} />
@@ -1197,7 +1258,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
         <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around px-2 py-3 max-w-2xl mx-auto">
           <button
             onClick={() => setActiveTab("home")}
-            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors ${
               activeTab === "home"
                 ? "text-primary"
                 : "text-muted-foreground hover:text-foreground"
@@ -1208,7 +1269,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           </button>
           <button
             onClick={() => setActiveTab("chat")}
-            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors relative ${
+            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors relative ${
               activeTab === "chat"
                 ? "text-primary"
                 : "text-muted-foreground hover:text-foreground"
@@ -1225,8 +1286,26 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             <span className="text-xs font-medium">Messages</span>
           </button>
           <button
+            onClick={() => setActiveTab("wishlist")}
+            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors relative ${
+              activeTab === "wishlist"
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <div className="relative">
+              <Heart className="w-6 h-6" />
+              {getWishlistCount() > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-rose-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                  {getWishlistCount() > 99 ? '99+' : getWishlistCount()}
+                </span>
+              )}
+            </div>
+            <span className="text-xs font-medium">Wishlist</span>
+          </button>
+          <button
             onClick={() => setActiveTab("orders")}
-            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors ${
               activeTab === "orders"
                 ? "text-primary"
                 : "text-muted-foreground hover:text-foreground"
@@ -1237,7 +1316,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           </button>
           <button
             onClick={() => setActiveTab("profile")}
-            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors ${
               activeTab === "profile"
                 ? "text-primary"
                 : "text-muted-foreground hover:text-foreground"

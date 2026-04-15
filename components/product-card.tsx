@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { ShoppingCart, Star, MapPin, Package, Check } from 'lucide-react'
+import { ShoppingCart, Heart, MapPin, Package, Check } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
 import { useCart } from '@/lib/cart-context'
+import { useWishlist } from '@/lib/wishlist-context'
 import Image from 'next/image'
 
 interface ProductCardProps {
@@ -46,6 +47,19 @@ export function ProductCard({
 }: ProductCardProps) {
   const [addedToCart, setAddedToCart] = useState(false)
   const { addItem } = useCart()
+  const { toggleItem, isInWishlist } = useWishlist()
+
+  const wishlistItem = {
+    id,
+    productId: id,
+    name,
+    price,
+    category,
+    image,
+    merchant,
+  }
+
+  const savedToWishlist = isInWishlist(id)
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -58,7 +72,7 @@ export function ProductCard({
       merchantId: merchant.id,
       merchantName: merchant.business_name,
     })
-    onAddToCart?.({ id, name, price, category, image, merchant })
+    onAddToCart?.(wishlistItem)
     setAddedToCart(true)
     setTimeout(() => setAddedToCart(false), 2000)
   }
@@ -70,6 +84,22 @@ export function ProductCard({
     >
       {/* Product Image */}
       <div className="aspect-[4/3] bg-gradient-to-br from-secondary to-secondary/50 flex items-center justify-center overflow-hidden relative">
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            toggleItem(wishlistItem)
+          }}
+          className={`absolute right-2 top-2 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${
+            savedToWishlist
+              ? 'border-rose-200 bg-white/90 text-rose-500'
+              : 'border-white/70 bg-white/80 text-muted-foreground hover:text-rose-500'
+          }`}
+          aria-label={savedToWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+          title={savedToWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+        >
+          <Heart className={`w-4 h-4 ${savedToWishlist ? 'fill-current' : ''}`} />
+        </button>
+
         {image ? (
           image.startsWith('http') ? (
             <img

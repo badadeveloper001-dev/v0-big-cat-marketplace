@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
-import { Loader2, MapPin, Share2, Store, Tag, ShoppingBag, ExternalLink, ShoppingCart, CheckCircle2 } from 'lucide-react'
+import { Loader2, MapPin, Share2, Store, Tag, ShoppingBag, ExternalLink, ShoppingCart, CheckCircle2, Heart } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
 import { extractMerchantIdFromSlug, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
 import { useCart } from '@/lib/cart-context'
+import { useWishlist } from '@/lib/wishlist-context'
 
 const themeMap: Record<WebsiteTheme, { hero: string; button: string; badge: string; soft: string }> = {
   emerald: {
@@ -37,6 +38,7 @@ export default function MerchantMiniWebsitePage() {
   const [loading, setLoading] = useState(true)
   const [addedProduct, setAddedProduct] = useState<any | null>(null)
   const { addItem, getItemCount, getTotal } = useCart()
+  const { toggleItem, isInWishlist } = useWishlist()
 
   const merchantId = useMemo(() => extractMerchantIdFromSlug(params?.slug || ''), [params])
   const theme = (searchParams.get('theme') || 'emerald') as WebsiteTheme
@@ -235,7 +237,35 @@ export default function MerchantMiniWebsitePage() {
                     )}
                   </div>
                   <div className="p-3">
-                    <p className="font-semibold text-sm text-foreground line-clamp-2">{product.name}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-sm text-foreground line-clamp-2">{product.name}</p>
+                      <button
+                        onClick={() =>
+                          toggleItem({
+                            id: String(product.id),
+                            productId: String(product.id),
+                            name: product.name,
+                            price: Number(product.price || 0),
+                            category: product.category || 'General',
+                            image: product.images?.[0] || product.image_url || null,
+                            merchant: {
+                              id: merchantId,
+                              business_name: profile.business_name || profile.full_name || 'Merchant',
+                              logo_url: profile.logo_url || profile.avatar_url || '',
+                              location: profile.location || 'Nigeria',
+                            },
+                          })
+                        }
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                          isInWishlist(String(product.id))
+                            ? 'border-rose-200 bg-rose-50 text-rose-500'
+                            : 'border-border bg-card text-muted-foreground hover:text-rose-500'
+                        }`}
+                        aria-label={isInWishlist(String(product.id)) ? 'Remove from wishlist' : 'Add to wishlist'}
+                      >
+                        <Heart className={`w-4 h-4 ${isInWishlist(String(product.id)) ? 'fill-current' : ''}`} />
+                      </button>
+                    </div>
                     <p className="text-primary font-bold mt-1">{formatNaira(Number(product.price || 0))}</p>
                     <div className="mt-3 space-y-2">
                       <button

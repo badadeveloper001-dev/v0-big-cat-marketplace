@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { formatNaira } from '@/lib/currency-utils'
 import { useCart } from '@/lib/cart-context'
-import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2, ChevronLeft, ChevronRight, ImageIcon, Store } from 'lucide-react'
+import { useWishlist } from '@/lib/wishlist-context'
+import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2, ChevronLeft, ChevronRight, ImageIcon, Store, Heart } from 'lucide-react'
 import { ProductReviews, StarRating } from './product-reviews'
 import { BrandWordmark } from './brand-wordmark'
 import Image from 'next/image'
@@ -25,6 +26,7 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
   const [showAddedPopup, setShowAddedPopup] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const { addItem, getItemCount, getTotal } = useCart()
+  const { toggleItem, isInWishlist } = useWishlist()
 
   useEffect(() => {
     loadProduct()
@@ -68,6 +70,22 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
   const merchant = product.merchant_profiles || {}
   const cartCount = getItemCount()
   const cartTotal = getTotal()
+  const savedToWishlist = isInWishlist(String(product.id))
+
+  const wishlistItem = {
+    id: String(product.id),
+    productId: String(product.id),
+    name: product.name,
+    price: Number(product.price || 0),
+    category: product.category || 'General',
+    image: product.images?.[0] || product.image_url || null,
+    merchant: {
+      id: String(product.merchant_id || ''),
+      business_name: merchant.business_name || merchant.name || 'Merchant',
+      logo_url: merchant.logo_url || merchant.avatar_url || '',
+      location: merchant.location || 'Nigeria',
+    },
+  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -148,13 +166,24 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
 
         {/* Product Info */}
         <div className="space-y-3">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <span className="text-xs px-2 py-1 bg-secondary rounded-full text-foreground">
                 {product.category}
               </span>
               <h1 className="text-3xl font-bold text-foreground mt-4">{product.name}</h1>
             </div>
+            <button
+              onClick={() => toggleItem(wishlistItem)}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors ${
+                savedToWishlist
+                  ? 'border-rose-200 bg-rose-50 text-rose-600'
+                  : 'border-border bg-card text-muted-foreground hover:text-rose-500'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${savedToWishlist ? 'fill-current' : ''}`} />
+              {savedToWishlist ? 'Saved' : 'Save'}
+            </button>
           </div>
 
           <div className="flex items-center gap-4">
@@ -329,6 +358,18 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
                 Add to Cart
               </>
             )}
+          </button>
+
+          <button
+            onClick={() => toggleItem(wishlistItem)}
+            className={`w-full py-3 rounded-lg font-semibold border transition-colors flex items-center justify-center gap-2 ${
+              savedToWishlist
+                ? 'border-rose-200 bg-rose-50 text-rose-600'
+                : 'border-border bg-card text-foreground hover:bg-secondary'
+            }`}
+          >
+            <Heart className={`w-5 h-5 ${savedToWishlist ? 'fill-current' : ''}`} />
+            {savedToWishlist ? 'Remove from Wishlist' : 'Add to Wishlist'}
           </button>
 
           <button

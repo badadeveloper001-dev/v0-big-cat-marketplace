@@ -27,6 +27,7 @@ import Image from "next/image"
 import { formatNaira } from "@/lib/currency-utils"
 import { BrandWordmark } from "./brand-wordmark"
 import { useCart } from "@/lib/cart-context"
+import { useWishlist } from "@/lib/wishlist-context"
 import { isUserSuspended } from "@/lib/trust-safety"
 import { getMerchantMiniWebsitePath } from "@/lib/merchant-website"
 
@@ -94,6 +95,7 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   const [addedToCart, setAddedToCart] = useState<string | null>(null)
   const [popupProduct, setPopupProduct] = useState<any | null>(null)
   const { addItem, getItemCount, getTotal } = useCart()
+  const { toggleItem, isInWishlist } = useWishlist()
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [chatLoading, setChatLoading] = useState(false)
@@ -538,16 +540,44 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleAddToCart(product)}
-                      className={`flex-shrink-0 px-4 py-2 h-fit text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-                        addedToCart === product.id
-                          ? "bg-green-500 text-white"
-                          : "bg-primary text-primary-foreground hover:bg-primary/90"
-                      }`}
-                    >
-                      {addedToCart === product.id ? "Added ✓" : "Add to Cart"}
-                    </button>
+                    <div className="flex flex-col items-end gap-2">
+                      <button
+                        onClick={() =>
+                          toggleItem({
+                            id: String(product.id),
+                            productId: String(product.id),
+                            name: product.name,
+                            price: Number(product.price || 0),
+                            category: product.category || vendor.category || 'General',
+                            image: product.images?.[0] || product.image_url || null,
+                            merchant: {
+                              id: String(vendor.id),
+                              business_name: vendor.name,
+                              logo_url: vendor.logo_url || vendor.avatar_url || '',
+                              location: vendor.location,
+                            },
+                          })
+                        }
+                        className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${
+                          isInWishlist(String(product.id))
+                            ? 'border-rose-200 bg-rose-50 text-rose-500'
+                            : 'border-border bg-card text-muted-foreground hover:text-rose-500'
+                        }`}
+                        aria-label={isInWishlist(String(product.id)) ? 'Remove from wishlist' : 'Add to wishlist'}
+                      >
+                        <Heart className={`w-4 h-4 ${isInWishlist(String(product.id)) ? 'fill-current' : ''}`} />
+                      </button>
+                      <button
+                        onClick={() => handleAddToCart(product)}
+                        className={`flex-shrink-0 px-4 py-2 h-fit text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
+                          addedToCart === product.id
+                            ? "bg-green-500 text-white"
+                            : "bg-primary text-primary-foreground hover:bg-primary/90"
+                        }`}
+                      >
+                        {addedToCart === product.id ? "Added ✓" : "Add to Cart"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
