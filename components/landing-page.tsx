@@ -149,12 +149,6 @@ export function LandingPage() {
               Browse
             </Link>
             <Link
-              href="/mobile-marketplace"
-              className="hidden sm:inline-flex items-center gap-1.5 border border-white/15 bg-white/5 hover:bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-full transition-all"
-            >
-              <Smartphone className="w-3.5 h-3.5" /> Mobile Version
-            </Link>
-            <Link
               href="/marketplace"
               className="inline-flex items-center gap-1.5 bg-[#00A651] hover:bg-[#17bd49] text-white text-sm font-semibold px-4 py-2 rounded-full transition-all shadow-lg shadow-black/30"
             >
@@ -206,12 +200,6 @@ export function LandingPage() {
                 className="inline-flex items-center gap-2 text-gray-200 hover:text-white text-base font-semibold px-6 py-4 rounded-full border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all"
               >
                 <ShoppingBag className="w-4 h-4" /> Browse Products
-              </Link>
-              <Link
-                href="/mobile-marketplace"
-                className="inline-flex items-center gap-2 text-gray-200 hover:text-white text-base font-semibold px-6 py-4 rounded-full border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all"
-              >
-                <Smartphone className="w-4 h-4" /> Open Mobile Version
               </Link>
             </div>
 
@@ -478,11 +466,11 @@ export function LandingPage() {
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
             <Link
-              href="/mobile-marketplace"
+              href="/marketplace"
               className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm font-medium transition-colors"
             >
               <Smartphone className="w-4 h-4" />
-              Try the mobile version
+              Or shop as a buyer
             </Link>
           </div>
         </div>
