@@ -10,7 +10,6 @@ import { formatNaira } from "@/lib/currency-utils"
 import { PaymentMethodSelector, type PaymentMethod } from "@/components/payment-method-selector"
 import { getUserStrikeCount, isUserSuspended, resetSafetyState } from "@/lib/trust-safety"
 import { createEscrowRecord } from "@/lib/escrow"
-import { createDemoOrdersFromCheckout } from "@/lib/demo-orders"
 import { sendOrderToLogistics } from "@/lib/logistics"
 
 interface CheckoutPageProps {
@@ -128,58 +127,6 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       return
     }
 
-    if (isWalletPayment) {
-      const createdOrders = createDemoOrdersFromCheckout({
-        buyerId: user.userId,
-        items,
-        deliveryAddress: deliveryAddress.trim(),
-        deliveryType: fulfillmentMethod === 'pickup' ? 'pickup' : deliveryType,
-        deliveryFee,
-      })
-
-      if (createdOrders.length === 0) {
-        await Promise.all(
-          merchantIdsInCart.map((merchantId) =>
-            fetch('/api/merchant/tokens/top-up', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ merchantId, amount: tokenChargeResult.tokenCostPerMerchant || 0 }),
-            }).catch(() => null)
-          )
-        )
-        setIsSubmitting(false)
-        setError('Could not create order from cart items')
-        return
-      }
-
-      const firstOrderId = String(createdOrders[0].id)
-      createEscrowRecord(firstOrderId, grandTotal, deliveryFee)
-
-      // Send to logistics system (fire-and-forget)
-      sendOrderToLogistics({
-        order_id: firstOrderId,
-        customer_name: user?.name || user?.email || "Customer",
-        customer_phone: user?.phone || "",
-        delivery_address: deliveryAddress.trim(),
-        items: items.map((item) => ({ product_name: item.name, quantity: item.quantity })),
-        total_amount: grandTotal,
-        delivery_fee: deliveryFee,
-        status: "pending",
-      })
-
-      const updatedBalance = Math.max(0, currentWalletBalance - grandTotal)
-      localStorage.setItem(getWalletStorageKey(), updatedBalance.toString())
-      setWalletBalance(updatedBalance)
-      setSuccess('Payment successful')
-
-      setIsSubmitting(false)
-      clearCart()
-      setTimeout(() => {
-        onSuccess(firstOrderId)
-      }, 700)
-      return
-    }
-
     const result = await createOrder({
       buyerId: user.userId,
       items: items.map(item => ({
@@ -199,31 +146,44 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     setIsSubmitting(false)
 
     if (result.success && result.data) {
+      const createdOrders = Array.isArray((result.data as any).orders) && (result.data as any).orders.length > 0
+        ? (result.data as any).orders
+        : [result.data]
       const orderId = String(result.data.orderId || result.data.id || `order_${Date.now()}`)
-      createEscrowRecord(orderId, grandTotal, deliveryFee)
 
-      // Send to logistics system (fire-and-forget)
-      sendOrderToLogistics({
-        order_id: orderId,
-        customer_name: user?.name || user?.email || "Customer",
-        customer_phone: user?.phone || "",
-        delivery_address: deliveryAddress.trim(),
-        items: items.map((item) => ({ product_name: item.name, quantity: item.quantity })),
-        total_amount: grandTotal,
-        delivery_fee: deliveryFee,
-        status: "pending",
+      createdOrders.forEach((createdOrder: any, index: number) => {
+        const currentOrderId = String(createdOrder?.id || `${orderId}_${index}`)
+        const currentOrderTotal = Number(createdOrder?.grand_total || createdOrder?.total_amount || 0)
+        const currentDeliveryFee = Number(createdOrder?.delivery_fee || 0)
+
+        createEscrowRecord(currentOrderId, currentOrderTotal, currentDeliveryFee)
+
+        const scopedItems = items.filter(
+          (item) => String(item.merchantId || '') === String(createdOrder?.merchant_id || '')
+        )
+
+        sendOrderToLogistics({
+          order_id: currentOrderId,
+          customer_name: user?.name || user?.email || "Customer",
+          customer_phone: user?.phone || "",
+          delivery_address: deliveryAddress.trim(),
+          items: (scopedItems.length > 0 ? scopedItems : items).map((item) => ({ product_name: item.name, quantity: item.quantity })),
+          total_amount: currentOrderTotal,
+          delivery_fee: currentDeliveryFee,
+          status: "pending",
+        })
       })
 
       if (isWalletPayment) {
         const updatedBalance = Math.max(0, currentWalletBalance - grandTotal)
         localStorage.setItem(getWalletStorageKey(), updatedBalance.toString())
         setWalletBalance(updatedBalance)
-        setSuccess('Payment successful')
+        setSuccess('Payment successful and funds secured in escrow')
       } else {
         setSuccess(
           paymentMethod === 'bank'
-            ? 'Bank transfer order created successfully'
-            : 'Card payment processed successfully'
+            ? 'Bank transfer confirmed and funds secured in escrow'
+            : 'Card payment processed and funds secured in escrow'
         )
       }
       clearCart()

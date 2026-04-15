@@ -147,7 +147,8 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
   }, [])
 
   const buildDeliveryPayload = (order: any): DeliveryPayload => {
-    const itemWeight = (order.items || []).reduce((sum: number, item: any) => {
+    const orderItems = order.order_items || order.items || []
+    const itemWeight = orderItems.reduce((sum: number, item: any) => {
       const weight = Number(item?.weight ?? item?.products?.weight ?? 0)
       return sum + Math.max(0, weight) * Number(item?.quantity || 0)
     }, 0)
@@ -291,6 +292,7 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
               const isUpdating = updatingOrderId === order.id
               const escrow = escrowMap[String(order.id)]
               const paymentHeld = escrow?.merchant_status === "held" || escrow?.logistics_status === "held"
+              const orderItems = order.order_items || order.items || []
               
               return (
                 <div
@@ -313,13 +315,13 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
 
                   {/* Order Items */}
                   <div className="space-y-2 mb-3">
-                    {order.items?.map((item: any) => (
+                    {orderItems.map((item: any) => (
                       <div key={item.id} className="flex justify-between items-center text-sm">
                         <span className="text-foreground">
-                          {item.product_name} x{item.quantity}
+                          {item.product_name || item.name || 'Product'} x{item.quantity}
                         </span>
                         <span className="text-muted-foreground">
-                          N{item.total_price?.toLocaleString()}
+                          N{Number(item.total_price || item.price || 0).toLocaleString()}
                         </span>
                       </div>
                     ))}
@@ -333,7 +335,7 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Your Earnings</p>
                       <p className="font-semibold text-foreground">
-                        N{order.items?.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0).toLocaleString()}
+                        N{orderItems.reduce((sum: number, item: any) => sum + Number(item.total_price || item.price || 0), 0).toLocaleString()}
                       </p>
                     </div>
                   </div>

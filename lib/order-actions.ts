@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { holdFundsInEscrow, releaseFundsFromEscrow } from '@/lib/escrow-actions'
 
 export async function getBuyerOrders(buyerId: string) {
   try {
@@ -90,12 +91,14 @@ export async function createOrder(
       const grandTotal = productTotal + allocatedDeliveryFee
       const orderId = crypto.randomUUID()
 
+      const resolvedPaymentMethod = payload.paymentMethod || 'card'
+
       const orderInsertAttempts = [
         {
           id: orderId,
           buyer_id: payload.buyerId,
           merchant_id: normalizedMerchantId,
-          status: 'pending',
+          status: 'paid',
           grand_total: grandTotal,
           product_total: productTotal,
           delivery_fee: allocatedDeliveryFee,
@@ -103,30 +106,37 @@ export async function createOrder(
           delivery_type: payload.deliveryType,
           delivery_address: payload.deliveryAddress,
           shipping_address: payload.deliveryAddress,
-          payment_method: payload.paymentMethod || 'card',
+          payment_method: resolvedPaymentMethod,
+          payment_status: 'completed',
+          payment_provider: resolvedPaymentMethod,
+          escrow_status: 'held',
         },
         {
           id: orderId,
           buyer_id: payload.buyerId,
           merchant_id: normalizedMerchantId,
-          status: 'pending',
+          status: 'paid',
           grand_total: grandTotal,
           product_total: productTotal,
           delivery_fee: allocatedDeliveryFee,
           delivery_type: payload.deliveryType,
           delivery_address: payload.deliveryAddress,
-          payment_method: payload.paymentMethod || 'card',
+          payment_method: resolvedPaymentMethod,
+          payment_status: 'completed',
+          payment_provider: resolvedPaymentMethod,
+          escrow_status: 'held',
         },
         {
           id: orderId,
           buyer_id: payload.buyerId,
           merchant_id: normalizedMerchantId,
-          status: 'pending',
+          status: 'paid',
           total_amount: grandTotal,
           delivery_fee: allocatedDeliveryFee,
           delivery_address: payload.deliveryAddress,
-          payment_status: 'pending',
-          payment_provider: payload.paymentMethod || 'card',
+          payment_status: 'completed',
+          payment_provider: resolvedPaymentMethod,
+          escrow_status: 'held',
         },
       ]
 
@@ -172,6 +182,24 @@ export async function createOrder(
       }
 
       if (itemsResult.error) throw itemsResult.error
+
+      await holdFundsInEscrow(
+        supabase,
+        {
+          ...(orderResult.data || {}),
+          id: orderResult.data?.id || orderId,
+          merchant_id: normalizedMerchantId,
+          product_total: productTotal,
+          grand_total: grandTotal,
+          total_amount: grandTotal,
+          delivery_fee: allocatedDeliveryFee,
+          payment_method: resolvedPaymentMethod,
+          payment_provider: resolvedPaymentMethod,
+          status: orderResult.data?.status || 'pending',
+        },
+        resolvedPaymentMethod,
+      )
+
       createdOrders.push(orderResult.data)
     }
 
@@ -191,8 +219,43 @@ export async function createOrder(
 export async function updateOrderStatus(orderId: string, status: string) {
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase.from('orders').update({ status }).eq('id', orderId).select().single()
-    if (error) throw error
+    const normalizedStatus = String(status || '').trim() === 'completed' ? 'delivered' : String(status || '').trim()
+
+    const updateAttempts = normalizedStatus === 'delivered'
+      ? [
+          { status: normalizedStatus, payment_status: 'completed', escrow_status: 'released', updated_at: new Date().toISOString() },
+          { status: normalizedStatus, payment_status: 'completed', escrow_status: 'released' },
+          { status: normalizedStatus, updated_at: new Date().toISOString() },
+          { status: normalizedStatus },
+        ]
+      : [
+          { status: normalizedStatus, updated_at: new Date().toISOString() },
+          { status: normalizedStatus },
+        ]
+
+    let data: any = null
+    let lastError: any = null
+
+    for (const attempt of updateAttempts) {
+      const result = await (supabase.from('orders') as any).update(attempt).eq('id', orderId).select().single()
+      if (!result.error) {
+        data = result.data
+        break
+      }
+      lastError = result.error
+    }
+
+    if (!data && lastError) throw lastError
+
+    if (normalizedStatus === 'delivered') {
+      const released = await releaseFundsFromEscrow(supabase, orderId, data)
+      return {
+        success: true,
+        data: released?.order || data,
+        disbursement: released?.breakdown || null,
+      }
+    }
+
     return { success: true, data }
   } catch (error: any) {
     return { success: false, error: error.message }

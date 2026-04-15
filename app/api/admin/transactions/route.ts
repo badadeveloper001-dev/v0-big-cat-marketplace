@@ -18,11 +18,37 @@ export async function GET() {
     })) : []
 
     const raw = statsResult.success ? statsResult.data : null
+
+    let productEscrow = 0
+    let deliveryEscrow = 0
+
+    try {
+      const { createClient } = await import('@/lib/supabase/server')
+      const supabase = await createClient()
+      const { data: escrowRows, error } = await supabase
+        .from('escrow')
+        .select('type, amount, status')
+        .eq('status', 'held')
+
+      if (!error) {
+        productEscrow = (escrowRows || [])
+          .filter((row: any) => row.type === 'product')
+          .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0)
+
+        deliveryEscrow = (escrowRows || [])
+          .filter((row: any) => row.type === 'delivery')
+          .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0)
+      }
+    } catch {
+      productEscrow = 0
+      deliveryEscrow = 0
+    }
+
     const stats = {
       totalTransactions: transactions.length,
       totalRevenue: raw?.totalRevenue || 0,
-      productEscrow: 0,
-      deliveryEscrow: 0,
+      productEscrow,
+      deliveryEscrow,
       completedPayments: raw?.successful || 0,
       pendingPayments: raw?.pending || 0,
     }
