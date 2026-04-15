@@ -37,6 +37,7 @@ import {
 import { useState, useEffect } from "react"
 import { formatNaira } from "@/lib/currency-utils"
 import { NotificationsPanel } from "./notifications-panel"
+import { ProductGrid } from "./product-card"
 import { getUserStrikeCount, isUserSuspended, resetSafetyState } from "@/lib/trust-safety"
 
 declare global {
@@ -82,8 +83,10 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null)
   const { items: cartItems, getItemCount } = useCart()
   const [merchants, setMerchants] = useState<any[]>([])
+  const [featuredProducts, setFeaturedProducts] = useState<any[]>([])
   const [recentOrders, setRecentOrders] = useState<any[]>([])
   const [loadingMerchants, setLoadingMerchants] = useState(true)
+  const [loadingProducts, setLoadingProducts] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showChat, setShowChat] = useState(false)
@@ -114,6 +117,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
   useEffect(() => {
     loadMerchants()
+    loadProducts()
     loadOrders()
   }, [user])
 
@@ -255,6 +259,21 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
       console.error("Error loading merchants:", error)
     } finally {
       setLoadingMerchants(false)
+    }
+  }
+
+  const loadProducts = async () => {
+    setLoadingProducts(true)
+    try {
+      const response = await fetch('/api/products')
+      const result = await response.json()
+      if (result.success) {
+        setFeaturedProducts((result.data || []).slice(0, 6))
+      }
+    } catch (error) {
+      console.error("Error loading products:", error)
+    } finally {
+      setLoadingProducts(false)
     }
   }
 
@@ -743,15 +762,45 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           </div>
         </section>
 
-        {/* Featured Vendors */}
+        {/* Featured Products */}
         <section className="px-4 mb-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-foreground text-lg">Featured Vendors</h2>
+            <h2 className="font-semibold text-foreground text-lg">Featured Products</h2>
             <button 
               onClick={() => setShowProducts(true)}
               className="text-sm text-primary font-medium flex items-center gap-0.5"
             >
               See all <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <ProductGrid
+            products={featuredProducts.map((product: any) => ({
+              id: String(product.id),
+              name: product.name,
+              price: Number(product.price || 0),
+              category: product.category || "General",
+              image: product.images?.[0] || product.image_url || null,
+              merchant: {
+                id: String(product.merchant_id || product.merchant?.id || ''),
+                business_name: product.merchant_profiles?.business_name || product.merchant_profiles?.name || 'Merchant',
+                location: product.merchant_profiles?.location || 'Nigeria',
+                logo_url: product.merchant_profiles?.avatar_url,
+              },
+            }))}
+            onProductClick={(productId) => setSelectedProductId(productId)}
+            loading={loadingProducts}
+          />
+        </section>
+
+        {/* Trusted Sellers */}
+        <section className="px-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-foreground text-lg">Trusted Sellers</h2>
+            <button 
+              onClick={() => setShowProducts(true)}
+              className="text-sm text-primary font-medium flex items-center gap-0.5"
+            >
+              Browse all <ChevronRight className="w-4 h-4" />
             </button>
           </div>
           {loadingMerchants ? (
@@ -761,7 +810,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           ) : displayMerchants.length === 0 ? (
             <div className="p-8 text-center">
               <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No vendors yet</p>
+              <p className="text-sm text-muted-foreground">No sellers yet</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
