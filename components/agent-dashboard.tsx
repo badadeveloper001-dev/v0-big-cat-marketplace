@@ -97,35 +97,6 @@ export function AgentDashboard() {
     loadRequests()
   }, [role])
 
-  const assignToMe = async (requestId: string) => {
-    if (!currentAgentId) {
-      setError("Unable to determine agent id for this session. Please logout and login again.")
-      return
-    }
-
-    setActionLoading(`assign:${requestId}`)
-    setError("")
-    try {
-      const response = await fetch(`/api/onboarding/requests/${requestId}/assign`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_id: currentAgentId, agentId: currentAgentId }),
-      })
-
-      const result = await response.json()
-      if (!result.success) {
-        setError(result.error || "Failed to assign request")
-        return
-      }
-
-      await loadRequests()
-    } catch {
-      setError("Failed to assign request")
-    } finally {
-      setActionLoading("")
-    }
-  }
-
   const markCompleted = async (requestId: string) => {
     if (!currentAgentId) {
       setError("Unable to determine agent id for this session. Please logout and login again.")
@@ -224,7 +195,7 @@ export function AgentDashboard() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Merchant Onboarding Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Handle merchant onboarding requests and assignments.</p>
+              <p className="text-sm text-muted-foreground">Merchant requests are automatically assigned to active agents.</p>
             </div>
             <button
               onClick={loadRequests}
@@ -265,7 +236,6 @@ export function AgentDashboard() {
                   {queue.map((request) => {
                     const isAssignedToCurrent = request.assigned_agent_id === currentAgentId
                     const isAssignedToOther = Boolean(request.assigned_agent_id) && !isAssignedToCurrent
-                    const isAssigning = actionLoading === `assign:${request.id}`
 
                     return (
                       <div
@@ -285,13 +255,9 @@ export function AgentDashboard() {
 
                         <div className="mt-3">
                           {!request.assigned_agent_id ? (
-                            <button
-                              onClick={() => assignToMe(request.id)}
-                              disabled={isAssigning}
-                              className="text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                            >
-                              {isAssigning ? "Assigning..." : "Assign to Me"}
-                            </button>
+                            <span className="inline-flex text-xs px-3 py-2 rounded-lg border border-amber-300/60 bg-amber-50 text-amber-700">
+                              Awaiting auto-assignment
+                            </span>
                           ) : isAssignedToCurrent ? (
                             <button
                               onClick={() => setSelectedRequestId(request.id)}

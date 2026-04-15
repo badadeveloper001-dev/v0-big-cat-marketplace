@@ -92,7 +92,7 @@ export function MerchantOnboardingIntake({ onBack }: MerchantOnboardingIntakePro
           <CheckCircle2 className="w-14 h-14 text-emerald-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-3">Request Submitted</h2>
           <p className="text-blue-100/85 text-sm md:text-base">
-            Your request has been submitted. An onboarding agent will assist you shortly.
+            Your request has been submitted and auto-assigned. An onboarding agent will assist you shortly.
           </p>
           <button
             onClick={onBack}
