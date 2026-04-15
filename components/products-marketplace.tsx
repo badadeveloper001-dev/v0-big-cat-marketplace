@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Search, Filter, X, ArrowLeft } from 'lucide-react'
 import { ProductCard, ProductGrid } from './product-card'
-import { BrandWordmark } from './brand-wordmark'
+import { BrandWordmark, PoweredByMarquee } from './brand-wordmark'
 
 const CATEGORIES = [
   'Electronics',
@@ -99,8 +99,9 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       {onBack && (
-        <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
+        <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3 relative">
+          <PoweredByMarquee />
+          <div className="flex items-center justify-between gap-3 relative z-10">
             <div className="flex items-center gap-2 min-w-0">
               <button
                 onClick={onBack}

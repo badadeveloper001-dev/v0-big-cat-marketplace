@@ -23,7 +23,7 @@ import { SettingsPage } from "@/components/settings-page"
 import { PaymentMethodsPage } from "@/components/payment-methods-page"
 import { ChatInterface } from "@/components/chat-interface"
 import { formatNaira } from "@/lib/currency-utils"
-import { BrandWordmark } from "./brand-wordmark"
+import { BrandWordmark, PoweredByMarquee } from "./brand-wordmark"
 import { ClipboardList } from "lucide-react"
 import {
   ArrowLeft,
@@ -489,8 +489,9 @@ export function MerchantDashboard() {
     )}
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3 relative">
+        <PoweredByMarquee />
+        <div className="flex items-center justify-between gap-3 relative z-10">
           <BrandWordmark compact />
           <div className="flex items-center gap-1">
             <button

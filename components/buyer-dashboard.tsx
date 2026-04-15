@@ -38,7 +38,7 @@ import { useState, useEffect } from "react"
 import { formatNaira } from "@/lib/currency-utils"
 import { NotificationsPanel } from "./notifications-panel"
 import { ProductGrid } from "./product-card"
-import { BrandWordmark } from "./brand-wordmark"
+import { BrandWordmark, PoweredByMarquee } from "./brand-wordmark"
 import { getUserStrikeCount, isUserSuspended, resetSafetyState } from "@/lib/trust-safety"
 
 declare global {
@@ -594,8 +594,9 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     )}
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Compact Header */}
-      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3 relative">
+        <PoweredByMarquee />
+        <div className="flex items-center justify-between gap-3 relative z-10">
           <div className="min-w-0">
             <BrandWordmark compact />
             <p className="text-xs text-muted-foreground mt-1">Good morning, {displayName}</p>
