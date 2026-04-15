@@ -58,7 +58,7 @@ function mapConversation(conversation: any, userId?: string): Conversation {
     vendorRating: 4.8,
     lastMessage: conversation.last_message || "Start a conversation",
     timestamp: new Date(conversation.last_message_at || conversation.created_at || Date.now()),
-    unread: 0,
+    unread: Number(conversation?.unread_count || 0),
     avatar: displayName.charAt(0).toUpperCase(),
   }
 }
@@ -137,7 +137,7 @@ function ChatListScreen({
             </div>
             <h3 className="font-semibold text-foreground mb-2">No conversations yet</h3>
             <p className="text-sm text-muted-foreground">
-              Tap <strong>Chat Vendor</strong> on any seller page to start messaging.
+              Tap <strong>Chat Merchant</strong> on any SME/Merchant page to start messaging.
             </p>
           </div>
         ) : (
@@ -230,7 +230,7 @@ function ChatConversationScreen({
     const loadMessages = async () => {
       setLoading(true)
       try {
-        const response = await fetch(`/api/messages/${conversation.id}`)
+        const response = await fetch(`/api/messages/${conversation.id}?userId=${encodeURIComponent(user?.userId || '')}`)
         const result = await response.json()
         if (result.success) {
           setMessages((result.data || []).map((message: any) => mapMessage(message, user?.userId)))

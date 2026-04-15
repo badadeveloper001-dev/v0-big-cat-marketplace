@@ -102,6 +102,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [aiSearching, setAiSearching] = useState(false)
   const [showAuthPrompt, setShowAuthPrompt] = useState(false)
   const [pendingCheckout, setPendingCheckout] = useState(false)
+  const [unreadMessages, setUnreadMessages] = useState(0)
 
   const cleanupStaleVoiceflowUi = (target?: HTMLElement | null) => {
     if (typeof document === "undefined") return
@@ -120,7 +121,12 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     loadMerchants()
     loadProducts()
     loadOrders()
+    loadUnreadMessages()
   }, [user])
+
+  useEffect(() => {
+    loadUnreadMessages()
+  }, [activeTab, showChat, user?.userId])
 
   useEffect(() => {
     // Voiceflow currently triggers a known React warning for `inline`.
@@ -277,6 +283,26 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
       console.error("Error loading products:", error)
     } finally {
       setLoadingProducts(false)
+    }
+  }
+
+  const loadUnreadMessages = async () => {
+    if (!user?.userId) {
+      setUnreadMessages(0)
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/messages/conversation?userId=${encodeURIComponent(user.userId)}`)
+      const result = await response.json()
+      if (result.success && Array.isArray(result.data)) {
+        const totalUnread = result.data.reduce((sum: number, conv: any) => sum + Number(conv.unread_count || 0), 0)
+        setUnreadMessages(totalUnread)
+      } else {
+        setUnreadMessages(0)
+      }
+    } catch {
+      setUnreadMessages(0)
     }
   }
 
@@ -1082,9 +1108,11 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           >
             <div className="relative">
               <MessageSquare className="w-6 h-6" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center font-bold">
-                3
-              </span>
+              {unreadMessages > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center font-bold">
+                  {unreadMessages > 99 ? '99+' : unreadMessages}
+                </span>
+              )}
             </div>
             <span className="text-xs font-medium">Messages</span>
           </button>

@@ -68,6 +68,22 @@ export async function getConversationMessages(conversationId: string) {
   }
 }
 
+export async function markConversationAsRead(conversationId: string, userId: string) {
+  try {
+    const supabase = await createClient()
+    await supabase
+      .from('messages')
+      .update({ read_at: new Date().toISOString() } as any)
+      .eq('conversation_id', conversationId)
+      .neq('sender_id', userId)
+      .is('read_at', null)
+
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
 export async function sendMessage(conversationId: string, senderId: string, content: string) {
   try {
     const supabase = await createClient()
@@ -124,10 +140,18 @@ export async function getUserConversations(userId: string) {
           .limit(1)
           .maybeSingle()
 
+        const { count: unreadCount } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('conversation_id', conversation.id)
+          .neq('sender_id', userId)
+          .is('read_at', null)
+
         return {
           ...conversation,
           last_message: latestMessage?.content || 'Start a conversation',
           last_message_at: latestMessage?.created_at || conversation.last_message_at || conversation.created_at,
+          unread_count: unreadCount || 0,
         }
       })
     )
