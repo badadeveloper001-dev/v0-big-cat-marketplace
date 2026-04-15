@@ -197,6 +197,13 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     setStrikeCount(getUserStrikeCount(user?.userId))
   }, [user?.userId])
 
+  // Close the auth prompt immediately once the buyer is signed in.
+  useEffect(() => {
+    if (user) {
+      setShowAuthPrompt(false)
+    }
+  }, [user])
+
   // After guest signs in with checkout pending, automatically proceed
   useEffect(() => {
     if (user && pendingCheckout) {
@@ -500,6 +507,9 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
         onBack={() => {
           setShowAuthPrompt(false)
           setPendingCheckout(false)
+        }}
+        onSuccess={() => {
+          setShowAuthPrompt(false)
         }}
       />
     )

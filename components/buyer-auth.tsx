@@ -12,7 +12,7 @@ declare global {
   }
 }
 
-export function BuyerAuth({ onBack }: { onBack: () => void }) {
+export function BuyerAuth({ onBack, onSuccess }: { onBack: () => void; onSuccess?: () => void }) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -84,6 +84,7 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
               role: "buyer",
             })
             setRole("buyer")
+            onSuccess?.()
           }, 1500)
         } else {
           // Establish browser session directly — more reliable than setSession()
@@ -99,6 +100,7 @@ export function BuyerAuth({ onBack }: { onBack: () => void }) {
             role: "buyer",
           })
           setRole("buyer")
+          onSuccess?.()
         }
       } else {
         setError(result.error || "An error occurred")
