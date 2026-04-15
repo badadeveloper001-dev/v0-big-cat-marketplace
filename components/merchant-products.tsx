@@ -144,7 +144,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
         })
         const result = await response.json()
         if (result.success) {
-          setSuccess('Product deleted successfully')
+          setSuccess(result.message || 'Product removed successfully')
           loadProducts()
         } else {
           setError(result.error || 'Failed to delete product')

@@ -90,8 +90,9 @@ export async function getMerchantProducts(merchantId: string) {
       .from('products')
       .select('*, merchant_profiles:auth_users!merchant_id(business_name, business_category, business_description, name, location, avatar_url)')
       .eq('merchant_id', merchantId)
+      .eq('is_active', true)
     if (error) throw error
-    return { success: true, data: (data || []).map(normalizeProduct) }
+    return { success: true, data: (data || []).map(normalizeProduct).filter((product) => product.status !== 'deleted') }
   } catch (error: any) {
     return { success: false, error: error.message, data: [] }
   }
@@ -120,7 +121,13 @@ export async function getProductById(productId: string) {
       .eq('id', productId)
       .single()
     if (error) throw error
-    return { success: true, data: normalizeProduct(data) }
+
+    const normalized = normalizeProduct(data)
+    if (normalized.status === 'deleted' || normalized.is_active === false) {
+      return { success: false, error: 'Product not found' }
+    }
+
+    return { success: true, data: normalized }
   } catch (error: any) {
     return { success: false, error: error.message }
   }
@@ -222,9 +229,51 @@ export async function deleteProduct(productId: string, actorId?: string) {
     const supabase = await createClient()
     let query = supabase.from('products').delete().eq('id', productId)
     if (actorId) query = query.eq('merchant_id', actorId)
+
     const { error } = await query
-    if (error) throw error
-    return { success: true }
+
+    if (!error) {
+      return { success: true, deleted: true, message: 'Product deleted successfully' }
+    }
+
+    const errorMessage = String(error.message || '')
+    const hasReferenceConstraint = /foreign key|violates.*constraint|order_items_product_id_fkey/i.test(errorMessage)
+
+    if (!hasReferenceConstraint) {
+      throw error
+    }
+
+    const softDeleteAttempts = [
+      { is_active: false, status: 'deleted', stock: 0, updated_at: new Date().toISOString() },
+      { is_active: false, stock: 0, updated_at: new Date().toISOString() },
+      { is_active: false, stock: 0 },
+      { status: 'deleted' },
+    ]
+
+    let archived = false
+    let lastSoftDeleteError: any = null
+
+    for (const payload of softDeleteAttempts) {
+      let updateQuery = (supabase.from('products') as any).update(payload).eq('id', productId)
+      if (actorId) updateQuery = updateQuery.eq('merchant_id', actorId)
+
+      const result = await updateQuery.select('id').maybeSingle()
+      if (!result.error) {
+        archived = true
+        break
+      }
+      lastSoftDeleteError = result.error
+    }
+
+    if (!archived && lastSoftDeleteError) {
+      throw lastSoftDeleteError
+    }
+
+    return {
+      success: true,
+      archived: true,
+      message: 'Product removed from active listings. Existing orders were preserved.',
+    }
   } catch (error: any) {
     return { success: false, error: error.message }
   }
