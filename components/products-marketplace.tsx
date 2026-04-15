@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Search, Filter, X, ArrowLeft } from 'lucide-react'
 import { ProductCard, ProductGrid } from './product-card'
-import { BrandWordmark, PoweredByMarquee } from './brand-wordmark'
+import { BrandWordmark } from './brand-wordmark'
 
 const CATEGORIES = [
   'Electronics',
@@ -113,7 +113,6 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
             </div>
             <h1 className="font-semibold text-foreground">Products</h1>
           </div>
-          <PoweredByMarquee />
         </header>
       )}
 

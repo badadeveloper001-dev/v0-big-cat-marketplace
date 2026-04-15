@@ -23,7 +23,7 @@ import { SettingsPage } from "@/components/settings-page"
 import { PaymentMethodsPage } from "@/components/payment-methods-page"
 import { ChatInterface } from "@/components/chat-interface"
 import { formatNaira } from "@/lib/currency-utils"
-import { BrandWordmark, PoweredByMarquee } from "./brand-wordmark"
+import { BrandWordmark } from "./brand-wordmark"
 import { ClipboardList } from "lucide-react"
 import {
   ArrowLeft,
@@ -512,7 +512,6 @@ export function MerchantDashboard() {
             </button>
           </div>
         </div>
-        <PoweredByMarquee />
       </header>
 
       {/* Tab Navigation */}

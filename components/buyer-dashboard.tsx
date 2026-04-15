@@ -38,7 +38,7 @@ import { useState, useEffect } from "react"
 import { formatNaira } from "@/lib/currency-utils"
 import { NotificationsPanel } from "./notifications-panel"
 import { ProductGrid } from "./product-card"
-import { BrandWordmark, PoweredByMarquee } from "./brand-wordmark"
+import { BrandWordmark } from "./brand-wordmark"
 import { getUserStrikeCount, isUserSuspended, resetSafetyState } from "@/lib/trust-safety"
 
 declare global {
@@ -660,7 +660,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             </button>
           </div>
         </div>
-        <PoweredByMarquee />
       </header>
 
       {/* Main Content */}

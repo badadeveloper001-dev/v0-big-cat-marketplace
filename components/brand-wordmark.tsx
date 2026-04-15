@@ -31,8 +31,8 @@ export function PoweredByMarquee() {
   ]
 
   return (
-    <div className="mt-2 flex justify-center w-full">
-      <div className="w-full max-w-[360px] overflow-hidden rounded-full border border-border bg-background/80 px-3 py-1.5">
+    <div className="flex justify-center w-full">
+      <div className="w-full max-w-[420px] overflow-hidden rounded-full border border-border bg-background/80 px-3 py-1.5">
         <div className="flex min-w-max items-center gap-5 whitespace-nowrap animate-[marquee_14s_linear_infinite]">
           {[...logos, ...logos].map((logo, index) => (
             <div key={`${logo.alt}-${index}`} className="flex items-center gap-2 text-xs text-muted-foreground">
