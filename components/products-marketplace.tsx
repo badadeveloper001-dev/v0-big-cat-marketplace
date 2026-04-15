@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, Filter, X, ArrowLeft } from 'lucide-react'
-import { ProductCard, ProductGrid } from './product-card'
+import { Search, Filter, X, ArrowLeft, ShoppingCart, CheckCircle2 } from 'lucide-react'
+import { ProductGrid } from './product-card'
 import { BrandWordmark } from './brand-wordmark'
+import { useCart } from '@/lib/cart-context'
+import { formatNaira } from '@/lib/currency-utils'
 
 const CATEGORIES = [
   'Electronics',
@@ -24,9 +26,11 @@ interface ProductsMarketplaceProps {
   onBack?: () => void
   initialCategory?: string | null
   initialSearch?: string
+  onOpenCart?: () => void
+  onCheckout?: () => void
 }
 
-export function ProductsMarketplace({ onProductClick, onBack, initialCategory, initialSearch }: ProductsMarketplaceProps) {
+export function ProductsMarketplace({ onProductClick, onBack, initialCategory, initialSearch, onOpenCart, onCheckout }: ProductsMarketplaceProps) {
   const [products, setProducts] = useState<any[]>([])
   const [filteredProducts, setFilteredProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -34,6 +38,8 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || '')
   const [showFilters, setShowFilters] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [addedProduct, setAddedProduct] = useState<any | null>(null)
+  const { getItemCount, getTotal } = useCart()
   const ITEMS_PER_PAGE = 24
 
   // Load all products on mount
@@ -94,6 +100,8 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
   }
 
   const hasActiveFilters = searchQuery || selectedCategory
+  const cartCount = getItemCount()
+  const cartTotal = getTotal()
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -111,7 +119,17 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
               </button>
               <BrandWordmark compact />
             </div>
-            <h1 className="font-semibold text-foreground">Products</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-semibold text-foreground">Products</h1>
+              <button
+                onClick={() => onOpenCart?.()}
+                className="relative flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-2 text-foreground hover:bg-secondary/80 transition-colors"
+                aria-label="Open cart"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span className="text-sm font-semibold">{cartCount}</span>
+              </button>
+            </div>
           </div>
         </header>
       )}
@@ -219,12 +237,27 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
       )}
 
       {/* Results Header */}
-      <div className="px-4">
+      <div className="px-4 space-y-3">
         <p className="text-sm text-muted-foreground">
           {loading
             ? 'Loading products...'
             : `${filteredProducts.length} product${filteredProducts.length !== 1 ? 's' : ''} found`}
         </p>
+        <button
+          onClick={() => onOpenCart?.()}
+          className="w-full flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm hover:border-primary/30 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <ShoppingCart className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Cart</p>
+              <p className="text-xs text-muted-foreground">{cartCount} item{cartCount !== 1 ? 's' : ''} in cart</p>
+            </div>
+          </div>
+          <p className="text-sm font-bold text-primary">{formatNaira(cartTotal)}</p>
+        </button>
       </div>
 
       {/* Products Grid */}
@@ -244,6 +277,7 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
             },
           }))}
           onProductClick={onProductClick}
+          onAddToCart={setAddedProduct}
           loading={loading}
         />
       </div>
@@ -302,6 +336,54 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
       {!loading && filteredProducts.length > 0 && (
         <div className="px-4 pb-4 text-center text-sm text-muted-foreground">
           Showing {startIndex + 1}-{Math.min(startIndex + ITEMS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length} products
+        </div>
+      )}
+
+      {addedProduct && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="w-16 h-16 rounded-xl bg-secondary overflow-hidden flex-shrink-0">
+                {addedProduct.image ? (
+                  <img src={addedProduct.image} alt={addedProduct.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground px-2 text-center">
+                    {addedProduct.category}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  <p className="font-semibold text-foreground">Added to cart</p>
+                </div>
+                <p className="text-sm font-medium text-foreground line-clamp-2">{addedProduct.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">{addedProduct.merchant.business_name}</p>
+                <p className="text-sm font-bold text-primary mt-2">{formatNaira(addedProduct.price)}</p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={() => {
+                  setAddedProduct(null)
+                  if (onCheckout) {
+                    onCheckout()
+                    return
+                  }
+                  onOpenCart?.()
+                }}
+                className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Proceed to Checkout
+              </button>
+              <button
+                onClick={() => setAddedProduct(null)}
+                className="w-full rounded-xl bg-secondary py-3 text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+              >
+                Continue Shopping
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

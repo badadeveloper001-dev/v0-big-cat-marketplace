@@ -19,6 +19,19 @@ interface ProductCardProps {
     location?: string
   }
   onClick?: () => void
+  onAddToCart?: (product: {
+    id: string
+    name: string
+    price: number
+    category: string
+    image?: string | null
+    merchant: {
+      id: string
+      business_name: string
+      logo_url?: string
+      location?: string
+    }
+  }) => void
 }
 
 export function ProductCard({
@@ -29,12 +42,13 @@ export function ProductCard({
   image,
   merchant,
   onClick,
+  onAddToCart,
 }: ProductCardProps) {
   const [addedToCart, setAddedToCart] = useState(false)
   const { addItem } = useCart()
 
   const handleAddToCart = (e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent card click when clicking button
+    e.stopPropagation()
     addItem({
       id,
       productId: id,
@@ -44,6 +58,7 @@ export function ProductCard({
       merchantId: merchant.id,
       merchantName: merchant.business_name,
     })
+    onAddToCart?.({ id, name, price, category, image, merchant })
     setAddedToCart(true)
     setTimeout(() => setAddedToCart(false), 2000)
   }
@@ -138,12 +153,26 @@ export function ProductCard({
 interface ProductGridProps {
   products: ProductCardProps[]
   onProductClick?: (productId: string) => void
+  onAddToCart?: (product: {
+    id: string
+    name: string
+    price: number
+    category: string
+    image?: string | null
+    merchant: {
+      id: string
+      business_name: string
+      logo_url?: string
+      location?: string
+    }
+  }) => void
   loading?: boolean
 }
 
 export function ProductGrid({
   products,
   onProductClick,
+  onAddToCart,
   loading,
 }: ProductGridProps) {
   if (loading) {
@@ -177,6 +206,7 @@ export function ProductGrid({
           key={product.id}
           {...product}
           onClick={() => onProductClick?.(product.id)}
+          onAddToCart={onAddToCart}
         />
       ))}
     </div>

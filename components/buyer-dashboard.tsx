@@ -473,6 +473,19 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           setSelectedProductId(null)
           setSelectedVendor(merchant)
         }}
+        onOpenCart={() => {
+          setSelectedProductId(null)
+          setShowCart(true)
+        }}
+        onCheckout={() => {
+          setSelectedProductId(null)
+          if (!user) {
+            setPendingCheckout(true)
+            setShowAuthPrompt(true)
+            return
+          }
+          setShowCheckout(true)
+        }}
       />
     )
   }
@@ -530,6 +543,19 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
         onProductClick={(productId) => {
           setShowProducts(false)
           setSelectedProductId(productId)
+        }}
+        onOpenCart={() => {
+          setShowProducts(false)
+          setShowCart(true)
+        }}
+        onCheckout={() => {
+          setShowProducts(false)
+          if (!user) {
+            setPendingCheckout(true)
+            setShowAuthPrompt(true)
+            return
+          }
+          setShowCheckout(true)
         }}
         initialCategory={selectedCategory}
         initialSearch={productSearchQuery}

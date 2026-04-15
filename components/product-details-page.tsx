@@ -12,16 +12,19 @@ interface ProductDetailsPageProps {
   productId: string
   onBack?: () => void
   onViewMerchant?: (merchant: any) => void
+  onOpenCart?: () => void
+  onCheckout?: () => void
 }
 
-export function ProductDetailsPage({ productId, onBack, onViewMerchant }: ProductDetailsPageProps) {
+export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCart, onCheckout }: ProductDetailsPageProps) {
   const [product, setProduct] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [addedToCart, setAddedToCart] = useState(false)
+  const [showAddedPopup, setShowAddedPopup] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const { addItem } = useCart()
+  const { addItem, getItemCount, getTotal } = useCart()
 
   useEffect(() => {
     loadProduct()
@@ -63,6 +66,8 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant }: Produc
   }
 
   const merchant = product.merchant_profiles || {}
+  const cartCount = getItemCount()
+  const cartTotal = getTotal()
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -79,6 +84,14 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant }: Produc
             </button>
             <BrandWordmark compact />
           </div>
+          <button
+            onClick={() => onOpenCart?.()}
+            className="relative flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-2 text-foreground hover:bg-secondary/80 transition-colors"
+            aria-label="Open cart"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span className="text-sm font-semibold">{cartCount}</span>
+          </button>
         </div>
       </header>
 
@@ -259,6 +272,23 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant }: Produc
           </div>
         </div>
 
+        {/* Cart Summary */}
+        <button
+          onClick={() => onOpenCart?.()}
+          className="w-full flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm hover:border-primary/30 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <ShoppingCart className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Cart</p>
+              <p className="text-xs text-muted-foreground">{cartCount} item{cartCount !== 1 ? 's' : ''} ready</p>
+            </div>
+          </div>
+          <p className="text-sm font-bold text-primary">{formatNaira(cartTotal)}</p>
+        </button>
+
         {/* Reviews Section */}
         <div className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">Customer Reviews</h2>
@@ -279,6 +309,7 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant }: Produc
                 merchantName: product.merchant_profiles?.business_name || 'Unknown',
               })
               setAddedToCart(true)
+              setShowAddedPopup(true)
               setTimeout(() => setAddedToCart(false), 2000)
             }}
             className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors ${
@@ -299,8 +330,63 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant }: Produc
               </>
             )}
           </button>
+
+          <button
+            onClick={() => onOpenCart?.()}
+            className="w-full py-3 rounded-lg font-semibold border border-border bg-card text-foreground hover:bg-secondary transition-colors"
+          >
+            View Cart
+          </button>
         </div>
       </main>
+
+      {showAddedPopup && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="w-16 h-16 rounded-xl bg-secondary overflow-hidden flex-shrink-0">
+                {product.images?.[0] ? (
+                  <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground px-2 text-center">
+                    {product.category}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  <p className="font-semibold text-foreground">Added to cart</p>
+                </div>
+                <p className="text-sm font-medium text-foreground line-clamp-2">{product.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">Quantity: {quantity}</p>
+                <p className="text-sm font-bold text-primary mt-2">{formatNaira(Number(product.price) * quantity)}</p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={() => {
+                  setShowAddedPopup(false)
+                  if (onCheckout) {
+                    onCheckout()
+                    return
+                  }
+                  onOpenCart?.()
+                }}
+                className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Proceed to Checkout
+              </button>
+              <button
+                onClick={() => setShowAddedPopup(false)}
+                className="w-full rounded-xl bg-secondary py-3 text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+              >
+                Continue Shopping
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
