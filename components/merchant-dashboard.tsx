@@ -57,6 +57,10 @@ import {
 import { useState, useEffect } from "react"
 import { NotificationsPanel } from "./notifications-panel"
 
+function NairaIcon({ className = "" }: { className?: string }) {
+  return <span className={`font-black leading-none ${className}`}>₦</span>
+}
+
 export function MerchantDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
   const [activeTab, setActiveTab] = useState("home")
@@ -200,7 +204,13 @@ export function MerchantDashboard() {
         return Math.max(0, productTotal || (grandTotal - deliveryFee))
       }
 
-      const totalSales = merchantOrders.reduce((sum, order) => sum + getMerchantAmount(order), 0)
+      const completedOrders = merchantOrders.filter((order) => {
+        const status = String(order?.status || '').toLowerCase()
+        const escrowStatus = String(order?.escrow_status || '').toLowerCase()
+        return status === 'delivered' || status === 'completed' || escrowStatus === 'released'
+      })
+
+      const totalSales = completedOrders.reduce((sum, order) => sum + getMerchantAmount(order), 0)
       const activeOrders = merchantOrders.filter((order) => !['delivered', 'completed'].includes(String(order?.status || '').toLowerCase())).length
       const paidOrders = merchantOrders.filter((order) => String(order?.payment_status || '').toLowerCase() === 'completed').length
       const escrowBalance = merchantOrders
@@ -208,10 +218,10 @@ export function MerchantDashboard() {
         .reduce((sum, order) => sum + getMerchantAmount(order), 0)
 
       const statsData = [
-        { label: "Total Sales", value: formatNaira(totalSales), change: `${paidOrders} paid`, trend: "up", icon: DollarSign },
+        { label: "Total Sales", value: formatNaira(totalSales), change: `${completedOrders.length} completed`, trend: "up", icon: NairaIcon },
         { label: "Active Orders", value: String(activeOrders), change: `${merchantOrders.length} total`, trend: "up", icon: ShoppingBag },
         { label: "Token Balance", value: String(nextTokenBalance), change: "Live", trend: "up", icon: Coins },
-        { label: "Escrow Balance", value: formatNaira(escrowBalance), change: escrowBalance > 0 ? "Held safely" : "No funds held", trend: "up", icon: Clock },
+        { label: "Escrow Balance", value: formatNaira(escrowBalance), change: paidOrders > 0 ? `${paidOrders} paid` : (escrowBalance > 0 ? "Held safely" : "No funds held"), trend: "up", icon: Clock },
       ]
       setStats(statsData)
     } catch (error) {
@@ -635,7 +645,7 @@ export function MerchantDashboard() {
             </div>
           ) : stats.length === 0 ? (
             <div className="p-8 text-center">
-              <DollarSign className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <NairaIcon className="w-12 h-12 text-muted-foreground mx-auto mb-3 flex items-center justify-center text-4xl" />
               <p className="text-sm text-muted-foreground">No sales data yet</p>
             </div>
           ) : (
