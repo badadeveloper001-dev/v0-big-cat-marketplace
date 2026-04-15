@@ -80,16 +80,21 @@ export async function createOrder(
     const createdOrders: any[] = []
 
     for (const [merchantId, merchantItems] of Object.entries(groupedItems)) {
+      const normalizedMerchantId = String(merchantId || '').trim()
+      if (!normalizedMerchantId || normalizedMerchantId === 'unknown_merchant') {
+        return { success: false, error: 'One or more cart items are missing merchant information. Please remove the item and add it again.' }
+      }
+
       const productTotal = merchantItems.reduce((sum, item) => sum + (Number(item.unitPrice) * Number(item.quantity)), 0)
       const allocatedDeliveryFee = payload.deliveryType === 'pickup' ? 0 : (createdOrders.length === 0 ? Number(payload.deliveryFee || 0) : 0)
       const grandTotal = productTotal + allocatedDeliveryFee
       const orderId = crypto.randomUUID()
 
-      let orderResult = await (supabase.from('orders') as any)
-        .insert({
+      const orderInsertAttempts = [
+        {
           id: orderId,
           buyer_id: payload.buyerId,
-          merchant_id: merchantId,
+          merchant_id: normalizedMerchantId,
           status: 'pending',
           grand_total: grandTotal,
           product_total: productTotal,
@@ -99,31 +104,53 @@ export async function createOrder(
           delivery_address: payload.deliveryAddress,
           shipping_address: payload.deliveryAddress,
           payment_method: payload.paymentMethod || 'card',
-        })
-        .select()
-        .single()
+        },
+        {
+          id: orderId,
+          buyer_id: payload.buyerId,
+          merchant_id: normalizedMerchantId,
+          status: 'pending',
+          grand_total: grandTotal,
+          product_total: productTotal,
+          delivery_fee: allocatedDeliveryFee,
+          delivery_type: payload.deliveryType,
+          delivery_address: payload.deliveryAddress,
+          payment_method: payload.paymentMethod || 'card',
+        },
+        {
+          id: orderId,
+          buyer_id: payload.buyerId,
+          merchant_id: normalizedMerchantId,
+          status: 'pending',
+          total_amount: grandTotal,
+          delivery_fee: allocatedDeliveryFee,
+          delivery_address: payload.deliveryAddress,
+          payment_status: 'pending',
+          payment_provider: payload.paymentMethod || 'card',
+        },
+      ]
 
-      if (orderResult.error) {
-        orderResult = await (supabase.from('orders') as any)
-          .insert({
-            id: orderId,
-            buyer_id: payload.buyerId,
-            status: 'pending',
-            grand_total: grandTotal,
-            delivery_type: payload.deliveryType,
-            delivery_address: payload.deliveryAddress,
-          })
-          .select()
-          .single()
+      let orderResult: any = null
+      let lastOrderError: any = null
+
+      for (const attempt of orderInsertAttempts) {
+        const result = await (supabase.from('orders') as any).insert(attempt).select().single()
+        if (!result.error) {
+          orderResult = result
+          break
+        }
+        lastOrderError = result.error
       }
 
-      if (orderResult.error) throw orderResult.error
+      if (!orderResult?.data) {
+        throw lastOrderError || new Error('Failed to create order')
+      }
 
       const richOrderItems = merchantItems.map((item) => ({
         id: crypto.randomUUID(),
         order_id: orderResult.data?.id || orderId,
         product_id: item.productId,
-        merchant_id: merchantId,
+        merchant_id: normalizedMerchantId,
         product_name: item.productName || 'Product',
         quantity: item.quantity,
         unit_price: item.unitPrice,
