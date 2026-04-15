@@ -2,12 +2,16 @@
 
 interface DeliveryFeeParams {
   weight: number
-  deliveryType: 'normal' | 'express'
+  deliveryType: 'normal' | 'express' | 'pickup'
   location: string
 }
 
 // Calculate delivery fee based on weight and delivery type
 export function calculateDeliveryFee({ weight, deliveryType, location }: DeliveryFeeParams): number {
+  if (deliveryType === 'pickup') {
+    return 0
+  }
+
   // Base fees
   const baseFee = deliveryType === 'express' ? 2500 : 1000 // Naira
   

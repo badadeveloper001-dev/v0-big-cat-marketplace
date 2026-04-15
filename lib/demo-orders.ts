@@ -53,7 +53,7 @@ export function createDemoOrdersFromCheckout(params: {
   buyerId: string
   items: CartItem[]
   deliveryAddress: string
-  deliveryType: "normal" | "express"
+  deliveryType: "normal" | "express" | "pickup"
   deliveryFee: number
 }): DemoOrder[] {
   const groupedByMerchant = params.items.reduce<Record<string, CartItem[]>>((acc, item) => {

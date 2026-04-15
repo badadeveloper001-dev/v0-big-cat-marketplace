@@ -21,6 +21,7 @@ interface CheckoutPageProps {
 export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const { items, getTotal, clearCart } = useCart()
   const { user } = useRole()
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<'doorstep' | 'pickup'>('doorstep')
   const [deliveryType, setDeliveryType] = useState<'normal' | 'express'>('normal')
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('palmpay')
@@ -37,15 +38,19 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
 
   // Calculate delivery fee when inputs change
   useEffect(() => {
-    if (deliveryAddress.trim()) {
-      const fee = calculateDeliveryFee({
-        weight: totalWeight,
-        deliveryType,
-        location: deliveryAddress,
-      })
-      setDeliveryFee(fee)
+    if (!deliveryAddress.trim()) {
+      setDeliveryFee(0)
+      return
     }
-  }, [deliveryType, deliveryAddress, totalWeight])
+
+    const effectiveDeliveryType = fulfillmentMethod === 'pickup' ? 'pickup' : deliveryType
+    const fee = calculateDeliveryFee({
+      weight: totalWeight,
+      deliveryType: effectiveDeliveryType,
+      location: deliveryAddress,
+    })
+    setDeliveryFee(fee)
+  }, [deliveryType, deliveryAddress, totalWeight, fulfillmentMethod])
 
   const productTotal = getTotal()
   const grandTotal = productTotal + deliveryFee
@@ -84,7 +89,11 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     }
 
     if (!deliveryAddress.trim()) {
-      setError('Please enter a delivery address')
+      setError(
+        fulfillmentMethod === 'pickup'
+          ? 'Please enter your preferred drop-off point or pickup area'
+          : 'Please enter a delivery address'
+      )
       return
     }
 
@@ -124,7 +133,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         buyerId: user.userId,
         items,
         deliveryAddress: deliveryAddress.trim(),
-        deliveryType,
+        deliveryType: fulfillmentMethod === 'pickup' ? 'pickup' : deliveryType,
         deliveryFee,
       })
 
@@ -181,9 +190,10 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         unitPrice: item.price,
         weight: 0.5, // Default weight
       })),
-      deliveryType,
+      deliveryType: fulfillmentMethod === 'pickup' ? 'pickup' : deliveryType,
       deliveryAddress: deliveryAddress.trim(),
       paymentMethod,
+      deliveryFee,
     })
 
     setIsSubmitting(false)
@@ -209,11 +219,17 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         localStorage.setItem(getWalletStorageKey(), updatedBalance.toString())
         setWalletBalance(updatedBalance)
         setSuccess('Payment successful')
+      } else {
+        setSuccess(
+          paymentMethod === 'bank'
+            ? 'Bank transfer order created successfully'
+            : 'Card payment processed successfully'
+        )
       }
       clearCart()
       setTimeout(() => {
         onSuccess(orderId)
-      }, isWalletPayment ? 700 : 0)
+      }, 700)
     } else {
       await Promise.all(
         merchantIdsInCart.map((merchantId) =>
@@ -279,60 +295,103 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         </section>
 
         {/* Delivery Options */}
-        <section className="p-4 border-b border-border">
-          <h2 className="font-semibold text-foreground mb-3">Delivery Options</h2>
-          <div className="space-y-3">
+        <section className="p-4 border-b border-border space-y-4">
+          <h2 className="font-semibold text-foreground">Delivery Options</h2>
+
+          <div className="grid gap-3">
             <button
-              onClick={() => setDeliveryType('normal')}
+              onClick={() => setFulfillmentMethod('doorstep')}
               className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                deliveryType === 'normal'
+                fulfillmentMethod === 'doorstep'
                   ? 'border-primary bg-primary/5'
                   : 'border-border hover:border-muted-foreground/50'
               }`}
             >
-              <div className={`p-2 rounded-lg ${deliveryType === 'normal' ? 'bg-primary/10' : 'bg-muted'}`}>
-                <Truck className={`w-5 h-5 ${deliveryType === 'normal' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <div className={`p-2 rounded-lg ${fulfillmentMethod === 'doorstep' ? 'bg-primary/10' : 'bg-muted'}`}>
+                <Truck className={`w-5 h-5 ${fulfillmentMethod === 'doorstep' ? 'text-primary' : 'text-muted-foreground'}`} />
               </div>
               <div className="flex-1 text-left">
-                <p className="font-medium text-foreground">Normal Delivery</p>
-                <p className="text-sm text-muted-foreground">3-5 business days</p>
+                <p className="font-medium text-foreground">Doorstep Delivery</p>
+                <p className="text-sm text-muted-foreground">Get your order delivered to your address</p>
               </div>
-              {deliveryType === 'normal' && (
-                <CheckCircle2 className="w-5 h-5 text-primary" />
-              )}
+              {fulfillmentMethod === 'doorstep' && <CheckCircle2 className="w-5 h-5 text-primary" />}
             </button>
 
             <button
-              onClick={() => setDeliveryType('express')}
+              onClick={() => setFulfillmentMethod('pickup')}
               className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                deliveryType === 'express'
+                fulfillmentMethod === 'pickup'
                   ? 'border-primary bg-primary/5'
                   : 'border-border hover:border-muted-foreground/50'
               }`}
             >
-              <div className={`p-2 rounded-lg ${deliveryType === 'express' ? 'bg-primary/10' : 'bg-muted'}`}>
-                <Zap className={`w-5 h-5 ${deliveryType === 'express' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <div className={`p-2 rounded-lg ${fulfillmentMethod === 'pickup' ? 'bg-primary/10' : 'bg-muted'}`}>
+                <MapPin className={`w-5 h-5 ${fulfillmentMethod === 'pickup' ? 'text-primary' : 'text-muted-foreground'}`} />
               </div>
               <div className="flex-1 text-left">
-                <p className="font-medium text-foreground">Express Delivery</p>
-                <p className="text-sm text-muted-foreground">1-2 business days</p>
+                <p className="font-medium text-foreground">Pickup at Drop-off Point</p>
+                <p className="text-sm text-muted-foreground">Collect your order from a nearby drop-off point</p>
               </div>
-              {deliveryType === 'express' && (
-                <CheckCircle2 className="w-5 h-5 text-primary" />
-              )}
+              {fulfillmentMethod === 'pickup' && <CheckCircle2 className="w-5 h-5 text-primary" />}
             </button>
           </div>
+
+          {fulfillmentMethod === 'doorstep' && (
+            <div className="space-y-3 pt-1">
+              <button
+                onClick={() => setDeliveryType('normal')}
+                className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                  deliveryType === 'normal'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-muted-foreground/50'
+                }`}
+              >
+                <div className={`p-2 rounded-lg ${deliveryType === 'normal' ? 'bg-primary/10' : 'bg-muted'}`}>
+                  <Truck className={`w-5 h-5 ${deliveryType === 'normal' ? 'text-primary' : 'text-muted-foreground'}`} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-medium text-foreground">Normal Delivery</p>
+                  <p className="text-sm text-muted-foreground">3-5 business days</p>
+                </div>
+                {deliveryType === 'normal' && <CheckCircle2 className="w-5 h-5 text-primary" />}
+              </button>
+
+              <button
+                onClick={() => setDeliveryType('express')}
+                className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                  deliveryType === 'express'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-muted-foreground/50'
+                }`}
+              >
+                <div className={`p-2 rounded-lg ${deliveryType === 'express' ? 'bg-primary/10' : 'bg-muted'}`}>
+                  <Zap className={`w-5 h-5 ${deliveryType === 'express' ? 'text-primary' : 'text-muted-foreground'}`} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-medium text-foreground">Express Delivery</p>
+                  <p className="text-sm text-muted-foreground">1-2 business days</p>
+                </div>
+                {deliveryType === 'express' && <CheckCircle2 className="w-5 h-5 text-primary" />}
+              </button>
+            </div>
+          )}
         </section>
 
         {/* Delivery Address */}
         <section className="p-4 border-b border-border">
-          <h2 className="font-semibold text-foreground mb-3">Delivery Address</h2>
+          <h2 className="font-semibold text-foreground mb-3">
+            {fulfillmentMethod === 'pickup' ? 'Preferred Drop-off Point' : 'Delivery Address'}
+          </h2>
           <div className="relative">
             <MapPin className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
             <textarea
               value={deliveryAddress}
               onChange={(e) => setDeliveryAddress(e.target.value)}
-              placeholder="Enter your full delivery address..."
+              placeholder={
+                fulfillmentMethod === 'pickup'
+                  ? 'Enter your preferred drop-off point or pickup area...'
+                  : 'Enter your full delivery address...'
+              }
               className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl text-foreground placeholder:text-muted-foreground resize-none h-24"
             />
           </div>
@@ -396,7 +455,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
               <span className="font-medium text-foreground">{formatNaira(productTotal)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Delivery Fee</span>
+              <span className="text-muted-foreground">{fulfillmentMethod === 'pickup' ? 'Pickup Fee' : 'Delivery Fee'}</span>
               <span className="font-medium text-foreground">
                 {deliveryAddress.trim() ? formatNaira(deliveryFee) : '--'}
               </span>
@@ -443,7 +502,13 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
             }`}
           >
             <CreditCard className="w-5 h-5" />
-            {isSubmitting ? 'Processing...' : isWalletPayment ? 'Pay with Wallet' : 'Place Order'}
+            {isSubmitting
+              ? 'Processing...'
+              : isWalletPayment
+                ? 'Pay with Wallet'
+                : paymentMethod === 'bank'
+                  ? 'Pay via Transfer'
+                  : 'Pay with Card'}
           </button>
         </div>
       </div>

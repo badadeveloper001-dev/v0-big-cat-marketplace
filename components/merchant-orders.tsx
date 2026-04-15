@@ -343,7 +343,11 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
                     <p className="text-xs text-muted-foreground mb-1">Delivery Address</p>
                     <p className="text-sm text-foreground">{order.delivery_address}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {order.delivery_type === 'express' ? 'Express Delivery' : 'Normal Delivery'}
+                      {order.delivery_type === 'pickup'
+                        ? 'Pickup at Drop-off Point'
+                        : order.delivery_type === 'express'
+                          ? 'Express Delivery'
+                          : 'Normal Delivery'}
                     </p>
                   </div>
 
