@@ -133,8 +133,8 @@ export function LandingPage() {
       <nav className="sticky top-0 z-50 bg-[#032c0e]/90 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-6xl mx-auto px-5 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#00A651] flex items-center justify-center shadow-lg shadow-black/30">
-              <Image src="/image.png" alt="BigCat" width={22} height={22} className="object-contain brightness-0 invert" />
+            <div className="w-10 h-10 rounded-2xl bg-white p-1.5 shadow-lg shadow-black/30 ring-1 ring-black/5 overflow-hidden">
+              <Image src="/image.png" alt="BigCat" width={36} height={36} className="w-full h-full object-cover object-top rounded-xl" />
             </div>
             <span className="font-extrabold text-white text-lg tracking-tight">BigCat</span>
             <span className="hidden sm:block text-[10px] font-semibold text-[#45c76c] bg-[#00A651]/10 border border-[#00A651]/30 px-2 py-0.5 rounded-full uppercase tracking-widest ml-1">
@@ -314,8 +314,9 @@ export function LandingPage() {
             <div className="bg-white rounded-2xl px-4 py-2.5 shadow-md opacity-90 hover:opacity-100 transition-opacity">
               <Image src="/palmpay-seeklogo.png" alt="PalmPay" width={90} height={36} className="object-contain" />
             </div>
-            {/* BigCat — black logo, invert to white */}
-            <Image src="/image.png" alt="BigCat" width={72} height={36} className="object-contain brightness-0 invert opacity-80 hover:opacity-100 transition-opacity" />
+            <div className="bg-white rounded-2xl px-3 py-2 shadow-md opacity-90 hover:opacity-100 transition-opacity">
+              <Image src="/image.png" alt="BigCat" width={72} height={36} className="object-contain" />
+            </div>
           </div>
         </div>
       </section>
@@ -479,8 +480,8 @@ export function LandingPage() {
       <footer className="border-t border-white/5 py-10 px-5">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#00A651] flex items-center justify-center">
-              <Image src="/image.png" alt="BigCat" width={18} height={18} className="object-contain brightness-0 invert" />
+            <div className="w-9 h-9 rounded-xl bg-white p-1.5 shadow-md ring-1 ring-black/5 overflow-hidden">
+              <Image src="/image.png" alt="BigCat" width={28} height={28} className="w-full h-full object-cover object-top rounded-lg" />
             </div>
             <span className="font-bold text-white text-sm">BigCat Marketplace</span>
           </div>
