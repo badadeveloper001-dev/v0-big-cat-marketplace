@@ -25,9 +25,24 @@ export function BrandWordmark({ compact = false }: { compact?: boolean }) {
 
 export function PoweredByMarquee() {
   const logos = [
-    { src: '/SMEDAN_ido8Y4OzuL_0.png', alt: 'SMEDAN', className: 'h-5 w-auto' },
-    { src: '/palmpay-seeklogo.png', alt: 'PalmPay', className: 'h-5 w-auto' },
-    { src: '/image.png', alt: 'BigCat', className: 'h-5 w-auto' },
+    {
+      src: '/SMEDAN_ido8Y4OzuL_0.png',
+      alt: 'SMEDAN',
+      className: 'h-5 w-auto',
+      wrapperClassName: 'bg-emerald-950 border-emerald-900 px-2.5',
+    },
+    {
+      src: '/palmpay-seeklogo.png',
+      alt: 'PalmPay',
+      className: 'h-5 w-auto',
+      wrapperClassName: 'bg-white border-border px-2',
+    },
+    {
+      src: '/image.png',
+      alt: 'BigCat',
+      className: 'h-5 w-auto',
+      wrapperClassName: 'bg-white border-border px-2',
+    },
   ]
 
   return (
@@ -37,7 +52,7 @@ export function PoweredByMarquee() {
           {[...logos, ...logos].map((logo, index) => (
             <div key={`${logo.alt}-${index}`} className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="font-medium">powered by</span>
-              <div className="h-7 px-2 rounded-full bg-white border border-border flex items-center">
+              <div className={`h-7 rounded-full border flex items-center ${logo.wrapperClassName}`}>
                 <Image src={logo.src} alt={logo.alt} width={72} height={20} className={logo.className} />
               </div>
             </div>
