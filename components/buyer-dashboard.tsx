@@ -493,7 +493,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           </div>
         </header>
         <div className="flex-1">
-          <ChatInterface initialConversation={initialConversation} />
+          <ChatInterface initialConversation={initialConversation} onUnreadChange={setUnreadMessages} />
         </div>
       </div>
     )
@@ -965,7 +965,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
         {/* Chat Tab */}
         {activeTab === "chat" && (
-          <ChatInterface />
+          <ChatInterface onUnreadChange={setUnreadMessages} />
         )}
 
         {/* Orders Tab */}

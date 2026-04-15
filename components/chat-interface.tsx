@@ -463,7 +463,13 @@ function ChatConversationScreen({
   )
 }
 
-export function ChatInterface({ initialConversation = null }: { initialConversation?: Conversation | null }) {
+export function ChatInterface({
+  initialConversation = null,
+  onUnreadChange,
+}: {
+  initialConversation?: Conversation | null
+  onUnreadChange?: (count: number) => void
+}) {
   const { user } = useRole()
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(initialConversation)
   const [conversations, setConversations] = useState<Conversation[]>(initialConversation ? [initialConversation] : [])
@@ -516,6 +522,11 @@ export function ChatInterface({ initialConversation = null }: { initialConversat
   }, [initialConversation])
 
   useEffect(() => {
+    const totalUnread = conversations.reduce((sum, conv) => sum + Number(conv.unread || 0), 0)
+    onUnreadChange?.(totalUnread)
+  }, [conversations, onUnreadChange])
+
+  useEffect(() => {
     loadConversations()
   }, [user?.userId, initialConversation, suspended])
 
@@ -552,7 +563,14 @@ export function ChatInterface({ initialConversation = null }: { initialConversat
     <ChatListScreen
       conversations={conversations}
       loading={loading}
-      onSelectConversation={setSelectedConversation}
+      onSelectConversation={(conversation) => {
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === conversation.id ? { ...conv, unread: 0 } : conv
+          )
+        )
+        setSelectedConversation({ ...conversation, unread: 0 })
+      }}
       onRefresh={loadConversations}
     />
   )
