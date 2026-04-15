@@ -394,93 +394,97 @@ export function AgentDashboard() {
       </div>
 
       {showEmailComposer && selectedRequest ? (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border p-4">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">Send Email</h3>
-                <p className="text-sm text-muted-foreground">Prepared for {selectedRequest.owner_name} at {selectedRequest.business_name}</p>
-              </div>
-              <button
-                onClick={() => setShowEmailComposer(false)}
-                className="rounded-lg p-2 hover:bg-secondary"
-                aria-label="Close email composer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4 p-4">
-              <div className="rounded-lg border border-border px-3 py-2">
-                <p className="text-xs text-muted-foreground">To</p>
-                <p className="text-sm font-medium text-foreground mt-1 break-all">{selectedRequest.email}</p>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground">Subject</label>
-                <input
-                  value={emailSubject}
-                  onChange={(event) => setEmailSubject(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground">Message</label>
-                <textarea
-                  value={emailBody}
-                  onChange={(event) => setEmailBody(event.target.value)}
-                  rows={10}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground">Certificate Attachments</label>
-                <label className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground hover:bg-secondary/50">
-                  <Paperclip className="w-4 h-4" />
-                  Add SMEDAN and CAC certificate images
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(event) => {
-                      setEmailAttachments(Array.from(event.target.files || []))
-                    }}
-                  />
-                </label>
-
-                {emailAttachments.length > 0 ? (
-                  <div className="mt-2 rounded-lg bg-secondary/50 p-3 text-sm text-foreground">
-                    <p className="font-medium">Selected files</p>
-                    <ul className="mt-1 space-y-1 text-muted-foreground">
-                      {emailAttachments.map((file) => (
-                        <li key={`${file.name}-${file.size}`}>• {file.name}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Your browser may open the default mail app with the message prefilled. On supported devices, selected images can also be shared directly.
-              </div>
-
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm p-4">
+          <div className="flex min-h-full items-start justify-center py-4 sm:items-center">
+            <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+              <div className="flex items-center justify-between border-b border-border p-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground">Send Email</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Prepared for {selectedRequest.owner_name} at {selectedRequest.business_name}
+                  </p>
+                </div>
                 <button
                   onClick={() => setShowEmailComposer(false)}
-                  className="px-4 py-2 rounded-lg border border-border hover:bg-secondary"
+                  className="rounded-lg p-2 hover:bg-secondary"
+                  aria-label="Close email composer"
                 >
-                  Cancel
+                  <X className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={sendEmailTemplate}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90"
-                >
-                  <Mail className="w-4 h-4" />
-                  Open Email Draft
-                </button>
+              </div>
+
+              <div className="max-h-[calc(90vh-76px)] overflow-y-auto space-y-4 p-4">
+                <div className="rounded-lg border border-border px-3 py-2">
+                  <p className="text-xs text-muted-foreground">To</p>
+                  <p className="text-sm font-medium text-foreground mt-1 break-all">{selectedRequest.email}</p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground">Subject</label>
+                  <input
+                    value={emailSubject}
+                    onChange={(event) => setEmailSubject(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground">Message</label>
+                  <textarea
+                    value={emailBody}
+                    onChange={(event) => setEmailBody(event.target.value)}
+                    rows={10}
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground">Certificate Attachments</label>
+                  <label className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground hover:bg-secondary/50">
+                    <Paperclip className="w-4 h-4" />
+                    Add SMEDAN and CAC certificate images
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => {
+                        setEmailAttachments(Array.from(event.target.files || []))
+                      }}
+                    />
+                  </label>
+
+                  {emailAttachments.length > 0 ? (
+                    <div className="mt-2 rounded-lg bg-secondary/50 p-3 text-sm text-foreground">
+                      <p className="font-medium">Selected files</p>
+                      <ul className="mt-1 space-y-1 text-muted-foreground">
+                        {emailAttachments.map((file) => (
+                          <li key={`${file.name}-${file.size}`}>• {file.name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Your browser may open the default mail app with the message prefilled. On supported devices, selected images can also be shared directly.
+                </div>
+
+                <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-border bg-card pt-3 sm:flex-row sm:justify-end">
+                  <button
+                    onClick={() => setShowEmailComposer(false)}
+                    className="px-4 py-2 rounded-lg border border-border hover:bg-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={sendEmailTemplate}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90"
+                  >
+                    <Mail className="w-4 h-4" />
+                    Open Email Draft
+                  </button>
+                </div>
               </div>
             </div>
           </div>
