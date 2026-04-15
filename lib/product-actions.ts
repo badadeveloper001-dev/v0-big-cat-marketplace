@@ -126,9 +126,13 @@ export async function getProductById(productId: string) {
   }
 }
 
-export async function createProduct(merchantId: string, product: ProductInput) {
+export async function createProduct(merchantId: string, product: ProductInput, actorId?: string) {
   try {
     const supabase = await createClient()
+
+    if (actorId && actorId !== merchantId) {
+      return { success: false, error: 'You are not allowed to create products for this merchant.' }
+    }
 
     const normalizedProduct = {
       ...product,
@@ -160,7 +164,7 @@ export async function createProduct(merchantId: string, product: ProductInput) {
   }
 }
 
-export async function updateProduct(productId: string, updates: Partial<ProductInput>) {
+export async function updateProduct(productId: string, updates: Partial<ProductInput>, actorId?: string) {
   try {
     const supabase = await createClient()
 
@@ -182,7 +186,10 @@ export async function updateProduct(productId: string, updates: Partial<ProductI
       ...(normalizedUpdates.status !== undefined ? { status: normalizedUpdates.status } : {}),
     }
 
-    let result = await (supabase.from('products') as any).update(richUpdates).eq('id', productId).select().single()
+    let updateQuery = (supabase.from('products') as any).update(richUpdates).eq('id', productId)
+    if (actorId) updateQuery = updateQuery.eq('merchant_id', actorId)
+
+    let result = await updateQuery.select().single()
 
     if (result.error && String(result.error.message || '').includes('column')) {
       const fallbackUpdates = {
@@ -197,7 +204,10 @@ export async function updateProduct(productId: string, updates: Partial<ProductI
           : {}),
       }
 
-      result = await (supabase.from('products') as any).update(fallbackUpdates).eq('id', productId).select().single()
+      let fallbackQuery = (supabase.from('products') as any).update(fallbackUpdates).eq('id', productId)
+      if (actorId) fallbackQuery = fallbackQuery.eq('merchant_id', actorId)
+
+      result = await fallbackQuery.select().single()
     }
 
     if (result.error) throw result.error
@@ -207,10 +217,12 @@ export async function updateProduct(productId: string, updates: Partial<ProductI
   }
 }
 
-export async function deleteProduct(productId: string) {
+export async function deleteProduct(productId: string, actorId?: string) {
   try {
     const supabase = await createClient()
-    const { error } = await supabase.from('products').delete().eq('id', productId)
+    let query = supabase.from('products').delete().eq('id', productId)
+    if (actorId) query = query.eq('merchant_id', actorId)
+    const { error } = await query
     if (error) throw error
     return { success: true }
   } catch (error: any) {

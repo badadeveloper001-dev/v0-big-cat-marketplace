@@ -104,10 +104,10 @@ export async function addPaymentMethod(userId: string, method: { type: string; d
   }
 }
 
-export async function removePaymentMethod(methodId: string) {
+export async function removePaymentMethod(userId: string, methodId: string) {
   try {
     const supabase = await createClient()
-    const { error } = await supabase.from('payment_methods').delete().eq('id', methodId)
+    const { error } = await supabase.from('payment_methods').delete().eq('id', methodId).eq('user_id', userId)
     if (error) throw error
     return { success: true }
   } catch (error: any) {
@@ -119,7 +119,7 @@ export async function setDefaultPaymentMethod(userId: string, methodId: string) 
   try {
     const supabase = await createClient()
     await supabase.from('payment_methods').update({ is_default: false }).eq('user_id', userId)
-    const { error } = await supabase.from('payment_methods').update({ is_default: true }).eq('id', methodId)
+    const { error } = await supabase.from('payment_methods').update({ is_default: true }).eq('id', methodId).eq('user_id', userId)
     if (error) throw error
     return { success: true }
   } catch (error: any) {

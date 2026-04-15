@@ -216,10 +216,22 @@ export async function createOrder(
   }
 }
 
-export async function updateOrderStatus(orderId: string, status: string) {
+export async function updateOrderStatus(orderId: string, status: string, actorId?: string) {
   try {
     const supabase = await createClient()
     const normalizedStatus = String(status || '').trim() === 'completed' ? 'delivered' : String(status || '').trim()
+
+    if (actorId) {
+      const orderResult = await (supabase.from('orders') as any).select('*').eq('id', orderId).single()
+      if (orderResult.error) throw orderResult.error
+
+      const order = (orderResult.data || {}) as any
+      const buyerId = String(order.buyer_id || '')
+      const merchantId = String(order.merchant_id || '')
+      if (buyerId !== actorId && merchantId !== actorId) {
+        return { success: false, error: 'You are not allowed to update this order.' }
+      }
+    }
 
     const updateAttempts = normalizedStatus === 'delivered'
       ? [

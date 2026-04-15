@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getConversationMessages, markConversationAsRead } from '@/lib/message-actions'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function GET(
   request: NextRequest,
@@ -7,8 +8,6 @@ export async function GET(
 ) {
   try {
     const { conversationId } = await params
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
 
     if (!conversationId) {
       return NextResponse.json(
@@ -17,11 +16,12 @@ export async function GET(
       )
     }
 
-    if (userId) {
-      await markConversationAsRead(conversationId, userId)
-    }
+    const auth = await requireAuthenticatedUser()
+    if (auth.response) return auth.response
 
-    const result = await getConversationMessages(conversationId)
+    await markConversationAsRead(conversationId, auth.user.id)
+
+    const result = await getConversationMessages(conversationId, auth.user.id)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Get conversation messages API error:', error)

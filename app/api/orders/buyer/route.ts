@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBuyerOrders } from '@/lib/order-actions'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,9 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const auth = await requireAuthenticatedUser(buyerId)
+    if (auth.response) return auth.response
 
     const result = await getBuyerOrders(buyerId)
     return NextResponse.json(result)

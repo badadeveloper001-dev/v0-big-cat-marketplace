@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendMessage } from '@/lib/message-actions'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +12,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const auth = await requireAuthenticatedUser(senderId)
+    if (auth.response) return auth.response
 
     const result = await sendMessage(conversationId, senderId, content.trim())
     return NextResponse.json(result)

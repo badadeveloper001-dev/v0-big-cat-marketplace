@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { deductMerchantTokens, TOKEN_COST_ORDER } from "@/lib/merchant-tokens"
+import { requireAuthenticatedUser } from "@/lib/supabase/request-auth"
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuthenticatedUser()
+  if (auth.response) return auth.response
+
   const body = await request.json().catch(() => ({}))
   const merchantIdsRaw = Array.isArray(body.merchantIds) ? body.merchantIds : []
   const merchantIds = Array.from(new Set(merchantIdsRaw.map((id: unknown) => String(id || "").trim()).filter(Boolean)))

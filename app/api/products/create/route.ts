@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createProduct } from '@/lib/product-actions'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +13,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = await createProduct(merchantId, product)
+    const auth = await requireAuthenticatedUser(merchantId)
+    if (auth.response) return auth.response
+
+    const result = await createProduct(merchantId, product, auth.user.id)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Create product API error:', error)

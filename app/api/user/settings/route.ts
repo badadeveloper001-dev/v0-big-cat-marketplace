@@ -5,6 +5,7 @@ import {
   updateNotificationPreferences,
   deleteAccount,
 } from '@/lib/user-actions'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,6 +18,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const auth = await requireAuthenticatedUser(userId)
+    if (auth.response) return auth.response
 
     switch (action) {
       case 'change-password': {

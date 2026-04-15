@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateProduct } from '@/lib/product-actions'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function PUT(request: NextRequest) {
   try {
@@ -12,7 +13,10 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const result = await updateProduct(productId, updates)
+    const auth = await requireAuthenticatedUser()
+    if (auth.response) return auth.response
+
+    const result = await updateProduct(productId, updates, auth.user.id)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Update product API error:', error)

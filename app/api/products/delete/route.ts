@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { deleteProduct } from '@/lib/product-actions'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -13,7 +14,10 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    const result = await deleteProduct(productId)
+    const auth = await requireAuthenticatedUser()
+    if (auth.response) return auth.response
+
+    const result = await deleteProduct(productId, auth.user.id)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Delete product API error:', error)

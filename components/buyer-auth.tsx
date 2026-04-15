@@ -201,6 +201,17 @@ export function BuyerAuth({
         return
       }
 
+      const supabase = createClient()
+      const { error: signInError } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: credential,
+      })
+
+      if (signInError) {
+        setError(signInError.message || 'Failed to establish your Google session.')
+        return
+      }
+
       const user = result.data.user
       setUser({
         userId: user.id,

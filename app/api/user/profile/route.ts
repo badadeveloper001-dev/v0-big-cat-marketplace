@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserProfile, updateUserProfile } from '@/lib/user-actions'
+import { getRequestAuthUser, requireAuthenticatedUser, toPublicProfile } from '@/lib/supabase/request-auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +15,16 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getUserProfile(userId)
-    return NextResponse.json(result)
+    if (!result.success) {
+      return NextResponse.json(result, { status: 404 })
+    }
+
+    const { user } = await getRequestAuthUser()
+    if (user?.id === userId) {
+      return NextResponse.json(result)
+    }
+
+    return NextResponse.json({ success: true, data: toPublicProfile(result.data) })
   } catch (error) {
     console.error('Get user profile API error:', error)
     return NextResponse.json(
@@ -34,6 +44,9 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const auth = await requireAuthenticatedUser(userId)
+    if (auth.response) return auth.response
 
     const result = await updateUserProfile(userId, updates)
     return NextResponse.json(result)

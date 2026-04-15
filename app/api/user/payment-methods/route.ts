@@ -5,6 +5,7 @@ import {
   removePaymentMethod,
   setDefaultPaymentMethod,
 } from '@/lib/user-actions'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,6 +18,9 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const auth = await requireAuthenticatedUser(userId)
+    if (auth.response) return auth.response
 
     const result = await getPaymentMethods(userId)
     return NextResponse.json(result)
@@ -40,6 +44,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const auth = await requireAuthenticatedUser(userId)
+    if (auth.response) return auth.response
+
     const result = await addPaymentMethod(userId, method)
     return NextResponse.json(result)
   } catch (error) {
@@ -61,6 +68,9 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const auth = await requireAuthenticatedUser(userId)
+    if (auth.response) return auth.response
 
     const result = await setDefaultPaymentMethod(userId, methodId)
     return NextResponse.json(result)
@@ -84,7 +94,10 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    const result = await removePaymentMethod(methodId)
+    const auth = await requireAuthenticatedUser()
+    if (auth.response) return auth.response
+
+    const result = await removePaymentMethod(auth.user.id, methodId)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Remove payment method API error:', error)

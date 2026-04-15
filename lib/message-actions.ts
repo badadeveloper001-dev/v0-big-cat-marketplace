@@ -53,9 +53,24 @@ export async function getOrCreateConversation(buyerId: string, merchantId: strin
   }
 }
 
-export async function getConversationMessages(conversationId: string) {
+export async function getConversationMessages(conversationId: string, viewerId?: string) {
   try {
     const supabase = await createClient()
+
+    if (viewerId) {
+      const { data: conversation, error: conversationError } = await supabase
+        .from('conversations')
+        .select('buyer_id, merchant_id')
+        .eq('id', conversationId)
+        .single()
+
+      if (conversationError) throw conversationError
+
+      if (conversation?.buyer_id !== viewerId && conversation?.merchant_id !== viewerId) {
+        return { success: false, error: 'You are not allowed to view this conversation.', data: [] }
+      }
+    }
+
     const { data, error } = await supabase
       .from('messages')
       .select('*, sender:auth_users!sender_id(name, business_name, role)')
@@ -71,6 +86,17 @@ export async function getConversationMessages(conversationId: string) {
 export async function markConversationAsRead(conversationId: string, userId: string) {
   try {
     const supabase = await createClient()
+    const { data: conversation, error: conversationError } = await supabase
+      .from('conversations')
+      .select('buyer_id, merchant_id')
+      .eq('id', conversationId)
+      .single()
+
+    if (conversationError) throw conversationError
+    if (conversation?.buyer_id !== userId && conversation?.merchant_id !== userId) {
+      return { success: false, error: 'You are not allowed to update this conversation.' }
+    }
+
     await supabase
       .from('messages')
       .update({ read_at: new Date().toISOString() } as any)
@@ -87,6 +113,17 @@ export async function markConversationAsRead(conversationId: string, userId: str
 export async function sendMessage(conversationId: string, senderId: string, content: string) {
   try {
     const supabase = await createClient()
+    const { data: conversation, error: conversationError } = await supabase
+      .from('conversations')
+      .select('buyer_id, merchant_id')
+      .eq('id', conversationId)
+      .single()
+
+    if (conversationError) throw conversationError
+    if (conversation?.buyer_id !== senderId && conversation?.merchant_id !== senderId) {
+      return { success: false, error: 'You are not allowed to send a message in this conversation.' }
+    }
+
     const basePayload = {
       conversation_id: conversationId,
       sender_id: senderId,
