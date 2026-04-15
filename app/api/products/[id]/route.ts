@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getProductById } from '@/lib/product-actions'
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const resolvedParams = await params
     const { searchParams } = new URL(request.url)
-    const productId = searchParams.get('id')
+    const productId = resolvedParams?.id || searchParams.get('id')
 
     if (!productId) {
       return NextResponse.json(

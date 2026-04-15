@@ -99,7 +99,7 @@ export async function getAllProducts() {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('products')
-      .select('*, merchant_profiles:auth_users!merchant_id(business_name, name, location, avatar_url)')
+      .select('*, merchant_profiles:auth_users!merchant_id(business_name, business_category, business_description, name, location, avatar_url)')
       .eq('is_active', true)
     if (error) throw error
     return { success: true, data: (data || []).map(normalizeProduct) }
@@ -113,7 +113,7 @@ export async function getProductById(productId: string) {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('products')
-      .select('*, merchant_profiles:auth_users!merchant_id(business_name, name, location, avatar_url)')
+      .select('*, merchant_profiles:auth_users!merchant_id(business_name, business_category, business_description, name, location, avatar_url)')
       .eq('id', productId)
       .single()
     if (error) throw error
