@@ -193,6 +193,16 @@ function sanitizeWholeNumber(
   return parsed
 }
 
+function extractMissingColumnName(errorMessage: string) {
+  const quotedMatch = errorMessage.match(/column\s+["']([a-zA-Z0-9_]+)["']/i)
+  if (quotedMatch?.[1]) return quotedMatch[1]
+
+  const unquotedMatch = errorMessage.match(/column\s+([a-zA-Z0-9_]+)\s+/i)
+  if (unquotedMatch?.[1]) return unquotedMatch[1]
+
+  return null
+}
+
 function sanitizeProductForPublic(product: any) {
   if (!product) return product
   const { cost_price, ...rest } = product
@@ -200,10 +210,15 @@ function sanitizeProductForPublic(product: any) {
 }
 
 function normalizeProduct(product: any) {
+  const safeImageUrl =
+    typeof product?.image_url === 'string' && product.image_url.startsWith(COST_PRICE_FALLBACK_PREFIX)
+      ? null
+      : product?.image_url
+
   const rawImages = Array.isArray(product?.images)
     ? product.images.filter(Boolean)
-    : product?.image_url
-      ? [product.image_url]
+    : safeImageUrl
+      ? [safeImageUrl]
       : []
 
   const images = stripCostPriceMetadata(rawImages)
@@ -213,7 +228,7 @@ function normalizeProduct(product: any) {
   return {
     ...product,
     images,
-    image_url: product?.image_url ?? images[0] ?? null,
+    image_url: safeImageUrl ?? images[0] ?? null,
     stock: Number.isFinite(Number(product?.stock)) ? Number(product.stock) : 0,
     cost_price: Number.isFinite(Number(product?.cost_price)) ? Number(product.cost_price) : extractCostPriceFromImageMetadata(rawImages),
     status: product?.status ?? (product?.is_active === false ? 'inactive' : 'active'),
@@ -244,18 +259,21 @@ function buildBaseProductPayload(product: Partial<ProductInput>, options: { incl
 }
 
 function buildLegacyProductPayload(product: Partial<ProductInput>, options: { includeDefaults?: boolean } = {}) {
-  const imagesWithMetadata = attachCostPriceMetadata(product.images, product.cost_price)
+  const { cost_price, ...legacySafeProduct } = product
+  const imagesWithMetadata = attachCostPriceMetadata(legacySafeProduct.images, cost_price)
+  const firstVisibleImage = stripCostPriceMetadata(imagesWithMetadata)[0] ?? null
+  const resolvedImageUrl = legacySafeProduct.image_url ?? firstVisibleImage ?? undefined
 
   return {
     ...buildBaseProductPayload(
       {
-        ...product,
+        ...legacySafeProduct,
         images: imagesWithMetadata,
-        image_url: product.image_url || imagesWithMetadata[0] || null,
+        image_url: resolvedImageUrl,
       },
       options,
     ),
-    ...(imagesWithMetadata.length > 0 ? { images: imagesWithMetadata } : {}),
+    ...(legacySafeProduct.images !== undefined && imagesWithMetadata.length > 0 ? { images: imagesWithMetadata } : {}),
   }
 }
 
@@ -383,21 +401,103 @@ export async function updateProduct(productId: string, updates: Partial<ProductI
       ...(normalizedUpdates.status !== undefined ? { status: normalizedUpdates.status } : {}),
     }
 
-    let updateQuery = (supabase.from('products') as any).update(richUpdates).eq('id', productId)
-    if (actorId) updateQuery = updateQuery.eq('merchant_id', actorId)
+    let richPayload = { ...richUpdates }
+    let result: any = null
+    let costPriceColumnUnavailable = false
 
-    let result = await updateQuery.select().single()
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      let updateQuery = (supabase.from('products') as any).update(richPayload).eq('id', productId)
+      if (actorId) updateQuery = updateQuery.eq('merchant_id', actorId)
+
+      result = await updateQuery.select().single()
+      if (!result.error) break
+
+      const message = String(result.error.message || '')
+      if (!message.includes('column')) break
+
+      const missingColumn = extractMissingColumnName(message)
+      if (!missingColumn || !(missingColumn in richPayload)) break
+
+      // If cost_price itself is unavailable, switch to compatibility fallback for metadata storage.
+      if (missingColumn === 'cost_price' && normalizedUpdates.cost_price !== undefined) {
+        costPriceColumnUnavailable = true
+        break
+      }
+
+      delete (richPayload as any)[missingColumn]
+      if (Object.keys(richPayload).length === 0) {
+        return { success: false, error: 'No compatible fields available to update for this product.' }
+      }
+    }
 
     if (result.error && String(result.error.message || '').includes('column')) {
-      const fallbackUpdates = {
-        ...buildLegacyProductPayload(normalizedUpdates),
+      let fallbackNormalizedUpdates = normalizedUpdates
+      let canPersistCostWithImages = normalizedUpdates.images !== undefined
+
+      // Preserve existing images when storing cost price in metadata fallback.
+      if (normalizedUpdates.images === undefined && normalizedUpdates.cost_price !== undefined) {
+        // Use select('*') so this read remains compatible whether `images` exists or not.
+        let existingProductQuery = (supabase.from('products') as any)
+          .select('*')
+          .eq('id', productId)
+        if (actorId) existingProductQuery = existingProductQuery.eq('merchant_id', actorId)
+        const existingProductResult = await existingProductQuery.maybeSingle()
+
+        if (!existingProductResult?.error && existingProductResult?.data) {
+          const hasImagesColumn = Object.prototype.hasOwnProperty.call(existingProductResult.data, 'images')
+          canPersistCostWithImages = hasImagesColumn
+
+          fallbackNormalizedUpdates = {
+            ...fallbackNormalizedUpdates,
+            ...(hasImagesColumn
+              ? {
+                  images: Array.isArray(existingProductResult.data.images)
+                    ? existingProductResult.data.images
+                    : existingProductResult.data.image_url
+                      ? [existingProductResult.data.image_url]
+                      : [],
+                }
+              : {}),
+            image_url: existingProductResult.data.image_url,
+          }
+        }
+      }
+
+      let fallbackPayload: Record<string, any> = {
+        ...buildLegacyProductPayload(fallbackNormalizedUpdates),
         ...(normalizedUpdates.is_active !== undefined ? { is_active: normalizedUpdates.is_active } : {}),
       }
 
-      let fallbackQuery = (supabase.from('products') as any).update(fallbackUpdates).eq('id', productId)
-      if (actorId) fallbackQuery = fallbackQuery.eq('merchant_id', actorId)
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        let fallbackQuery = (supabase.from('products') as any).update(fallbackPayload).eq('id', productId)
+        if (actorId) fallbackQuery = fallbackQuery.eq('merchant_id', actorId)
 
-      result = await fallbackQuery.select().single()
+        result = await fallbackQuery.select().single()
+        if (!result.error) break
+
+        const message = String(result.error.message || '')
+        if (!message.includes('column')) break
+
+        const missingColumn = extractMissingColumnName(message)
+        if (!missingColumn || !(missingColumn in fallbackPayload)) break
+
+        if (missingColumn === 'images') {
+          canPersistCostWithImages = false
+        }
+
+        delete fallbackPayload[missingColumn]
+        if (Object.keys(fallbackPayload).length === 0) {
+          break
+        }
+      }
+
+      if (!result.error && normalizedUpdates.cost_price !== undefined && costPriceColumnUnavailable && !canPersistCostWithImages) {
+        return {
+          success: false,
+          error:
+            'Cost price cannot be saved on this database schema yet. Please run scripts/013-add-product-cost-price.sql and retry.',
+        }
+      }
     }
 
     if (result.error) throw result.error
