@@ -21,6 +21,7 @@ interface Notification {
   message: string
   time: string
   read: boolean
+  createdAt?: string
 }
 
 interface NotificationsPanelProps {
@@ -30,80 +31,67 @@ interface NotificationsPanelProps {
 }
 
 export function NotificationsPanel({ isOpen, onClose, onUnreadChange }: NotificationsPanelProps) {
-  const { role } = useRole()
+  const { role, user } = useRole()
   const [notifications, setNotifications] = useState<Notification[]>([])
 
+  const getNotificationStorageKey = (currentRole: string, userId: string) => `app_notifications_${currentRole}_${userId}`
+
+  const syncStoredNotifications = (nextNotifications: Notification[]) => {
+    setNotifications(nextNotifications)
+
+    if (typeof window === "undefined" || !role || !user?.userId) return
+
+    const storedNotifications = nextNotifications.filter((notification) => notification.id !== "welcome")
+    localStorage.setItem(getNotificationStorageKey(role, user.userId), JSON.stringify(storedNotifications))
+    window.dispatchEvent(new Event("bigcat-notifications-updated"))
+  }
+
   useEffect(() => {
-    // TODO: Fetch real notifications from database
-    // For now, show empty notifications
-    setNotifications([])
-    
-    // Only show welcome notification for new users
-    if (role === "buyer" || role === "merchant") {
-      // Check if they've seen the welcome notification before
-      const hasSeenWelcome = localStorage.getItem(`welcome_notification_${role}`)
-      if (!hasSeenWelcome) {
-        setNotifications([
-          {
+    if (typeof window === "undefined" || !role) return
+
+    const loadNotifications = () => {
+      const stored = user?.userId
+        ? JSON.parse(localStorage.getItem(getNotificationStorageKey(role, user.userId)) || "[]") as Notification[]
+        : []
+
+      const nextNotifications = [...stored]
+
+      if (role === "buyer" || role === "merchant") {
+        const hasSeenWelcome = localStorage.getItem(`welcome_notification_${role}`)
+        if (!hasSeenWelcome) {
+          nextNotifications.unshift({
             id: "welcome",
             type: "system",
-            title: `Welcome to BigCat!`,
-            message: role === "buyer" 
+            title: "Welcome to BigCat!",
+            message: role === "buyer"
               ? "Start exploring our marketplace for amazing deals."
               : "Set up your store and start selling today.",
             time: "Just now",
             read: false,
-          },
-        ])
-        localStorage.setItem(`welcome_notification_${role}`, "true")
+            createdAt: new Date().toISOString(),
+          })
+          localStorage.setItem(`welcome_notification_${role}`, "true")
+        }
       }
+
+      setNotifications(
+        nextNotifications.sort((a, b) => {
+          const left = new Date(b.createdAt || 0).getTime()
+          const right = new Date(a.createdAt || 0).getTime()
+          return left - right
+        }),
+      )
     }
-    
-    /* Future: Replace with real notification fetch
-    if (role === "buyer") {
-      setNotifications([
-        {
-          id: "1",
-          type: "order",
-          title: "Order Confirmed",
-          message: "Your order has been confirmed and is being processed.",
-          time: "Just now",
-          read: false,
-        },
-      ])
-    } else if (role === "merchant") {
-      setNotifications([
-        {
-          id: "3",
-          type: "system",
-          title: "Store Approved",
-          message: "Your store has been approved! Start adding products.",
-          time: "2 days ago",
-          read: true,
-        },
-      ])
-    } else if (role === "admin") {
-      setNotifications([
-        {
-          id: "1",
-          type: "warning",
-          title: "Pending Approval",
-          message: "3 merchants are waiting for approval.",
-          time: "Just now",
-          read: false,
-        },
-        {
-          id: "2",
-          type: "system",
-          title: "Platform Update",
-          message: "System maintenance completed successfully.",
-          time: "3 hours ago",
-          read: true,
-        },
-      ])
+
+    loadNotifications()
+    window.addEventListener("storage", loadNotifications)
+    window.addEventListener("bigcat-notifications-updated", loadNotifications)
+
+    return () => {
+      window.removeEventListener("storage", loadNotifications)
+      window.removeEventListener("bigcat-notifications-updated", loadNotifications)
     }
-    */
-  }, [role])
+  }, [role, user?.userId])
 
   const getIcon = (type: Notification["type"]) => {
     switch (type) {
@@ -138,13 +126,15 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange }: Notifica
   }
 
   const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => (n.id === id ? { ...n, read: true } : n))
+    syncStoredNotifications(
+      notifications.map((notification) =>
+        notification.id === id ? { ...notification, read: true } : notification,
+      ),
     )
   }
 
   const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+    syncStoredNotifications(notifications.map((notification) => ({ ...notification, read: true })))
   }
 
   const unreadCount = notifications.filter(n => !n.read).length

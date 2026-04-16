@@ -61,6 +61,25 @@ function NairaIcon({ className = "" }: { className?: string }) {
   return <span className={`font-black leading-none ${className}`}>₦</span>
 }
 
+interface MerchantTodo {
+  id: string
+  title: string
+  dueAt: string
+  completed: boolean
+  notified: boolean
+  createdAt: string
+}
+
+interface DashboardNotification {
+  id: string
+  type: "order" | "delivery" | "message" | "system" | "warning"
+  title: string
+  message: string
+  time: string
+  read: boolean
+  createdAt?: string
+}
+
 export function MerchantDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
   const [activeTab, setActiveTab] = useState("home")
@@ -88,6 +107,120 @@ export function MerchantDashboard() {
   const [tokenPaymentMethod, setTokenPaymentMethod] = useState<"wallet" | "card" | "bank">("wallet")
   const [tokenDialogError, setTokenDialogError] = useState("")
   const [tokenBuying, setTokenBuying] = useState(false)
+  const [merchantTodos, setMerchantTodos] = useState<MerchantTodo[]>([])
+  const [todoForm, setTodoForm] = useState({ title: "", dueDate: "", dueTime: "" })
+  const [todoError, setTodoError] = useState("")
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default")
+
+  const getTodoStorageKey = (merchantId: string) => `merchant_todos_${merchantId}`
+  const getNotificationStorageKey = (merchantId: string) => `app_notifications_merchant_${merchantId}`
+
+  const syncTodosToStorage = (nextTodos: MerchantTodo[]) => {
+    setMerchantTodos(nextTodos)
+    if (typeof window !== "undefined" && user?.userId) {
+      localStorage.setItem(getTodoStorageKey(user.userId), JSON.stringify(nextTodos))
+      window.dispatchEvent(new Event("bigcat-notifications-updated"))
+    }
+  }
+
+  const formatReminderTime = (value: string) => {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "Invalid date"
+    return date.toLocaleString("en-NG", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    })
+  }
+
+  const appendReminderNotification = (todo: MerchantTodo) => {
+    if (typeof window === "undefined" || !user?.userId) return
+
+    const storageKey = getNotificationStorageKey(user.userId)
+    const existing = JSON.parse(localStorage.getItem(storageKey) || "[]") as DashboardNotification[]
+
+    if (existing.some((item) => item.id === `todo-${todo.id}`)) {
+      return
+    }
+
+    const nextNotifications: DashboardNotification[] = [
+      {
+        id: `todo-${todo.id}`,
+        type: "warning",
+        title: "Task reminder",
+        message: `It is time for: ${todo.title}`,
+        time: "Just now",
+        read: false,
+        createdAt: new Date().toISOString(),
+      },
+      ...existing,
+    ]
+
+    localStorage.setItem(storageKey, JSON.stringify(nextNotifications))
+    window.dispatchEvent(new Event("bigcat-notifications-updated"))
+  }
+
+  const requestNotificationAccess = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setNotificationPermission("unsupported")
+      return
+    }
+
+    if (Notification.permission === "default") {
+      const permission = await Notification.requestPermission()
+      setNotificationPermission(permission)
+      return
+    }
+
+    setNotificationPermission(Notification.permission)
+  }
+
+  const handleAddTodo = async () => {
+    setTodoError("")
+
+    if (!todoForm.title.trim() || !todoForm.dueDate || !todoForm.dueTime) {
+      setTodoError("Add a task, date, and time.")
+      return
+    }
+
+    const dueAt = new Date(`${todoForm.dueDate}T${todoForm.dueTime}`)
+    if (Number.isNaN(dueAt.getTime())) {
+      setTodoError("Choose a valid date and time.")
+      return
+    }
+
+    const nextTodo: MerchantTodo = {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: todoForm.title.trim(),
+      dueAt: dueAt.toISOString(),
+      completed: false,
+      notified: false,
+      createdAt: new Date().toISOString(),
+    }
+
+    const nextTodos = [nextTodo, ...merchantTodos].sort(
+      (a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime(),
+    )
+
+    syncTodosToStorage(nextTodos)
+    setTodoForm({ title: "", dueDate: "", dueTime: "" })
+    await requestNotificationAccess()
+  }
+
+  const toggleTodoCompletion = (todoId: string) => {
+    const nextTodos = merchantTodos.map((todo) =>
+      todo.id === todoId
+        ? { ...todo, completed: !todo.completed }
+        : todo,
+    )
+    syncTodosToStorage(nextTodos)
+  }
+
+  const deleteTodo = (todoId: string) => {
+    const nextTodos = merchantTodos.filter((todo) => todo.id !== todoId)
+    syncTodosToStorage(nextTodos)
+  }
   
   // Guard against undefined user during initial load - AFTER all hooks
   if (isLoading) {
@@ -165,6 +298,74 @@ export function MerchantDashboard() {
       render: { mode: "embedded", target },
     })
   }, [activeTab, voiceflowMerchantReady])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    if ("Notification" in window) {
+      setNotificationPermission(Notification.permission)
+    } else {
+      setNotificationPermission("unsupported")
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !user?.userId) return
+
+    const storedTodos = localStorage.getItem(getTodoStorageKey(user.userId))
+    if (!storedTodos) {
+      setMerchantTodos([])
+      return
+    }
+
+    try {
+      const parsedTodos = JSON.parse(storedTodos) as MerchantTodo[]
+      setMerchantTodos(Array.isArray(parsedTodos) ? parsedTodos : [])
+    } catch {
+      setMerchantTodos([])
+    }
+  }, [user?.userId])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !user?.userId) return
+
+    const checkReminders = () => {
+      setMerchantTodos((currentTodos) => {
+        const now = Date.now()
+        let hasUpdates = false
+
+        const nextTodos = currentTodos.map((todo) => {
+          if (todo.completed || todo.notified) return todo
+
+          if (new Date(todo.dueAt).getTime() <= now) {
+            hasUpdates = true
+            appendReminderNotification(todo)
+
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("BigCat reminder", {
+                body: todo.title,
+              })
+            }
+
+            return { ...todo, notified: true }
+          }
+
+          return todo
+        })
+
+        if (hasUpdates) {
+          localStorage.setItem(getTodoStorageKey(user.userId), JSON.stringify(nextTodos))
+          window.dispatchEvent(new Event("bigcat-notifications-updated"))
+        }
+
+        return nextTodos
+      })
+    }
+
+    checkReminders()
+    const intervalId = window.setInterval(checkReminders, 30000)
+    return () => window.clearInterval(intervalId)
+  }, [user?.userId])
 
   const loadStats = async () => {
     setLoadingStats(true)
@@ -763,6 +964,110 @@ export function MerchantDashboard() {
             <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg px-3 py-2">
               More activity = higher visibility. Tokens boost your store ranking.
             </p>
+          </div>
+        </section>
+
+        {/* To-Do & Reminders */}
+        <section className="px-4 mb-6">
+          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">To-Do & Reminders</h3>
+                <p className="text-xs text-muted-foreground">Plan tasks and get alerted when they are due.</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold text-foreground">{merchantTodos.filter((todo) => !todo.completed).length}</p>
+                <p className="text-[10px] text-muted-foreground">Open tasks</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 mb-4">
+              <input
+                type="text"
+                value={todoForm.title}
+                onChange={(e) => setTodoForm((prev) => ({ ...prev, title: e.target.value }))}
+                placeholder="What do you want to do?"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  value={todoForm.dueDate}
+                  onChange={(e) => setTodoForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
+                />
+                <input
+                  type="time"
+                  value={todoForm.dueTime}
+                  onChange={(e) => setTodoForm((prev) => ({ ...prev, dueTime: e.target.value }))}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
+                />
+              </div>
+              {todoError ? (
+                <p className="text-xs text-destructive">{todoError}</p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  {notificationPermission === "granted"
+                    ? "Browser alerts are enabled for reminders."
+                    : notificationPermission === "denied"
+                      ? "Browser alerts are blocked, but reminder notices will still appear in-app."
+                      : notificationPermission === "unsupported"
+                        ? "This browser does not support push alerts; in-app reminders still work."
+                        : "Allow browser notifications for instant reminder pop-ups."}
+                </p>
+              )}
+              <button
+                onClick={handleAddTodo}
+                className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm shadow-primary/20"
+              >
+                Add Reminder
+              </button>
+            </div>
+
+            {merchantTodos.length === 0 ? (
+              <div className="rounded-xl bg-secondary/40 px-4 py-5 text-center">
+                <Clock className="w-5 h-5 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-foreground font-medium">No tasks yet</p>
+                <p className="text-xs text-muted-foreground">Add your first reminder above.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {merchantTodos.slice(0, 5).map((todo) => {
+                  const isOverdue = !todo.completed && new Date(todo.dueAt).getTime() <= Date.now()
+                  return (
+                    <div key={todo.id} className="rounded-xl border border-border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className={`text-sm font-medium ${todo.completed ? "text-muted-foreground line-through" : "text-foreground"}`}>
+                            {todo.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">{formatReminderTime(todo.dueAt)}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${todo.completed ? "bg-primary/10 text-primary" : isOverdue ? "bg-destructive/10 text-destructive" : "bg-chart-4/10 text-chart-4"}`}>
+                          {todo.completed ? "Done" : isOverdue ? "Due now" : "Scheduled"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-3">
+                        <button
+                          onClick={() => toggleTodoCompletion(todo.id)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-secondary px-3 py-1.5 text-xs font-medium text-foreground"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {todo.completed ? "Undo" : "Complete"}
+                        </button>
+                        <button
+                          onClick={() => deleteTodo(todo.id)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </section>
 
