@@ -19,6 +19,7 @@ interface ProductCardProps {
     business_name: string
     logo_url?: string
     location?: string
+    distance_km?: number | null
   }
   onClick?: () => void
   onAddToCart?: (product: {
@@ -33,6 +34,7 @@ interface ProductCardProps {
       business_name: string
       logo_url?: string
       location?: string
+      distance_km?: number | null
     }
   }) => void
 }
@@ -66,6 +68,9 @@ export function ProductCard({
   const savedToWishlist = isInWishlist(id)
   const availableStock = Math.max(0, Number(stock || 0))
   const isOutOfStock = availableStock <= 0
+  const distanceLabel = Number.isFinite(Number(merchant.distance_km))
+    ? `${Number(merchant.distance_km) < 1 ? '<1' : Number(merchant.distance_km).toFixed(1)} km away`
+    : null
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -158,10 +163,12 @@ export function ProductCard({
             <p className="text-xs font-medium text-foreground truncate">
               {merchant.business_name}
             </p>
-            {merchant.location && (
+            {(merchant.location || distanceLabel) && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                 <MapPin className="w-3 h-3" />
-                <span className="truncate">{merchant.location}</span>
+                <span className="truncate">
+                  {distanceLabel ? `${distanceLabel}${merchant.location ? ` • ${merchant.location}` : ''}` : merchant.location}
+                </span>
               </div>
             )}
           </div>
@@ -216,6 +223,7 @@ interface ProductGridProps {
       business_name: string
       logo_url?: string
       location?: string
+      distance_km?: number | null
     }
   }) => void
   loading?: boolean

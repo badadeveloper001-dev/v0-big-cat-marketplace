@@ -11,6 +11,8 @@ interface User {
   city?: string
   state?: string
   location?: string
+  latitude?: number
+  longitude?: number
   role: 'buyer' | 'merchant' | 'agent'
   merchantProfile?: any
   region?: string

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { buildLocationQuery, geocodeLocation, haversineDistanceKm } from '@/lib/location-utils'
 
 function toAmount(value: unknown) {
   const parsed = Number(value || 0)
@@ -20,7 +21,12 @@ function sortBigZeeFirst<T>(items: T[], getText: (item: T) => string) {
   })
 }
 
-export async function getMerchants() {
+function toFiniteNumber(value: unknown) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export async function getMerchants(options: { buyerLat?: number | null; buyerLng?: number | null } = {}) {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase
@@ -29,7 +35,58 @@ export async function getMerchants() {
       .eq('role', 'merchant')
     if (error) throw error
 
-    const merchants = sortBigZeeFirst(data || [], (merchant: any) => `${merchant?.business_name || ''} ${merchant?.name || ''}`)
+    const latitude = toFiniteNumber(options.buyerLat)
+    const longitude = toFiniteNumber(options.buyerLng)
+
+    let merchants = data || []
+
+    if (latitude !== null && longitude !== null) {
+      const locationCache = new Map<string, Awaited<ReturnType<typeof geocodeLocation>>>()
+
+      merchants = await Promise.all(
+        merchants.map(async (merchant: any) => {
+          const locationQuery = buildLocationQuery(merchant?.city, merchant?.state, merchant?.location)
+
+          if (!locationQuery) {
+            return { ...merchant, distance_km: null }
+          }
+
+          if (!locationCache.has(locationQuery)) {
+            locationCache.set(locationQuery, await geocodeLocation(locationQuery))
+          }
+
+          const resolvedLocation = locationCache.get(locationQuery)
+          const distanceKm = resolvedLocation
+            ? haversineDistanceKm(latitude, longitude, resolvedLocation.latitude, resolvedLocation.longitude)
+            : null
+
+          return {
+            ...merchant,
+            distance_km: distanceKm,
+          }
+        }),
+      )
+
+      merchants = [...merchants].sort((a: any, b: any) => {
+        const leftDistance = toFiniteNumber(a?.distance_km) ?? Number.POSITIVE_INFINITY
+        const rightDistance = toFiniteNumber(b?.distance_km) ?? Number.POSITIVE_INFINITY
+
+        if (leftDistance !== rightDistance) {
+          return leftDistance - rightDistance
+        }
+
+        const leftText = `${a?.business_name || ''} ${a?.name || ''}`
+        const rightText = `${b?.business_name || ''} ${b?.name || ''}`
+        const leftIsBigZee = isBigZeeWears(leftText)
+        const rightIsBigZee = isBigZeeWears(rightText)
+
+        if (leftIsBigZee === rightIsBigZee) return 0
+        return leftIsBigZee ? -1 : 1
+      })
+    } else {
+      merchants = sortBigZeeFirst(merchants, (merchant: any) => `${merchant?.business_name || ''} ${merchant?.name || ''}`)
+    }
+
     return { success: true, data: merchants }
   } catch (error: any) {
     return { success: false, error: error.message, data: [] }

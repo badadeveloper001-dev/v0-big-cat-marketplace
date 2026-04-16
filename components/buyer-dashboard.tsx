@@ -109,6 +109,9 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [showAuthPrompt, setShowAuthPrompt] = useState(false)
   const [pendingCheckout, setPendingCheckout] = useState(false)
   const [unreadMessages, setUnreadMessages] = useState(0)
+  const [buyerCoordinates, setBuyerCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'detecting' | 'ready' | 'fallback' | 'denied'>('idle')
+  const [buyerLocationLabel, setBuyerLocationLabel] = useState('')
 
   const cleanupStaleVoiceflowUi = (target?: HTMLElement | null) => {
     if (typeof document === "undefined") return
@@ -124,11 +127,15 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   }
 
   useEffect(() => {
+    detectBuyerLocation()
+  }, [user?.userId])
+
+  useEffect(() => {
     loadMerchants()
     loadProducts()
     loadOrders()
     loadUnreadMessages()
-  }, [user])
+  }, [user?.userId, buyerCoordinates?.latitude, buyerCoordinates?.longitude])
 
   useEffect(() => {
     loadUnreadMessages()
@@ -262,28 +269,183 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     return true
   }
 
+  const syncDetectedLocation = async (payload: {
+    latitude: number
+    longitude: number
+    city?: string | null
+    state?: string | null
+    displayName?: string | null
+  }) => {
+    const label = [payload.city, payload.state].filter(Boolean).join(', ') || payload.displayName || ''
+
+    setBuyerCoordinates({ latitude: payload.latitude, longitude: payload.longitude })
+    setBuyerLocationLabel(label)
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        'bigcat_buyer_location_cache',
+        JSON.stringify({
+          latitude: payload.latitude,
+          longitude: payload.longitude,
+          label,
+          updatedAt: Date.now(),
+        }),
+      )
+    }
+
+    if (!user?.userId) return
+
+    const nextUser = {
+      ...user,
+      city: payload.city || user.city,
+      state: payload.state || user.state,
+      location: label || user.location,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+    }
+
+    setUser(nextUser)
+
+    try {
+      await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.userId,
+          updates: {
+            city: payload.city || user.city,
+            state: payload.state || user.state,
+            location: label || user.location,
+          },
+        }),
+      })
+    } catch {
+      // Ignore location persistence failures and keep the live coordinates in memory.
+    }
+  }
+
+  const detectBuyerLocation = async () => {
+    if (typeof window === 'undefined') return
+
+    try {
+      const cached = localStorage.getItem('bigcat_buyer_location_cache')
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (
+          Number.isFinite(Number(parsed?.latitude)) &&
+          Number.isFinite(Number(parsed?.longitude)) &&
+          Date.now() - Number(parsed?.updatedAt || 0) < 1000 * 60 * 30
+        ) {
+          setBuyerCoordinates({ latitude: Number(parsed.latitude), longitude: Number(parsed.longitude) })
+          setBuyerLocationLabel(parsed.label || '')
+          setLocationStatus('ready')
+          return
+        }
+      }
+    } catch {
+      // Ignore malformed cached location data.
+    }
+
+    const fallbackQuery = [user?.city, user?.state].filter(Boolean).join(', ') || user?.location || ''
+
+    if (!navigator.geolocation) {
+      if (fallbackQuery) {
+        setBuyerLocationLabel(fallbackQuery)
+        setLocationStatus('fallback')
+      }
+      return
+    }
+
+    setLocationStatus('detecting')
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const latitude = position.coords.latitude
+          const longitude = position.coords.longitude
+          const response = await fetch(`/api/location?latitude=${latitude}&longitude=${longitude}`, { cache: 'no-store' })
+          const result = await response.json()
+
+          if (result.success && result.data) {
+            await syncDetectedLocation({
+              latitude,
+              longitude,
+              city: result.data.city,
+              state: result.data.state,
+              displayName: result.data.displayName,
+            })
+          } else {
+            setBuyerCoordinates({ latitude, longitude })
+          }
+
+          setLocationStatus('ready')
+        } catch {
+          setLocationStatus('ready')
+        }
+      },
+      async () => {
+        if (!fallbackQuery) {
+          setLocationStatus('denied')
+          return
+        }
+
+        setBuyerLocationLabel(fallbackQuery)
+
+        try {
+          const response = await fetch(`/api/location?query=${encodeURIComponent(fallbackQuery)}`, { cache: 'no-store' })
+          const result = await response.json()
+          if (result.success && result.data) {
+            setBuyerCoordinates({
+              latitude: Number(result.data.latitude),
+              longitude: Number(result.data.longitude),
+            })
+          }
+        } catch {
+          // Keep the saved location label even if geocoding fails.
+        }
+
+        setLocationStatus('fallback')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
+    )
+  }
+
   const loadMerchants = async () => {
     setLoadingMerchants(true)
     try {
-      const response = await fetch('/api/admin/merchants')
+      const searchParams = new URLSearchParams()
+      if (buyerCoordinates?.latitude && buyerCoordinates?.longitude) {
+        searchParams.set('buyerLat', String(buyerCoordinates.latitude))
+        searchParams.set('buyerLng', String(buyerCoordinates.longitude))
+      }
+
+      const endpoint = searchParams.toString() ? `/api/admin/merchants?${searchParams.toString()}` : '/api/admin/merchants'
+      const response = await fetch(endpoint, { cache: 'no-store' })
       const result = await response.json()
       if (result.success) {
-        const merchantsData = result.data.map((m: any) => ({
-          id: m.id,
-          name: m.business_name || m.full_name || "Unknown",
-          category: m.business_category || "General",
-          rating: 4.5 + Math.random() * 0.5,
-          reviews: Math.floor(Math.random() * 3000) + 100,
-          location: m.location || "Lagos, NG",
-          badge: "Verified",
-          badgeColor: "bg-primary/15 text-primary",
-          bgColor: "bg-blue-100",
-          initials: (m.business_name || m.full_name || "UN").substring(0, 2).toUpperCase(),
-          iconColor: "text-blue-600",
-          description: m.business_description || "Quality products and services",
-          logo_url: m.logo_url || m.avatar_url || "",
-          avatar_url: m.avatar_url || m.logo_url || "",
-        }))
+        const merchantsData = result.data.map((m: any) => {
+          const numericDistance = Number(m.distance_km)
+          const hasDistance = Number.isFinite(numericDistance)
+          const isNearby = hasDistance && numericDistance <= 50
+
+          return {
+            id: m.id,
+            name: m.business_name || m.full_name || "Unknown",
+            category: m.business_category || "General",
+            rating: 4.5 + Math.random() * 0.5,
+            reviews: Math.floor(Math.random() * 3000) + 100,
+            location: m.location || [m.city, m.state].filter(Boolean).join(', ') || "Nigeria",
+            badge: isNearby ? "Near you" : "Verified",
+            badgeColor: isNearby ? "bg-emerald-100 text-emerald-700" : "bg-primary/15 text-primary",
+            bgColor: "bg-blue-100",
+            initials: (m.business_name || m.full_name || "UN").substring(0, 2).toUpperCase(),
+            iconColor: "text-blue-600",
+            description: m.business_description || "Quality products and services",
+            logo_url: m.logo_url || m.avatar_url || "",
+            avatar_url: m.avatar_url || m.logo_url || "",
+            distance_km: hasDistance ? numericDistance : null,
+          }
+        })
         setMerchants(merchantsData)
       }
     } catch (error) {
@@ -296,7 +458,14 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const loadProducts = async () => {
     setLoadingProducts(true)
     try {
-      const response = await fetch('/api/products')
+      const searchParams = new URLSearchParams()
+      if (buyerCoordinates?.latitude && buyerCoordinates?.longitude) {
+        searchParams.set('buyerLat', String(buyerCoordinates.latitude))
+        searchParams.set('buyerLng', String(buyerCoordinates.longitude))
+      }
+
+      const endpoint = searchParams.toString() ? `/api/products?${searchParams.toString()}` : '/api/products'
+      const response = await fetch(endpoint, { cache: 'no-store' })
       const result = await response.json()
       if (result.success) {
         setFeaturedProducts((result.data || []).slice(0, 6))
@@ -595,6 +764,10 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             setSelectedCategory(null)
             setProductSearchQuery("")
           }}
+          buyerLatitude={buyerCoordinates?.latitude}
+          buyerLongitude={buyerCoordinates?.longitude}
+          buyerLocationLabel={buyerLocationLabel}
+          locationStatus={locationStatus}
           onProductClick={(productId) => {
             setShowProducts(false)
             setSelectedProductId(productId)
@@ -661,6 +834,11 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
   const displayName = user?.name || (user ? "Customer" : "Guest")
   const displayMerchants = showAllMerchants ? merchants : merchants.slice(0, 6)
+  const formatDistanceLabel = (distance: unknown) => {
+    const numericDistance = Number(distance)
+    if (!Number.isFinite(numericDistance)) return null
+    return `${numericDistance < 1 ? '<1' : numericDistance.toFixed(1)} km away`
+  }
 
   return (
     <>
@@ -855,6 +1033,21 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           </div>
         </section>
 
+        <section className="px-4 pb-4">
+          <div className={`rounded-2xl border px-4 py-3 ${locationStatus === 'ready' ? 'border-emerald-200 bg-emerald-50' : 'border-border bg-card'}`}>
+            <div className="flex items-center gap-2 text-sm">
+              <MapPin className={`w-4 h-4 ${locationStatus === 'ready' ? 'text-emerald-600' : 'text-muted-foreground'}`} />
+              <span className="font-medium text-foreground">
+                {locationStatus === 'detecting'
+                  ? 'Finding your live location...'
+                  : buyerLocationLabel
+                    ? `Showing the closest merchants to ${buyerLocationLabel}`
+                    : 'Allow location access to see merchants near you first'}
+              </span>
+            </div>
+          </div>
+        </section>
+
         {/* Categories */}
         <section className="mb-6">
           <div className="flex items-center justify-between px-4 mb-3">
@@ -909,6 +1102,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
                 business_name: product.merchant_profiles?.business_name || product.merchant_profiles?.name || 'Merchant',
                 location: product.merchant_profiles?.location || 'Nigeria',
                 logo_url: product.merchant_profiles?.avatar_url,
+                distance_km: product.merchant_profiles?.distance_km ?? product.distance_km ?? null,
               },
             }))}
             onProductClick={(productId) => setSelectedProductId(productId)}
@@ -989,7 +1183,11 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
                     </div>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <MapPin className="w-3 h-3" />
-                      <span className="truncate">{vendor.location}</span>
+                      <span className="truncate">
+                        {formatDistanceLabel(vendor.distance_km)
+                          ? `${formatDistanceLabel(vendor.distance_km)} • ${vendor.location}`
+                          : vendor.location}
+                      </span>
                     </div>
                   </div>
                 </button>

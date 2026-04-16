@@ -28,9 +28,24 @@ interface ProductsMarketplaceProps {
   initialSearch?: string
   onOpenCart?: () => void
   onCheckout?: () => void
+  buyerLatitude?: number | null
+  buyerLongitude?: number | null
+  buyerLocationLabel?: string
+  locationStatus?: 'idle' | 'detecting' | 'ready' | 'fallback' | 'denied'
 }
 
-export function ProductsMarketplace({ onProductClick, onBack, initialCategory, initialSearch, onOpenCart, onCheckout }: ProductsMarketplaceProps) {
+export function ProductsMarketplace({
+  onProductClick,
+  onBack,
+  initialCategory,
+  initialSearch,
+  onOpenCart,
+  onCheckout,
+  buyerLatitude,
+  buyerLongitude,
+  buyerLocationLabel,
+  locationStatus = 'idle',
+}: ProductsMarketplaceProps) {
   const [products, setProducts] = useState<any[]>([])
   const [filteredProducts, setFilteredProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,10 +57,10 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
   const { getItemCount, getTotal } = useCart()
   const ITEMS_PER_PAGE = 24
 
-  // Load all products on mount
+  // Load products and re-sort when live buyer coordinates become available
   useEffect(() => {
     loadProducts()
-  }, [])
+  }, [buyerLatitude, buyerLongitude])
 
   // Filter products when search query or category changes
   useEffect(() => {
@@ -56,7 +71,14 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
   const loadProducts = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/products')
+      const searchParams = new URLSearchParams()
+      if (Number.isFinite(Number(buyerLatitude)) && Number.isFinite(Number(buyerLongitude))) {
+        searchParams.set('buyerLat', String(buyerLatitude))
+        searchParams.set('buyerLng', String(buyerLongitude))
+      }
+
+      const endpoint = searchParams.toString() ? `/api/products?${searchParams.toString()}` : '/api/products'
+      const response = await fetch(endpoint, { cache: 'no-store' })
       const result = await response.json()
       if (result.success) {
         setProducts(result.data)
@@ -238,6 +260,15 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
 
       {/* Results Header */}
       <div className="px-4 space-y-3">
+        {(buyerLocationLabel || locationStatus === 'detecting' || locationStatus === 'denied') && (
+          <div className={`rounded-xl border px-4 py-3 text-sm ${locationStatus === 'ready' || locationStatus === 'fallback' ? 'border-primary/20 bg-primary/5 text-foreground' : 'border-border bg-card text-muted-foreground'}`}>
+            {locationStatus === 'detecting'
+              ? 'Detecting your live location to show the nearest merchants...'
+              : buyerLocationLabel
+                ? `Showing merchants closest to ${buyerLocationLabel}.`
+                : 'Allow location access to see merchants nearest to you.'}
+          </div>
+        )}
         <p className="text-sm text-muted-foreground">
           {loading
             ? 'Loading products...'
@@ -275,6 +306,7 @@ export function ProductsMarketplace({ onProductClick, onBack, initialCategory, i
               business_name: p.merchant_profiles?.business_name || 'Unknown',
               logo_url: p.merchant_profiles?.logo_url,
               location: p.merchant_profiles?.location,
+              distance_km: p.merchant_profiles?.distance_km ?? p.distance_km ?? null,
             },
           }))}
           onProductClick={onProductClick}

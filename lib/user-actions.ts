@@ -28,6 +28,8 @@ export async function updateUserProfile(
     business_name?: string
     business_description?: string
     business_category?: string
+    city?: string
+    state?: string
     location?: string
     email?: string
   }

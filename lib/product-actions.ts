@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { buildLocationQuery, geocodeLocation, haversineDistanceKm } from '@/lib/location-utils'
 
 interface ProductInput {
   name: string
@@ -30,6 +31,75 @@ function sortBigZeeFirst<T>(items: T[], getText: (item: T) => string) {
 
     if (aIsBigZee === bIsBigZee) return 0
     return aIsBigZee ? -1 : 1
+  })
+}
+
+function toFiniteNumber(value: unknown) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function getMerchantLocationText(merchant: any) {
+  return buildLocationQuery(merchant?.city, merchant?.state, merchant?.location)
+}
+
+async function attachProductDistances(products: any[], buyerLat?: number | null, buyerLng?: number | null) {
+  const latitude = toFiniteNumber(buyerLat)
+  const longitude = toFiniteNumber(buyerLng)
+
+  if (latitude === null || longitude === null) {
+    return products
+  }
+
+  const locationCache = new Map<string, Awaited<ReturnType<typeof geocodeLocation>>>()
+
+  return Promise.all(
+    products.map(async (product) => {
+      const merchant = product?.merchant_profiles
+      const locationQuery = getMerchantLocationText(merchant)
+
+      if (!merchant || !locationQuery) {
+        return product
+      }
+
+      if (!locationCache.has(locationQuery)) {
+        locationCache.set(locationQuery, await geocodeLocation(locationQuery))
+      }
+
+      const resolvedLocation = locationCache.get(locationQuery)
+      const distanceKm = resolvedLocation
+        ? haversineDistanceKm(latitude, longitude, resolvedLocation.latitude, resolvedLocation.longitude)
+        : null
+
+      return {
+        ...product,
+        distance_km: distanceKm,
+        merchant_profiles: {
+          ...merchant,
+          distance_km: distanceKm,
+        },
+      }
+    }),
+  )
+}
+
+function sortProductsByLocation(products: any[]) {
+  return [...products].sort((a, b) => {
+    const leftDistance = toFiniteNumber(a?.merchant_profiles?.distance_km ?? a?.distance_km) ?? Number.POSITIVE_INFINITY
+    const rightDistance = toFiniteNumber(b?.merchant_profiles?.distance_km ?? b?.distance_km) ?? Number.POSITIVE_INFINITY
+
+    if (leftDistance !== rightDistance) {
+      return leftDistance - rightDistance
+    }
+
+    const leftText = `${a?.merchant_profiles?.business_name || ''} ${a?.merchant_profiles?.name || ''} ${a?.name || ''}`
+    const rightText = `${b?.merchant_profiles?.business_name || ''} ${b?.merchant_profiles?.name || ''} ${b?.name || ''}`
+
+    const leftIsBigZee = isBigZeeWears(leftText)
+    const rightIsBigZee = isBigZeeWears(rightText)
+
+    if (leftIsBigZee === rightIsBigZee) return 0
+    return leftIsBigZee ? -1 : 1
   })
 }
 
@@ -109,8 +179,10 @@ function normalizeProduct(product: any) {
     merchant_profiles: merchant
       ? {
           ...merchant,
+          id: merchant.id || product?.merchant_id || '',
           business_name: merchant.business_name || merchant.name || 'Unknown',
           logo_url: merchant.logo_url || merchant.avatar_url || null,
+          distance_km: Number.isFinite(Number(merchant.distance_km)) ? Number(merchant.distance_km) : null,
         }
       : undefined,
   }
@@ -134,7 +206,7 @@ export async function getMerchantProducts(merchantId: string) {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('products')
-      .select('*, merchant_profiles:auth_users!merchant_id(business_name, business_category, business_description, name, location, avatar_url)')
+      .select('*, merchant_profiles:auth_users!merchant_id(id, business_name, business_category, business_description, name, city, state, location, avatar_url)')
       .eq('merchant_id', merchantId)
       .eq('is_active', true)
     if (error) throw error
@@ -144,20 +216,18 @@ export async function getMerchantProducts(merchantId: string) {
   }
 }
 
-export async function getAllProducts() {
+export async function getAllProducts(options: { buyerLat?: number | null; buyerLng?: number | null } = {}) {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('products')
-      .select('*, merchant_profiles:auth_users!merchant_id(business_name, business_category, business_description, name, location, avatar_url)')
+      .select('*, merchant_profiles:auth_users!merchant_id(id, business_name, business_category, business_description, name, city, state, location, avatar_url)')
       .eq('is_active', true)
     if (error) throw error
 
     const normalizedProducts = (data || []).map(normalizeProduct)
-    const sortedProducts = sortBigZeeFirst(
-      normalizedProducts,
-      (product: any) => `${product?.merchant_profiles?.business_name || ''} ${product?.merchant_profiles?.name || ''} ${product?.name || ''}`
-    )
+    const productsWithDistance = await attachProductDistances(normalizedProducts, options.buyerLat, options.buyerLng)
+    const sortedProducts = sortProductsByLocation(productsWithDistance)
 
     return { success: true, data: sortedProducts }
   } catch (error: any) {
@@ -170,7 +240,7 @@ export async function getProductById(productId: string) {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('products')
-      .select('*, merchant_profiles:auth_users!merchant_id(business_name, business_category, business_description, name, location, avatar_url)')
+      .select('*, merchant_profiles:auth_users!merchant_id(id, business_name, business_category, business_description, name, city, state, location, avatar_url)')
       .eq('id', productId)
       .single()
     if (error) throw error
