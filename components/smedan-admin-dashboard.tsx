@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, CheckCircle2, Clock, BarChart3, Users, Loader2 } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Clock, BarChart3, Users, Loader2, MapPin, TrendingUp, Search } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 
 export function SmedanAdminDashboard() {
@@ -11,6 +11,9 @@ export function SmedanAdminDashboard() {
   const [merchants, setMerchants] = useState<any[]>([])
   const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, totalSales: 0, totalProfit: 0 })
   const [growthSummary, setGrowthSummary] = useState({ Nano: 0, Mini: 0, Medium: 0, 'Large Scale': 0 })
+  const [selectedState, setSelectedState] = useState('all')
+  const [cityQuery, setCityQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'approved' | 'pending'>('all')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,6 +42,9 @@ export function SmedanAdminDashboard() {
           smedanId: m.smedan_id || 'N/A',
           status: m.setup_completed ? 'approved' : 'pending',
           email: m.email,
+          state: m.state || 'Unknown',
+          city: m.city || '',
+          location: m.location || '',
           createdAt: m.created_at,
           sales: Number(m.total_sales || 0),
           profitLoss: Number(m.profit_loss || 0),
@@ -56,16 +62,6 @@ export function SmedanAdminDashboard() {
     } finally {
       setLoading(false)
     }
-  }
-
-  if (!isAuthorized) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-pulse">Loading...</div>
-        </div>
-      </div>
-    )
   }
 
   const statCards = [
@@ -89,14 +85,96 @@ export function SmedanAdminDashboard() {
     },
   ]
 
-  const missingSmedan = merchants.filter((m) => !m.smedanId || m.smedanId === 'N/A').length
-  const dormantCandidates = merchants.filter((m) => m.status === 'approved').length
+  const states = useMemo(() => {
+    const unique = Array.from(
+      new Set(
+        merchants
+          .map((m) => String(m.state || '').trim())
+          .filter((state) => state.length > 0 && state.toLowerCase() !== 'unknown'),
+      ),
+    )
+    return unique.sort((a, b) => a.localeCompare(b))
+  }, [merchants])
+
+  const filteredMerchants = useMemo(() => {
+    const query = cityQuery.trim().toLowerCase()
+
+    return merchants.filter((merchant) => {
+      const merchantState = String(merchant.state || 'Unknown')
+      const merchantCity = String(merchant.city || '')
+      const merchantLocation = String(merchant.location || '')
+
+      if (selectedState !== 'all' && merchantState !== selectedState) return false
+      if (statusFilter !== 'all' && merchant.status !== statusFilter) return false
+
+      if (query) {
+        const searchable = `${merchantCity} ${merchantLocation} ${merchantState}`.toLowerCase()
+        if (!searchable.includes(query)) return false
+      }
+
+      return true
+    })
+  }, [merchants, selectedState, statusFilter, cityQuery])
+
+  const geographicPerformance = useMemo(() => {
+    const grouped = merchants.reduce(
+      (acc, merchant) => {
+        const state = String(merchant.state || 'Unknown').trim() || 'Unknown'
+
+        if (!acc[state]) {
+          acc[state] = {
+            state,
+            total: 0,
+            approved: 0,
+            pending: 0,
+            totalSales: 0,
+            totalProfit: 0,
+          }
+        }
+
+        acc[state].total += 1
+        if (merchant.status === 'approved') acc[state].approved += 1
+        if (merchant.status === 'pending') acc[state].pending += 1
+        acc[state].totalSales += Number(merchant.sales || 0)
+        acc[state].totalProfit += Number(merchant.profitLoss || 0)
+
+        return acc
+      },
+      {} as Record<string, { state: string; total: number; approved: number; pending: number; totalSales: number; totalProfit: number }>,
+    )
+
+    return Object.values(grouped)
+      .map((entry) => ({
+        ...entry,
+        approvalRate: entry.total > 0 ? (entry.approved / entry.total) * 100 : 0,
+      }))
+      .sort((a, b) => {
+        if (b.totalSales !== a.totalSales) return b.totalSales - a.totalSales
+        if (b.totalProfit !== a.totalProfit) return b.totalProfit - a.totalProfit
+        return b.approved - a.approved
+      })
+  }, [merchants])
+
+  const topState = geographicPerformance[0]
+
+  const missingSmedan = filteredMerchants.filter((m) => !m.smedanId || m.smedanId === 'N/A').length
+  const dormantCandidates = filteredMerchants.filter((m) => m.status === 'approved').length
   const growthCards = [
     { label: 'Nano', value: growthSummary.Nano || 0, color: 'bg-slate-100 text-slate-700' },
     { label: 'Mini', value: growthSummary.Mini || 0, color: 'bg-blue-100 text-blue-700' },
     { label: 'Medium', value: growthSummary.Medium || 0, color: 'bg-purple-100 text-purple-700' },
     { label: 'Large Scale', value: growthSummary['Large Scale'] || 0, color: 'bg-green-100 text-green-700' },
   ]
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-pulse">Loading...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -209,10 +287,154 @@ export function SmedanAdminDashboard() {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-2 bg-card border border-border rounded-lg p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-lg text-foreground">Geographic SME Tracking</h2>
+                <p className="text-sm text-muted-foreground">Filter SMEs by state, city and verification status.</p>
+              </div>
+              <MapPin className="w-5 h-5 text-primary" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">State</label>
+                <select
+                  value={selectedState}
+                  onChange={(event) => setSelectedState(event.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                >
+                  <option value="all">All states</option>
+                  {states.map((state) => (
+                    <option key={state} value={state}>{state}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value as 'all' | 'approved' | 'pending')}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="approved">Approved</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">City / location</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    value={cityQuery}
+                    onChange={(event) => setCityQuery(event.target.value)}
+                    placeholder="Search city or area"
+                    className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-sm text-foreground"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+              <div className="rounded-lg border border-border bg-background p-3">
+                <p className="text-xs text-muted-foreground">Visible SMEs</p>
+                <p className="text-xl font-bold text-foreground mt-1">{filteredMerchants.length}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-background p-3">
+                <p className="text-xs text-muted-foreground">Approved (filtered)</p>
+                <p className="text-xl font-bold text-foreground mt-1">{filteredMerchants.filter((m) => m.status === 'approved').length}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-background p-3">
+                <p className="text-xs text-muted-foreground">Sales (filtered)</p>
+                <p className="text-xl font-bold text-foreground mt-1">{formatNaira(filteredMerchants.reduce((sum, m) => sum + Number(m.sales || 0), 0))}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-background p-3">
+                <p className="text-xs text-muted-foreground">Profit/Loss (filtered)</p>
+                <p className="text-xl font-bold text-foreground mt-1">{formatNaira(filteredMerchants.reduce((sum, m) => sum + Number(m.profitLoss || 0), 0))}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-lg text-foreground">Best Performing State</h2>
+              <TrendingUp className="w-5 h-5 text-primary" />
+            </div>
+            {topState ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                  <p className="text-xs text-muted-foreground">Top state right now</p>
+                  <p className="text-2xl font-bold text-foreground mt-1">{topState.state}</p>
+                </div>
+                <div className="text-sm space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">SMEs</span>
+                    <span className="font-semibold text-foreground">{topState.total}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Approved</span>
+                    <span className="font-semibold text-foreground">{topState.approved}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Approval rate</span>
+                    <span className="font-semibold text-foreground">{topState.approvalRate.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Sales</span>
+                    <span className="font-semibold text-foreground">{formatNaira(topState.totalSales)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Profit/Loss</span>
+                    <span className="font-semibold text-foreground">{formatNaira(topState.totalProfit)}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No state data available yet.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-6 mb-8">
+          <h2 className="font-bold text-lg text-foreground mb-4">State Performance Ranking</h2>
+          {geographicPerformance.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No performance records yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 pr-3 text-muted-foreground">State</th>
+                    <th className="text-left py-2 pr-3 text-muted-foreground">SMEs</th>
+                    <th className="text-left py-2 pr-3 text-muted-foreground">Approved</th>
+                    <th className="text-left py-2 pr-3 text-muted-foreground">Approval Rate</th>
+                    <th className="text-left py-2 pr-3 text-muted-foreground">Sales</th>
+                    <th className="text-left py-2 pr-3 text-muted-foreground">Profit/Loss</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {geographicPerformance.slice(0, 10).map((row) => (
+                    <tr key={row.state} className="border-b border-border/60">
+                      <td className="py-2 pr-3 font-semibold text-foreground">{row.state}</td>
+                      <td className="py-2 pr-3 text-foreground">{row.total}</td>
+                      <td className="py-2 pr-3 text-foreground">{row.approved}</td>
+                      <td className="py-2 pr-3 text-foreground">{row.approvalRate.toFixed(1)}%</td>
+                      <td className="py-2 pr-3 text-foreground">{formatNaira(row.totalSales)}</td>
+                      <td className={`py-2 pr-3 font-medium ${row.totalProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                        {formatNaira(row.totalProfit)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {/* Merchants Table */}
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="p-6 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-lg text-foreground">Merchants</h2>
+            <h2 className="font-bold text-lg text-foreground">Merchants ({filteredMerchants.length})</h2>
             <button
               onClick={loadData}
               disabled={loading}
@@ -258,14 +480,14 @@ export function SmedanAdminDashboard() {
                       Loading merchants...
                     </td>
                   </tr>
-                ) : merchants.length === 0 ? (
+                ) : filteredMerchants.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="p-8 text-center text-muted-foreground">
-                      No merchants found
+                      No merchants found for the selected geographic filters
                     </td>
                   </tr>
                 ) : (
-                  merchants.map((merchant) => (
+                  filteredMerchants.map((merchant) => (
                     <tr key={merchant.id} className="border-b border-border hover:bg-muted/30">
                       <td className="p-4 text-sm text-foreground font-medium">
                         {merchant.name}
