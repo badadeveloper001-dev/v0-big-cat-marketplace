@@ -31,6 +31,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const [walletBalance, setWalletBalance] = useState(0)
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
+  const savedLocation = [user?.city, user?.state].filter(Boolean).join(', ')
 
   // Calculate total weight
   const totalWeight = items.reduce((sum, item) => sum + (0.5 * item.quantity), 0) // Default 0.5kg per item
@@ -77,6 +78,12 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     setSuspended(isUserSuspended(user?.userId))
     setStrikeCount(getUserStrikeCount(user?.userId))
   }, [user?.userId])
+
+  useEffect(() => {
+    if (!deliveryAddress.trim() && savedLocation) {
+      setDeliveryAddress(savedLocation)
+    }
+  }, [savedLocation])
 
   const handleSubmit = async () => {
     setError('')
@@ -166,6 +173,8 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
           order_id: currentOrderId,
           customer_name: user?.name || user?.email || "Customer",
           customer_phone: user?.phone || "",
+          customer_city: user?.city || "",
+          customer_state: user?.state || "",
           delivery_address: deliveryAddress.trim(),
           items: (scopedItems.length > 0 ? scopedItems : items).map((item) => ({ product_name: item.name, quantity: item.quantity })),
           total_amount: currentOrderTotal,
@@ -355,6 +364,11 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
               className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl text-foreground placeholder:text-muted-foreground resize-none h-24"
             />
           </div>
+          {savedLocation && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Prefilled from your account location: {savedLocation}
+            </p>
+          )}
         </section>
 
         {/* Payment Method Selection */}

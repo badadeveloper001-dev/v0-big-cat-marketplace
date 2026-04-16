@@ -14,9 +14,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (role === 'merchant' && (!normalizedCity || !normalizedState)) {
+    if (!normalizedCity || !normalizedState) {
       return NextResponse.json(
-        { success: false, error: 'State and city are required for merchant accounts' },
+        { success: false, error: 'State and city are required to create an account' },
         { status: 400 }
       )
     }

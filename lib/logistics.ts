@@ -9,6 +9,8 @@ export interface LogisticsOrderPayload {
   order_id: string
   customer_name: string
   customer_phone: string
+  customer_city?: string
+  customer_state?: string
   delivery_address: string
   items: LogisticsOrderItem[]
   total_amount: number

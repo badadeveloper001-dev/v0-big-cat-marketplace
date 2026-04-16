@@ -141,7 +141,9 @@ export async function signupEnhanced(params: {
           name,
           phone,
           role,
-          location: null,
+          city: normalizedCity,
+          state: normalizedState,
+          location: buildMerchantLocation(normalizedCity, normalizedState),
           token_balance: 0,
         }
 

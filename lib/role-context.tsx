@@ -8,6 +8,9 @@ interface User {
   email: string
   phone?: string
   name?: string
+  city?: string
+  state?: string
+  location?: string
   role: 'buyer' | 'merchant' | 'agent'
   merchantProfile?: any
   region?: string

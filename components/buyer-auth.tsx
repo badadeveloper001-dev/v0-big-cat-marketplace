@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRole } from "@/lib/role-context"
 import { createClient } from "@/lib/supabase/client"
 import { BrandWordmark } from "./brand-wordmark"
-import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Loader2, CheckCircle2, ShoppingBag, X } from "lucide-react"
+import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Loader2, CheckCircle2, ShoppingBag, X, MapPin, Building2 } from "lucide-react"
 
 declare global {
   interface Window {
@@ -12,6 +12,46 @@ declare global {
     __googleScriptLoaded?: boolean
   }
 }
+
+const NIGERIAN_STATES = [
+  "Abia",
+  "Adamawa",
+  "Akwa Ibom",
+  "Anambra",
+  "Bauchi",
+  "Bayelsa",
+  "Benue",
+  "Borno",
+  "Cross River",
+  "Delta",
+  "Ebonyi",
+  "Edo",
+  "Ekiti",
+  "Enugu",
+  "FCT Abuja",
+  "Gombe",
+  "Imo",
+  "Jigawa",
+  "Kaduna",
+  "Kano",
+  "Katsina",
+  "Kebbi",
+  "Kogi",
+  "Kwara",
+  "Lagos",
+  "Nasarawa",
+  "Niger",
+  "Ogun",
+  "Ondo",
+  "Osun",
+  "Oyo",
+  "Plateau",
+  "Rivers",
+  "Sokoto",
+  "Taraba",
+  "Yobe",
+  "Zamfara",
+]
 
 export function BuyerAuth({
   onBack,
@@ -32,8 +72,21 @@ export function BuyerAuth({
   const [formData, setFormData] = useState({
     email: "",
     phone: "",
+    city: "",
+    state: "",
     password: "",
     name: "",
+  })
+
+  const normalizeBuyerUser = (user: any) => ({
+    userId: user.id,
+    email: user.email,
+    phone: user.phone,
+    name: user.name || user.full_name,
+    city: user.city || "",
+    state: user.state || "",
+    location: user.location || [user.city, user.state].filter(Boolean).join(", "),
+    role: "buyer" as const,
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,6 +103,8 @@ export function BuyerAuth({
             password: formData.password,
             name: formData.name,
             phone: formData.phone,
+            city: formData.city,
+            state: formData.state,
             role: 'buyer'
           }
         : {
@@ -90,24 +145,12 @@ export function BuyerAuth({
         if (isSignUp) {
           setSuccessMessage("Account created successfully! Redirecting...")
           setTimeout(() => {
-            setUser({
-              userId: user.id,
-              email: user.email,
-              phone: user.phone,
-              name: user.name,
-              role: "buyer",
-            })
+            setUser(normalizeBuyerUser(user))
             setRole("buyer")
             onSuccess?.()
           }, 1500)
         } else {
-          setUser({
-            userId: user.id,
-            email: user.email,
-            phone: user.phone,
-            name: user.name,
-            role: "buyer",
-          })
+          setUser(normalizeBuyerUser(user))
           setRole("buyer")
           onSuccess?.()
         }
@@ -122,7 +165,7 @@ export function BuyerAuth({
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -157,6 +200,10 @@ export function BuyerAuth({
     setGoogleLoading(true)
 
     try {
+      if (isSignUp) {
+        setError('Use the signup form so your state and city can be saved for delivery and logistics.')
+        return
+      }
       const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
       if (!googleClientId) {
         setError('Google sign-in is not configured. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID.')
@@ -338,6 +385,54 @@ export function BuyerAuth({
                       />
                     </div>
                   </div>
+
+                  <div className="rounded-xl border border-border/60 bg-secondary/30 p-4 space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Your Location</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        This helps delivery and logistics know your city and state automatically.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">State</label>
+                        <div className="relative">
+                          <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+                          <select
+                            name="state"
+                            value={formData.state}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground"
+                            required
+                          >
+                            <option value="">Select your state</option>
+                            {NIGERIAN_STATES.map((stateName) => (
+                              <option key={stateName} value={stateName}>
+                                {stateName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">City</label>
+                        <div className="relative">
+                          <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                          <input
+                            type="text"
+                            name="city"
+                            placeholder="Enter your city"
+                            value={formData.city}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </>
               )}
 
@@ -381,14 +476,20 @@ export function BuyerAuth({
             </form>
 
             <div className="mt-4">
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={googleLoading || loading}
-                className="w-full py-3 px-4 bg-white border border-border text-foreground font-semibold rounded-xl hover:bg-muted/50 transition-colors disabled:opacity-50"
-              >
-                {googleLoading ? 'Connecting to Google...' : 'Login with Google'}
-              </button>
+              {isSignUp ? (
+                <div className="rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
+                  Buyer sign-up uses the form above so your state and city are saved for logistics automatically.
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={googleLoading || loading}
+                  className="w-full py-3 px-4 bg-white border border-border text-foreground font-semibold rounded-xl hover:bg-muted/50 transition-colors disabled:opacity-50"
+                >
+                  {googleLoading ? 'Connecting to Google...' : 'Login with Google'}
+                </button>
+              )}
             </div>
 
             <div className="mt-8 text-center">
@@ -397,7 +498,7 @@ export function BuyerAuth({
                   setIsSignUp(!isSignUp)
                   setError("")
                   setSuccessMessage("")
-                  setFormData({ email: "", phone: "", password: "", name: "" })
+                  setFormData({ email: "", phone: "", city: "", state: "", password: "", name: "" })
                 }}
                 className="text-primary hover:text-primary/80 font-medium transition-colors"
               >
