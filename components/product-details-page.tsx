@@ -12,13 +12,16 @@ import Image from 'next/image'
 interface ProductDetailsPageProps {
   productId: string
   onBack?: () => void
+  onViewProduct?: (productId: string) => void
   onViewMerchant?: (merchant: any) => void
   onOpenCart?: () => void
   onCheckout?: () => void
 }
 
-export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCart, onCheckout }: ProductDetailsPageProps) {
+export function ProductDetailsPage({ productId, onBack, onViewProduct, onViewMerchant, onOpenCart, onCheckout }: ProductDetailsPageProps) {
   const [product, setProduct] = useState<any>(null)
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([])
+  const [loadingRelated, setLoadingRelated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [quantity, setQuantity] = useState(1)
@@ -39,6 +42,15 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
     setQuantity((current) => (stockCount > 0 ? Math.min(Math.max(1, current), stockCount) : 1))
   }, [product])
 
+  useEffect(() => {
+    if (!product) {
+      setRelatedProducts([])
+      return
+    }
+
+    loadRelatedProducts(product)
+  }, [product])
+
   const loadProduct = async () => {
     setLoading(true)
     try {
@@ -53,6 +65,54 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
       setError('Failed to load product')
     }
     setLoading(false)
+  }
+
+  const loadRelatedProducts = async (currentProduct: any) => {
+    setLoadingRelated(true)
+    try {
+      const response = await fetch('/api/products', { cache: 'no-store' })
+      const result = await response.json()
+
+      if (!result.success || !Array.isArray(result.data)) {
+        setRelatedProducts([])
+        return
+      }
+
+      const currentId = String(currentProduct.id)
+      const currentCategory = String(currentProduct.category || '').toLowerCase()
+      const currentNameTokens = String(currentProduct.name || '')
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((token: string) => token.length > 3)
+
+      const ranked = result.data
+        .filter((item: any) => String(item.id) !== currentId)
+        .map((item: any) => {
+          const itemCategory = String(item.category || '').toLowerCase()
+          const itemName = String(item.name || '').toLowerCase()
+          const sharedTokens = currentNameTokens.reduce((count: number, token: string) => {
+            return itemName.includes(token) ? count + 1 : count
+          }, 0)
+
+          let score = 0
+          if (currentCategory && itemCategory === currentCategory) score += 10
+          if (String(item.merchant_id || '') === String(currentProduct.merchant_id || '')) score += 3
+          score += sharedTokens
+
+          return { ...item, relatedScore: score }
+        })
+        .sort((a: any, b: any) => {
+          if (b.relatedScore !== a.relatedScore) return b.relatedScore - a.relatedScore
+          return Number(b.review_count || 0) - Number(a.review_count || 0)
+        })
+        .slice(0, 6)
+
+      setRelatedProducts(ranked)
+    } catch {
+      setRelatedProducts([])
+    } finally {
+      setLoadingRelated(false)
+    }
   }
 
   if (loading) {
@@ -289,6 +349,58 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
               <span>View Store</span>
             </div>
           </button>
+        </div>
+
+        {/* Related Products */}
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">Related Products</h2>
+          {loadingRelated ? (
+            <div className="grid grid-cols-2 gap-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-48 rounded-xl border border-border bg-card animate-pulse" />
+              ))}
+            </div>
+          ) : relatedProducts.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+              No related products available right now.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {relatedProducts.map((related) => (
+                <button
+                  key={related.id}
+                  type="button"
+                  onClick={() => {
+                    setCurrentImageIndex(0)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                    onViewProduct?.(String(related.id))
+                  }}
+                  className="text-left rounded-xl border border-border bg-card overflow-hidden hover:border-primary/40 hover:shadow-md transition-all"
+                >
+                  <div className="aspect-[4/3] bg-secondary relative">
+                    {related.images?.[0] || related.image_url ? (
+                      <Image
+                        src={related.images?.[0] || related.image_url}
+                        alt={related.name}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 50vw, 25vw"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ImageIcon className="w-8 h-8 text-muted-foreground opacity-50" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3 space-y-1.5">
+                    <p className="text-xs text-muted-foreground">{related.category || 'General'}</p>
+                    <p className="text-sm font-semibold text-foreground line-clamp-2 min-h-[2.5rem]">{related.name}</p>
+                    <p className="text-sm font-bold text-primary">{formatNaira(Number(related.price || 0))}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Quantity Selector */}

@@ -674,6 +674,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
         <ProductDetailsPage 
           productId={selectedProductId} 
           onBack={() => setSelectedProductId(null)}
+          onViewProduct={(productId) => setSelectedProductId(productId)}
           onViewMerchant={(merchant) => {
             setSelectedProductId(null)
             setSelectedVendor(merchant)
