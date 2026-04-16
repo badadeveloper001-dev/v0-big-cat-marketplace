@@ -382,7 +382,7 @@ export function MerchantDashboard() {
           fetch(`/api/orders/merchant?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
           }),
-          fetch(`/api/products/merchant?merchantId=${encodeURIComponent(user.userId)}`, {
+          fetch(`/api/products/merchant?merchantId=${encodeURIComponent(user.userId)}&includePrivate=1`, {
             cache: 'no-store',
           }),
         ])
@@ -463,7 +463,7 @@ export function MerchantDashboard() {
     setLoadingProducts(true)
     try {
       if (user?.userId) {
-        const response = await fetch(`/api/products/merchant?merchantId=${user.userId}`)
+        const response = await fetch(`/api/products/merchant?merchantId=${user.userId}&includePrivate=1`)
         const result = await response.json()
         if (result.success && result.data) {
           setProducts(result.data.slice(0, 4))

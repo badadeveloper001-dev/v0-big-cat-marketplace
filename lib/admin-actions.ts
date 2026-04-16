@@ -42,6 +42,18 @@ function getMerchantSalesAmount(order: any) {
   return Math.max(0, productTotal || (grandTotal - deliveryFee))
 }
 
+function extractFallbackCostPrice(images: unknown) {
+  if (!Array.isArray(images)) return 0
+
+  const token = images.find(
+    (item) => typeof item === 'string' && item.startsWith('__bigcat_cost_price__:'),
+  )
+
+  if (typeof token !== 'string') return 0
+
+  return toAmount(token.replace('__bigcat_cost_price__:', ''))
+}
+
 function getOrderItemCost(item: any, costMap: Map<string, number>) {
   const quantity = Math.max(1, toAmount(item?.quantity) || 1)
   const productId = String(item?.product_id || item?.products?.id || '')
@@ -61,9 +73,9 @@ export async function getMerchants(options: { buyerLat?: number | null; buyerLng
 
     if (error) throw error
 
-    let productsResult = await supabase.from('products').select('id, merchant_id, cost_price, stock')
+    let productsResult = await supabase.from('products').select('id, merchant_id, cost_price, stock, images')
     if (productsResult.error && String(productsResult.error.message || '').toLowerCase().includes('cost_price')) {
-      productsResult = await supabase.from('products').select('id, merchant_id, stock')
+      productsResult = await supabase.from('products').select('id, merchant_id, stock, images')
     }
     if (productsResult.error) throw productsResult.error
 
@@ -78,7 +90,7 @@ export async function getMerchants(options: { buyerLat?: number | null; buyerLng
     for (const product of productRows || []) {
       const productId = String((product as any)?.id || '')
       const merchantId = String((product as any)?.merchant_id || '')
-      const costPrice = toAmount((product as any)?.cost_price)
+      const costPrice = toAmount((product as any)?.cost_price ?? extractFallbackCostPrice((product as any)?.images))
       const stock = toAmount((product as any)?.stock)
 
       if (productId) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMerchantProducts } from '@/lib/product-actions'
-import { getRequestAuthUser } from '@/lib/supabase/request-auth'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,21 +14,23 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const includePrivate = searchParams.get('includePrivate') === '1'
     const result = await getMerchantProducts(merchantId)
 
     if (!result.success || !Array.isArray(result.data)) {
       return NextResponse.json(result)
     }
 
-    const { user } = await getRequestAuthUser()
-    const isOwner = user?.id === merchantId
+    if (includePrivate) {
+      const auth = await requireAuthenticatedUser(merchantId)
+      if (auth.response) return auth.response
+      return NextResponse.json(result)
+    }
 
-    const safeData = isOwner
-      ? result.data
-      : result.data.map((product: any) => {
-          const { cost_price, ...rest } = product
-          return rest
-        })
+    const safeData = result.data.map((product: any) => {
+      const { cost_price, ...rest } = product
+      return rest
+    })
 
     return NextResponse.json({ ...result, data: safeData })
   } catch (error) {

@@ -50,7 +50,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
   const loadProducts = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/products/merchant?merchantId=${merchantId}`)
+      const response = await fetch(`/api/products/merchant?merchantId=${merchantId}&includePrivate=1`)
       const result = await response.json()
       if (result.success) {
         setProducts(result.data)

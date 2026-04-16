@@ -19,6 +19,7 @@ interface ProductInput {
 
 const MAX_DECIMAL_VALUE = 99999999.99
 const MAX_STOCK_VALUE = 99999999
+const COST_PRICE_FALLBACK_PREFIX = '__bigcat_cost_price__:'
 
 function isBigZeeWears(value: unknown) {
   const normalized = String(value || '').toLowerCase()
@@ -104,6 +105,36 @@ function sortProductsByLocation(products: any[]) {
   })
 }
 
+function extractCostPriceFromImageMetadata(images: unknown): number {
+  if (!Array.isArray(images)) return 0
+
+  const token = images.find(
+    (item) => typeof item === 'string' && item.startsWith(COST_PRICE_FALLBACK_PREFIX),
+  )
+
+  if (typeof token !== 'string') return 0
+
+  const parsed = Number(token.replace(COST_PRICE_FALLBACK_PREFIX, ''))
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function stripCostPriceMetadata(images: unknown): string[] {
+  if (!Array.isArray(images)) return []
+  return images.filter(
+    (item): item is string => typeof item === 'string' && !item.startsWith(COST_PRICE_FALLBACK_PREFIX),
+  )
+}
+
+function attachCostPriceMetadata(images: unknown, costPrice?: number) {
+  const cleanImages = stripCostPriceMetadata(images)
+
+  if (costPrice === undefined || costPrice === null || !Number.isFinite(Number(costPrice))) {
+    return cleanImages
+  }
+
+  return [...cleanImages, `${COST_PRICE_FALLBACK_PREFIX}${Number(costPrice).toFixed(2)}`]
+}
+
 function sanitizeDecimal(
   value: number | undefined,
   fieldName: string,
@@ -169,11 +200,13 @@ function sanitizeProductForPublic(product: any) {
 }
 
 function normalizeProduct(product: any) {
-  const images = Array.isArray(product?.images)
+  const rawImages = Array.isArray(product?.images)
     ? product.images.filter(Boolean)
     : product?.image_url
       ? [product.image_url]
       : []
+
+  const images = stripCostPriceMetadata(rawImages)
 
   const merchant = product?.merchant_profiles || product?.auth_users
 
@@ -182,7 +215,7 @@ function normalizeProduct(product: any) {
     images,
     image_url: product?.image_url ?? images[0] ?? null,
     stock: Number.isFinite(Number(product?.stock)) ? Number(product.stock) : 0,
-    cost_price: Number.isFinite(Number(product?.cost_price)) ? Number(product.cost_price) : 0,
+    cost_price: Number.isFinite(Number(product?.cost_price)) ? Number(product.cost_price) : extractCostPriceFromImageMetadata(rawImages),
     status: product?.status ?? (product?.is_active === false ? 'inactive' : 'active'),
     merchant_profiles: merchant
       ? {
@@ -211,8 +244,19 @@ function buildBaseProductPayload(product: Partial<ProductInput>, options: { incl
 }
 
 function buildLegacyProductPayload(product: Partial<ProductInput>, options: { includeDefaults?: boolean } = {}) {
-  const { cost_price, ...legacyProduct } = product
-  return buildBaseProductPayload(legacyProduct, options)
+  const imagesWithMetadata = attachCostPriceMetadata(product.images, product.cost_price)
+
+  return {
+    ...buildBaseProductPayload(
+      {
+        ...product,
+        images: imagesWithMetadata,
+        image_url: product.image_url || imagesWithMetadata[0] || null,
+      },
+      options,
+    ),
+    ...(imagesWithMetadata.length > 0 ? { images: imagesWithMetadata } : {}),
+  }
 }
 
 export async function getMerchantProducts(merchantId: string) {
@@ -346,15 +390,8 @@ export async function updateProduct(productId: string, updates: Partial<ProductI
 
     if (result.error && String(result.error.message || '').includes('column')) {
       const fallbackUpdates = {
-        ...(normalizedUpdates.name !== undefined ? { name: normalizedUpdates.name } : {}),
-        ...(normalizedUpdates.description !== undefined ? { description: normalizedUpdates.description } : {}),
-        ...(normalizedUpdates.price !== undefined ? { price: normalizedUpdates.price } : {}),
-        ...(normalizedUpdates.category !== undefined ? { category: normalizedUpdates.category } : {}),
-        ...(normalizedUpdates.stock !== undefined ? { stock: normalizedUpdates.stock } : {}),
+        ...buildLegacyProductPayload(normalizedUpdates),
         ...(normalizedUpdates.is_active !== undefined ? { is_active: normalizedUpdates.is_active } : {}),
-        ...(normalizedUpdates.image_url !== undefined || normalizedUpdates.images !== undefined
-          ? { image_url: normalizedUpdates.image_url || normalizedUpdates.images?.[0] || null }
-          : {}),
       }
 
       let fallbackQuery = (supabase.from('products') as any).update(fallbackUpdates).eq('id', productId)
