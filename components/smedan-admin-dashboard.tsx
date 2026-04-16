@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Clock, BarChart3, Users, Loader2, MapPin, TrendingUp, Search } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 
-export function SmedanAdminDashboard() {
+interface SmedanAdminDashboardProps {
+  bypassAccessCheck?: boolean
+  embedded?: boolean
+}
+
+export function SmedanAdminDashboard({ bypassAccessCheck = false, embedded = false }: SmedanAdminDashboardProps = {}) {
   const router = useRouter()
   const [isAuthorized, setIsAuthorized] = useState(false)
   const [merchants, setMerchants] = useState<any[]>([])
@@ -17,6 +22,12 @@ export function SmedanAdminDashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (bypassAccessCheck) {
+      setIsAuthorized(true)
+      loadData()
+      return
+    }
+
     const adminAccess = sessionStorage.getItem("adminAccess")
     if (adminAccess === "SMEDAN_123") {
       setIsAuthorized(true)
@@ -24,7 +35,7 @@ export function SmedanAdminDashboard() {
     } else {
       router.push("/")
     }
-  }, [router])
+  }, [router, bypassAccessCheck])
 
   const loadData = async () => {
     setLoading(true)
@@ -178,21 +189,22 @@ export function SmedanAdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar & Header */}
-      <div className="border-b border-border">
-        <div className="flex items-center gap-4 p-6 max-w-7xl mx-auto">
-          <button
-            onClick={() => router.push("/")}
-            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">SMEDAN Admin</h1>
-            <p className="text-sm text-muted-foreground">Merchant Verification Dashboard</p>
+      {!embedded && (
+        <div className="border-b border-border">
+          <div className="flex items-center gap-4 p-6 max-w-7xl mx-auto">
+            <button
+              onClick={() => router.push("/")}
+              className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">SMEDAN Admin</h1>
+              <p className="text-sm text-muted-foreground">Merchant Verification Dashboard</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto">

@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft, TrendingUp, Wallet, DollarSign, CheckCircle2, Clock, Loader2, UserPlus, Copy, Trash2, MapPin } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 
-export function PalmpayAdminDashboard() {
+interface PalmpayAdminDashboardProps {
+  bypassAccessCheck?: boolean
+  embedded?: boolean
+}
+
+export function PalmpayAdminDashboard({ bypassAccessCheck = false, embedded = false }: PalmpayAdminDashboardProps = {}) {
   const router = useRouter()
   const [isAuthorized, setIsAuthorized] = useState(false)
   const [transactions, setTransactions] = useState<any[]>([])
@@ -29,6 +34,12 @@ export function PalmpayAdminDashboard() {
   const [agentFeedback, setAgentFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
 
   useEffect(() => {
+    if (bypassAccessCheck) {
+      setIsAuthorized(true)
+      loadData()
+      return
+    }
+
     const adminAccess = sessionStorage.getItem("adminAccess")
     if (adminAccess === "PALMPAY_012") {
       setIsAuthorized(true)
@@ -36,7 +47,7 @@ export function PalmpayAdminDashboard() {
     } else {
       router.push("/")
     }
-  }, [router])
+  }, [router, bypassAccessCheck])
 
   const loadData = async () => {
     setLoading(true)
@@ -187,21 +198,22 @@ export function PalmpayAdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border">
-        <div className="flex items-center gap-4 p-6 max-w-7xl mx-auto">
-          <button
-            onClick={() => router.push("/")}
-            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">PalmPay Admin</h1>
-            <p className="text-sm text-muted-foreground">Payment & Escrow Management</p>
+      {!embedded && (
+        <div className="border-b border-border">
+          <div className="flex items-center gap-4 p-6 max-w-7xl mx-auto">
+            <button
+              onClick={() => router.push("/")}
+              className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">PalmPay Admin</h1>
+              <p className="text-sm text-muted-foreground">Payment & Escrow Management</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto">

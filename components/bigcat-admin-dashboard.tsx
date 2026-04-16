@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, XCircle, Clock, Loader2, UserPlus } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
+import { SmedanAdminDashboard } from "./smedan-admin-dashboard"
+import { PalmpayAdminDashboard } from "./palmpay-admin-dashboard"
 
 export function BigcatAdminDashboard() {
   const router = useRouter()
@@ -38,6 +40,7 @@ export function BigcatAdminDashboard() {
   })
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [activePanel, setActivePanel] = useState<'overview' | 'smedan' | 'palmpay'>('overview')
 
   // Agent management state - BigCat only sees count
   const [agentCount, setAgentCount] = useState(0)
@@ -160,6 +163,66 @@ export function BigcatAdminDashboard() {
     )
   }
 
+  if (activePanel === 'smedan') {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="border-b border-border">
+          <div className="flex items-center justify-between gap-3 p-4 max-w-7xl mx-auto">
+            <div>
+              <h1 className="text-xl font-bold text-foreground">BigCat Super Admin</h1>
+              <p className="text-sm text-muted-foreground">Viewing full SMEDAN dashboard</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActivePanel('overview')}
+                className="px-3 py-2 rounded-lg bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80"
+              >
+                Back to Overview
+              </button>
+              <button
+                onClick={() => setActivePanel('palmpay')}
+                className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
+              >
+                Open PalmPay View
+              </button>
+            </div>
+          </div>
+        </div>
+        <SmedanAdminDashboard bypassAccessCheck embedded />
+      </div>
+    )
+  }
+
+  if (activePanel === 'palmpay') {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="border-b border-border">
+          <div className="flex items-center justify-between gap-3 p-4 max-w-7xl mx-auto">
+            <div>
+              <h1 className="text-xl font-bold text-foreground">BigCat Super Admin</h1>
+              <p className="text-sm text-muted-foreground">Viewing full PalmPay dashboard</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActivePanel('overview')}
+                className="px-3 py-2 rounded-lg bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80"
+              >
+                Back to Overview
+              </button>
+              <button
+                onClick={() => setActivePanel('smedan')}
+                className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
+              >
+                Open SMEDAN View
+              </button>
+            </div>
+          </div>
+        </div>
+        <PalmpayAdminDashboard bypassAccessCheck embedded />
+      </div>
+    )
+  }
+
   const stats = [
     {
       label: "Total Users",
@@ -273,6 +336,24 @@ export function BigcatAdminDashboard() {
 
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto">
+        <div className="bg-card border border-border rounded-lg p-4 mb-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-foreground mr-2">Open Full Admin Views:</span>
+            <button
+              onClick={() => setActivePanel('smedan')}
+              className="px-3 py-2 rounded-lg bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100"
+            >
+              SMEDAN Admin View
+            </button>
+            <button
+              onClick={() => setActivePanel('palmpay')}
+              className="px-3 py-2 rounded-lg bg-green-50 text-green-700 text-sm font-medium hover:bg-green-100"
+            >
+              PalmPay Admin View
+            </button>
+          </div>
+        </div>
+
         {/* Key Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           {stats.map((stat) => (
