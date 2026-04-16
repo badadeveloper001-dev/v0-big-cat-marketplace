@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { buildLocationQuery, geocodeLocation, haversineDistanceKm } from '@/lib/location-utils'
+import { getBusinessScale, getBusinessScaleProgress } from '@/lib/business-metrics'
 
 function toAmount(value: unknown) {
   const parsed = Number(value || 0)
@@ -26,66 +27,146 @@ function toFiniteNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function isRecognizedSale(order: any) {
+  const status = String(order?.status || '').toLowerCase()
+  const paymentStatus = String(order?.payment_status || '').toLowerCase()
+  const escrowStatus = String(order?.escrow_status || '').toLowerCase()
+
+  return status === 'delivered' || status === 'completed' || paymentStatus === 'completed' || escrowStatus === 'released'
+}
+
+function getMerchantSalesAmount(order: any) {
+  const deliveryFee = toAmount(order?.delivery_fee)
+  const productTotal = toAmount(order?.product_total)
+  const grandTotal = toAmount(order?.grand_total ?? order?.total_amount)
+  return Math.max(0, productTotal || (grandTotal - deliveryFee))
+}
+
+function getOrderItemCost(item: any, costMap: Map<string, number>) {
+  const quantity = Math.max(1, toAmount(item?.quantity) || 1)
+  const productId = String(item?.product_id || item?.products?.id || '')
+  const unitCost = toAmount(item?.products?.cost_price ?? costMap.get(productId) ?? 0)
+  return Math.max(0, unitCost * quantity)
+}
+
 export async function getMerchants(options: { buyerLat?: number | null; buyerLng?: number | null } = {}) {
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('auth_users')
-      .select('*')
-      .eq('role', 'merchant')
+    const [{ data, error }, { data: orderRows }] = await Promise.all([
+      supabase.from('auth_users').select('*').eq('role', 'merchant'),
+      supabase
+        .from('orders')
+        .select('merchant_id, total_amount, grand_total, product_total, delivery_fee, status, payment_status, escrow_status, order_items(quantity, product_id, unit_price, price, total_price)'),
+    ])
+
     if (error) throw error
+
+    let productsResult = await supabase.from('products').select('id, merchant_id, cost_price, stock')
+    if (productsResult.error && String(productsResult.error.message || '').toLowerCase().includes('cost_price')) {
+      productsResult = await supabase.from('products').select('id, merchant_id, stock')
+    }
+    if (productsResult.error) throw productsResult.error
+
+    const productRows = productsResult.data || []
 
     const latitude = toFiniteNumber(options.buyerLat)
     const longitude = toFiniteNumber(options.buyerLng)
+    const locationCache = new Map<string, Awaited<ReturnType<typeof geocodeLocation>>>()
+    const productCostMap = new Map<string, number>()
+    const merchantInventoryCostMap = new Map<string, number>()
 
-    let merchants = data || []
+    for (const product of productRows || []) {
+      const productId = String((product as any)?.id || '')
+      const merchantId = String((product as any)?.merchant_id || '')
+      const costPrice = toAmount((product as any)?.cost_price)
+      const stock = toAmount((product as any)?.stock)
 
-    if (latitude !== null && longitude !== null) {
-      const locationCache = new Map<string, Awaited<ReturnType<typeof geocodeLocation>>>()
+      if (productId) {
+        productCostMap.set(productId, costPrice)
+      }
 
-      merchants = await Promise.all(
-        merchants.map(async (merchant: any) => {
-          const locationQuery = buildLocationQuery(merchant?.city, merchant?.state, merchant?.location)
+      if (merchantId) {
+        merchantInventoryCostMap.set(
+          merchantId,
+          (merchantInventoryCostMap.get(merchantId) || 0) + (costPrice * stock),
+        )
+      }
+    }
 
-          if (!locationQuery) {
-            return { ...merchant, distance_km: null }
-          }
+    const merchantOrderMetrics = new Map<string, { totalSales: number; profitLoss: number; orders: number }>()
 
+    for (const order of orderRows || []) {
+      if (!isRecognizedSale(order)) continue
+
+      const merchantId = String((order as any)?.merchant_id || '')
+      if (!merchantId) continue
+
+      const current = merchantOrderMetrics.get(merchantId) || { totalSales: 0, profitLoss: 0, orders: 0 }
+      const saleAmount = getMerchantSalesAmount(order)
+      const costOfGoods = Array.isArray((order as any)?.order_items)
+        ? (order as any).order_items.reduce((sum: number, item: any) => sum + getOrderItemCost(item, productCostMap), 0)
+        : 0
+
+      current.totalSales += saleAmount
+      current.profitLoss += saleAmount - costOfGoods
+      current.orders += 1
+      merchantOrderMetrics.set(merchantId, current)
+    }
+
+    let merchants = await Promise.all(
+      (data || []).map(async (merchant: any) => {
+        const merchantId = String(merchant?.id || '')
+        const metrics = merchantOrderMetrics.get(merchantId) || { totalSales: 0, profitLoss: 0, orders: 0 }
+        const inventoryCost = merchantInventoryCostMap.get(merchantId) || 0
+        const growth = getBusinessScaleProgress(metrics.totalSales)
+        const locationQuery = buildLocationQuery(merchant?.city, merchant?.state, merchant?.location)
+
+        let distanceKm: number | null = null
+        if (latitude !== null && longitude !== null && locationQuery) {
           if (!locationCache.has(locationQuery)) {
             locationCache.set(locationQuery, await geocodeLocation(locationQuery))
           }
-
           const resolvedLocation = locationCache.get(locationQuery)
-          const distanceKm = resolvedLocation
+          distanceKm = resolvedLocation
             ? haversineDistanceKm(latitude, longitude, resolvedLocation.latitude, resolvedLocation.longitude)
             : null
-
-          return {
-            ...merchant,
-            distance_km: distanceKm,
-          }
-        }),
-      )
-
-      merchants = [...merchants].sort((a: any, b: any) => {
-        const leftDistance = toFiniteNumber(a?.distance_km) ?? Number.POSITIVE_INFINITY
-        const rightDistance = toFiniteNumber(b?.distance_km) ?? Number.POSITIVE_INFINITY
-
-        if (leftDistance !== rightDistance) {
-          return leftDistance - rightDistance
         }
 
-        const leftText = `${a?.business_name || ''} ${a?.name || ''}`
-        const rightText = `${b?.business_name || ''} ${b?.name || ''}`
-        const leftIsBigZee = isBigZeeWears(leftText)
-        const rightIsBigZee = isBigZeeWears(rightText)
+        return {
+          ...merchant,
+          total_sales: Number(metrics.totalSales.toFixed(2)),
+          inventory_cost: Number(inventoryCost.toFixed(2)),
+          profit_loss: Number(metrics.profitLoss.toFixed(2)),
+          order_count: metrics.orders,
+          business_scale: getBusinessScale(metrics.totalSales),
+          growth_progress: growth.progressPercent,
+          amount_to_next_scale: growth.amountToNext,
+          next_scale: growth.next,
+          distance_km: distanceKm,
+        }
+      }),
+    )
 
-        if (leftIsBigZee === rightIsBigZee) return 0
-        return leftIsBigZee ? -1 : 1
-      })
-    } else {
-      merchants = sortBigZeeFirst(merchants, (merchant: any) => `${merchant?.business_name || ''} ${merchant?.name || ''}`)
-    }
+    merchants = [...merchants].sort((a: any, b: any) => {
+      const leftDistance = toFiniteNumber(a?.distance_km) ?? Number.POSITIVE_INFINITY
+      const rightDistance = toFiniteNumber(b?.distance_km) ?? Number.POSITIVE_INFINITY
+
+      if (leftDistance !== rightDistance) {
+        return leftDistance - rightDistance
+      }
+
+      if (toAmount(b?.total_sales) !== toAmount(a?.total_sales)) {
+        return toAmount(b?.total_sales) - toAmount(a?.total_sales)
+      }
+
+      const leftText = `${a?.business_name || ''} ${a?.name || ''}`
+      const rightText = `${b?.business_name || ''} ${b?.name || ''}`
+      const leftIsBigZee = isBigZeeWears(leftText)
+      const rightIsBigZee = isBigZeeWears(rightText)
+
+      if (leftIsBigZee === rightIsBigZee) return 0
+      return leftIsBigZee ? -1 : 1
+    })
 
     return { success: true, data: merchants }
   } catch (error: any) {
@@ -180,11 +261,37 @@ export async function getLogisticsStats() {
 
 export async function getMerchantStats() {
   try {
-    const supabase = await createClient()
-    const { count: totalMerchants } = await supabase.from('auth_users').select('*', { count: 'exact', head: true }).eq('role', 'merchant')
-    const { count: approvedMerchants } = await supabase.from('auth_users').select('*', { count: 'exact', head: true }).eq('role', 'merchant').eq('setup_completed', true)
-    const { count: pendingMerchants } = await supabase.from('auth_users').select('*', { count: 'exact', head: true }).eq('role', 'merchant').eq('setup_completed', false)
-    return { success: true, data: { total: totalMerchants || 0, approved: approvedMerchants || 0, pending: pendingMerchants || 0 } }
+    const merchantsResult = await getMerchants()
+    if (!merchantsResult.success) {
+      return { success: false, error: merchantsResult.error }
+    }
+
+    const merchants = merchantsResult.data || []
+    const categories = merchants.reduce(
+      (acc: Record<string, number>, merchant: any) => {
+        const scale = String(merchant?.business_scale || 'Nano')
+        acc[scale] = (acc[scale] || 0) + 1
+        return acc
+      },
+      { Nano: 0, Mini: 0, Medium: 0, 'Large Scale': 0 },
+    )
+
+    const approvedMerchants = merchants.filter((merchant: any) => merchant.setup_completed).length
+    const pendingMerchants = merchants.filter((merchant: any) => !merchant.setup_completed).length
+    const totalSales = merchants.reduce((sum: number, merchant: any) => sum + toAmount(merchant?.total_sales), 0)
+    const totalProfit = merchants.reduce((sum: number, merchant: any) => sum + toAmount(merchant?.profit_loss), 0)
+
+    return {
+      success: true,
+      data: {
+        total: merchants.length,
+        approved: approvedMerchants,
+        pending: pendingMerchants,
+        totalSales,
+        totalProfit,
+        categories,
+      },
+    }
   } catch (error: any) {
     return { success: false, error: error.message }
   }

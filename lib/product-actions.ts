@@ -7,6 +7,7 @@ interface ProductInput {
   name: string
   description?: string
   price: number
+  cost_price?: number
   category?: string
   image_url?: string
   images?: string[]
@@ -161,6 +162,12 @@ function sanitizeWholeNumber(
   return parsed
 }
 
+function sanitizeProductForPublic(product: any) {
+  if (!product) return product
+  const { cost_price, ...rest } = product
+  return rest
+}
+
 function normalizeProduct(product: any) {
   const images = Array.isArray(product?.images)
     ? product.images.filter(Boolean)
@@ -175,6 +182,7 @@ function normalizeProduct(product: any) {
     images,
     image_url: product?.image_url ?? images[0] ?? null,
     stock: Number.isFinite(Number(product?.stock)) ? Number(product.stock) : 0,
+    cost_price: Number.isFinite(Number(product?.cost_price)) ? Number(product.cost_price) : 0,
     status: product?.status ?? (product?.is_active === false ? 'inactive' : 'active'),
     merchant_profiles: merchant
       ? {
@@ -193,12 +201,18 @@ function buildBaseProductPayload(product: Partial<ProductInput>, options: { incl
     ...(product.name !== undefined ? { name: product.name } : {}),
     ...(product.description !== undefined ? { description: product.description } : {}),
     ...(product.price !== undefined ? { price: product.price } : {}),
+    ...(product.cost_price !== undefined ? { cost_price: product.cost_price } : {}),
     ...(product.category !== undefined ? { category: product.category } : {}),
     ...(product.image_url !== undefined || product.images !== undefined
       ? { image_url: product.image_url || product.images?.[0] || null }
       : {}),
     ...(product.stock !== undefined ? { stock: product.stock } : options.includeDefaults ? { stock: 0 } : {}),
   }
+}
+
+function buildLegacyProductPayload(product: Partial<ProductInput>, options: { includeDefaults?: boolean } = {}) {
+  const { cost_price, ...legacyProduct } = product
+  return buildBaseProductPayload(legacyProduct, options)
 }
 
 export async function getMerchantProducts(merchantId: string) {
@@ -229,7 +243,7 @@ export async function getAllProducts(options: { buyerLat?: number | null; buyerL
     const productsWithDistance = await attachProductDistances(normalizedProducts, options.buyerLat, options.buyerLng)
     const sortedProducts = sortProductsByLocation(productsWithDistance)
 
-    return { success: true, data: sortedProducts }
+    return { success: true, data: sortedProducts.map(sanitizeProductForPublic) }
   } catch (error: any) {
     return { success: false, error: error.message, data: [] }
   }
@@ -250,7 +264,7 @@ export async function getProductById(productId: string) {
       return { success: false, error: 'Product not found' }
     }
 
-    return { success: true, data: normalized }
+    return { success: true, data: sanitizeProductForPublic(normalized) }
   } catch (error: any) {
     return { success: false, error: error.message }
   }
@@ -267,6 +281,7 @@ export async function createProduct(merchantId: string, product: ProductInput, a
     const normalizedProduct = {
       ...product,
       price: sanitizeDecimal(product.price, 'Product price', { required: true, min: 0.01 }),
+      cost_price: sanitizeDecimal(product.cost_price, 'Cost price', { required: true, min: 0 }),
       stock: sanitizeWholeNumber(product.stock, 'Stock quantity', { min: 0 }),
       weight: sanitizeDecimal(product.weight, 'Product weight', { min: 0 }),
     }
@@ -283,7 +298,7 @@ export async function createProduct(merchantId: string, product: ProductInput, a
 
     if (result.error && String(result.error.message || '').includes('column')) {
       result = await (supabase.from('products') as any)
-        .insert({ ...buildBaseProductPayload(normalizedProduct), merchant_id: merchantId })
+        .insert({ ...buildLegacyProductPayload(normalizedProduct), merchant_id: merchantId })
         .select()
         .single()
     }
@@ -304,6 +319,9 @@ export async function updateProduct(productId: string, updates: Partial<ProductI
       ...(updates.price !== undefined
         ? { price: sanitizeDecimal(updates.price, 'Product price', { min: 0.01 }) }
         : {}),
+      ...(updates.cost_price !== undefined
+        ? { cost_price: sanitizeDecimal(updates.cost_price, 'Cost price', { min: 0 }) }
+        : {}),
       ...(updates.stock !== undefined
         ? { stock: sanitizeWholeNumber(updates.stock, 'Stock quantity', { min: 0 }) }
         : {}),
@@ -315,6 +333,7 @@ export async function updateProduct(productId: string, updates: Partial<ProductI
     const richUpdates = {
       ...buildBaseProductPayload(normalizedUpdates),
       ...(normalizedUpdates.is_active !== undefined ? { is_active: normalizedUpdates.is_active } : {}),
+      ...(normalizedUpdates.cost_price !== undefined ? { cost_price: normalizedUpdates.cost_price } : {}),
       ...(normalizedUpdates.weight !== undefined ? { weight: normalizedUpdates.weight } : {}),
       ...(normalizedUpdates.images !== undefined ? { images: normalizedUpdates.images } : {}),
       ...(normalizedUpdates.status !== undefined ? { status: normalizedUpdates.status } : {}),

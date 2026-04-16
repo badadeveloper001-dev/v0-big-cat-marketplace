@@ -28,6 +28,14 @@ export function BigcatAdminDashboard() {
     pendingOrders: 0,
     completedOrders: 0,
   })
+  const [growthStats, setGrowthStats] = useState({
+    Nano: 0,
+    Mini: 0,
+    Medium: 0,
+    'Large Scale': 0,
+    totalSales: 0,
+    totalProfit: 0,
+  })
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -62,6 +70,14 @@ export function BigcatAdminDashboard() {
           disbursedAmount: Number(statsRes.transactions?.disbursedAmount || 0),
           pendingOrders: Number(statsRes.transactions?.pendingOrders || 0),
           completedOrders: Number(statsRes.transactions?.completedOrders || 0),
+        })
+        setGrowthStats({
+          Nano: Number(statsRes.merchants?.categories?.Nano || 0),
+          Mini: Number(statsRes.merchants?.categories?.Mini || 0),
+          Medium: Number(statsRes.merchants?.categories?.Medium || 0),
+          'Large Scale': Number(statsRes.merchants?.categories?.['Large Scale'] || 0),
+          totalSales: Number(statsRes.merchants?.totalSales || 0),
+          totalProfit: Number(statsRes.merchants?.totalProfit || 0),
         })
         if (statsRes.logistics) {
           setLogisticsStats({
@@ -341,6 +357,33 @@ export function BigcatAdminDashboard() {
             <div>
               <p className="text-sm text-muted-foreground">Completed orders</p>
               <p className="text-2xl font-bold text-blue-600 mt-1">{paymentStats.completedOrders}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-6 mb-8">
+          <h2 className="font-bold text-lg text-foreground mb-4">SME Growth Tracker</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {[
+              { label: 'Nano', value: growthStats.Nano, tone: 'bg-slate-100 text-slate-700' },
+              { label: 'Mini', value: growthStats.Mini, tone: 'bg-blue-100 text-blue-700' },
+              { label: 'Medium', value: growthStats.Medium, tone: 'bg-purple-100 text-purple-700' },
+              { label: 'Large Scale', value: growthStats['Large Scale'], tone: 'bg-green-100 text-green-700' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border border-border p-4 bg-background">
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${item.tone}`}>{item.label}</span>
+                <p className="text-2xl font-bold text-foreground mt-3">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Combined merchant sales</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{formatNaira(growthStats.totalSales)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Combined merchant profit/loss</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{formatNaira(growthStats.totalProfit)}</p>
             </div>
           </div>
         </div>

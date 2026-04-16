@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Clock, BarChart3, Users, Loader2 } from "lucide-react"
+import { formatNaira } from "@/lib/currency-utils"
 
 export function SmedanAdminDashboard() {
   const router = useRouter()
   const [isAuthorized, setIsAuthorized] = useState(false)
   const [merchants, setMerchants] = useState<any[]>([])
-  const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0 })
+  const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, totalSales: 0, totalProfit: 0 })
+  const [growthSummary, setGrowthSummary] = useState({ Nano: 0, Mini: 0, Medium: 0, 'Large Scale': 0 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -38,12 +40,16 @@ export function SmedanAdminDashboard() {
           status: m.setup_completed ? 'approved' : 'pending',
           email: m.email,
           createdAt: m.created_at,
+          sales: Number(m.total_sales || 0),
+          profitLoss: Number(m.profit_loss || 0),
+          businessScale: m.business_scale || 'Nano',
         }))
         setMerchants(merchantData)
       }
 
       if (statsRes.success && statsRes.merchants) {
         setStats(statsRes.merchants)
+        setGrowthSummary(statsRes.merchants.categories || { Nano: 0, Mini: 0, Medium: 0, 'Large Scale': 0 })
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -85,6 +91,12 @@ export function SmedanAdminDashboard() {
 
   const missingSmedan = merchants.filter((m) => !m.smedanId || m.smedanId === 'N/A').length
   const dormantCandidates = merchants.filter((m) => m.status === 'approved').length
+  const growthCards = [
+    { label: 'Nano', value: growthSummary.Nano || 0, color: 'bg-slate-100 text-slate-700' },
+    { label: 'Mini', value: growthSummary.Mini || 0, color: 'bg-blue-100 text-blue-700' },
+    { label: 'Medium', value: growthSummary.Medium || 0, color: 'bg-purple-100 text-purple-700' },
+    { label: 'Large Scale', value: growthSummary['Large Scale'] || 0, color: 'bg-green-100 text-green-700' },
+  ]
 
   return (
     <div className="min-h-screen bg-background">
@@ -126,6 +138,31 @@ export function SmedanAdminDashboard() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold text-lg text-foreground">SME Growth Categories</h2>
+            <BarChart3 className="w-5 h-5 text-primary" />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {growthCards.map((card) => (
+              <div key={card.label} className="rounded-lg border border-border p-4 bg-background">
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${card.color}`}>{card.label}</span>
+                <p className="text-2xl font-bold text-foreground mt-3">{card.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-lg bg-primary/5 p-4 border border-primary/10">
+              <p className="text-muted-foreground">Total SME sales</p>
+              <p className="text-xl font-bold text-foreground mt-1">{formatNaira(Number(stats.totalSales || 0))}</p>
+            </div>
+            <div className="rounded-lg bg-primary/5 p-4 border border-primary/10">
+              <p className="text-muted-foreground">Total SME profit/loss</p>
+              <p className="text-xl font-bold text-foreground mt-1">{formatNaira(Number(stats.totalProfit || 0))}</p>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -198,6 +235,15 @@ export function SmedanAdminDashboard() {
                     SMEDAN ID
                   </th>
                   <th className="text-left p-4 font-semibold text-sm text-foreground">
+                    Category
+                  </th>
+                  <th className="text-left p-4 font-semibold text-sm text-foreground">
+                    Total Sales
+                  </th>
+                  <th className="text-left p-4 font-semibold text-sm text-foreground">
+                    Profit/Loss
+                  </th>
+                  <th className="text-left p-4 font-semibold text-sm text-foreground">
                     Email
                   </th>
                   <th className="text-left p-4 font-semibold text-sm text-foreground">
@@ -208,13 +254,13 @@ export function SmedanAdminDashboard() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={8} className="p-8 text-center text-muted-foreground">
                       Loading merchants...
                     </td>
                   </tr>
                 ) : merchants.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={8} className="p-8 text-center text-muted-foreground">
                       No merchants found
                     </td>
                   </tr>
@@ -229,6 +275,17 @@ export function SmedanAdminDashboard() {
                       </td>
                       <td className="p-4 text-sm text-muted-foreground">
                         {merchant.smedanId}
+                      </td>
+                      <td className="p-4 text-sm">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                          {merchant.businessScale}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm text-muted-foreground">
+                        {formatNaira(merchant.sales)}
+                      </td>
+                      <td className={`p-4 text-sm font-medium ${merchant.profitLoss >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                        {merchant.profitLoss >= 0 ? formatNaira(merchant.profitLoss) : `-${formatNaira(Math.abs(merchant.profitLoss))}`}
                       </td>
                       <td className="p-4 text-sm text-muted-foreground">
                         {merchant.email}

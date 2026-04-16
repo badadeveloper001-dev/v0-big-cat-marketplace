@@ -35,6 +35,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
     name: '',
     description: '',
     price: '',
+    costPrice: '',
     category: 'Electronics',
     stock: '0',
     weight: '',
@@ -84,12 +85,28 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
 
     const price = Number.parseFloat(formData.price)
     if (!Number.isFinite(price) || price <= 0) {
-      setError('Enter a valid product price greater than 0')
+      setError('Enter a valid selling price greater than 0')
       return
     }
 
     if (price > 99999999.99) {
-      setError('Product price is too large')
+      setError('Selling price is too large')
+      return
+    }
+
+    if (formData.costPrice === '') {
+      setError('Cost price is required')
+      return
+    }
+
+    const costPrice = Number.parseFloat(formData.costPrice)
+    if (!Number.isFinite(costPrice) || costPrice < 0) {
+      setError('Enter a valid cost price')
+      return
+    }
+
+    if (costPrice > 99999999.99) {
+      setError('Cost price is too large')
       return
     }
 
@@ -127,6 +144,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
             name: formData.name,
             description: formData.description,
             price,
+            cost_price: costPrice,
             category: formData.category,
             stock,
             weight,
@@ -138,7 +156,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
 
       if (result.success) {
         setSuccess('Product created successfully!')
-        setFormData({ name: '', description: '', price: '', category: 'Electronics', stock: '0', weight: '', images: [] })
+        setFormData({ name: '', description: '', price: '', costPrice: '', category: 'Electronics', stock: '0', weight: '', images: [] })
         setShowAddForm(false)
         loadProducts()
       } else {
@@ -168,9 +186,14 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
     }
   }
 
-  const handleUpdateStock = async (productId: string, stockValue: number) => {
+  const handleUpdateInventory = async (productId: string, stockValue: number, costPriceValue: number) => {
     if (!Number.isInteger(stockValue) || stockValue < 0) {
       setError('Enter a valid stock quantity')
+      return
+    }
+
+    if (!Number.isFinite(costPriceValue) || costPriceValue < 0) {
+      setError('Enter a valid cost price')
       return
     }
 
@@ -189,21 +212,22 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
           merchantId,
           updates: {
             stock: stockValue,
+            cost_price: costPriceValue,
           },
         }),
       })
 
       const result = await response.json()
       if (result.success) {
-        setSuccess('Stock quantity updated successfully!')
+        setSuccess('Inventory details updated successfully!')
         loadProducts()
       } else if (response.status === 401) {
         setError('Your session expired. Please sign in again and retry.')
       } else {
-        setError(result.error || 'Failed to update stock quantity')
+        setError(result.error || 'Failed to update inventory details')
       }
     } catch (error) {
-      setError('Failed to update stock quantity')
+      setError('Failed to update inventory details')
     } finally {
       setUpdatingStockId(null)
     }
@@ -322,10 +346,26 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
-                  Price
+                  Cost Price
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="99999999.99"
+                  value={formData.costPrice}
+                  onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Selling Price
                 </label>
                 <input
                   type="number"
@@ -371,6 +411,10 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                 />
               </div>
             </div>
+
+            <p className="text-xs text-muted-foreground">
+              Cost price is private to merchants and used only for audit, profit and loss tracking.
+            </p>
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
@@ -437,7 +481,13 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                   </p>
                   <div className="flex items-center gap-4 mt-3 flex-wrap">
                     <span className="text-sm font-medium text-foreground">
-                      {formatNaira(product.price)}
+                      Selling: {formatNaira(product.price)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      Cost: {formatNaira(Number(product.cost_price || 0))}
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded-full ${Number(product.price || 0) >= Number(product.cost_price || 0) ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
+                      Margin: {formatNaira(Number(product.price || 0) - Number(product.cost_price || 0))}
                     </span>
                     <span className="text-xs px-2 py-1 bg-secondary rounded-full text-foreground">
                       {product.category}
@@ -464,7 +514,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                 </div>
 
                 <div className="ml-4 flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-[88px_110px_auto] gap-2 items-center">
                     <input
                       type="number"
                       min="0"
@@ -479,15 +529,32 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                           )
                         )
                       }
-                      className="w-24 rounded-lg border border-border bg-secondary px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full rounded-lg border border-border bg-secondary px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                       aria-label={`Stock for ${product.name}`}
                     />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={String(product.cost_price ?? 0)}
+                      onChange={(e) =>
+                        setProducts((current) =>
+                          current.map((item) =>
+                            item.id === product.id
+                              ? { ...item, cost_price: e.target.value }
+                              : item
+                          )
+                        )
+                      }
+                      className="w-full rounded-lg border border-border bg-secondary px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      aria-label={`Cost price for ${product.name}`}
+                    />
                     <button
-                      onClick={() => handleUpdateStock(product.id, Number(product.stock || 0))}
+                      onClick={() => handleUpdateInventory(product.id, Number(product.stock || 0), Number(product.cost_price || 0))}
                       disabled={updatingStockId === product.id}
                       className="rounded-lg bg-secondary px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary/80 disabled:opacity-50"
                     >
-                      {updatingStockId === product.id ? 'Saving...' : 'Save stock'}
+                      {updatingStockId === product.id ? 'Saving...' : 'Save audit'}
                     </button>
                   </div>
 

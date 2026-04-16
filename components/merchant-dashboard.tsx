@@ -372,19 +372,24 @@ export function MerchantDashboard() {
     try {
       let nextTokenBalance = 0
       let merchantOrders: any[] = []
+      let merchantProducts: any[] = []
 
       if (user?.userId) {
-        const [tokenResponse, ordersResponse] = await Promise.all([
+        const [tokenResponse, ordersResponse, productsResponse] = await Promise.all([
           fetch(`/api/merchant/tokens?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
           }),
           fetch(`/api/orders/merchant?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
           }),
+          fetch(`/api/products/merchant?merchantId=${encodeURIComponent(user.userId)}`, {
+            cache: 'no-store',
+          }),
         ])
 
         const tokenResult = await tokenResponse.json()
         const ordersResult = await ordersResponse.json()
+        const productsResult = await productsResponse.json()
 
         if (tokenResult.success) {
           nextTokenBalance = Number(tokenResult.balance || 0)
@@ -396,6 +401,8 @@ export function MerchantDashboard() {
           : Array.isArray(ordersResult.orders)
             ? ordersResult.orders
             : []
+
+        merchantProducts = Array.isArray(productsResult.data) ? productsResult.data : []
       }
 
       const getMerchantAmount = (order: any) => {
@@ -405,24 +412,44 @@ export function MerchantDashboard() {
         return Math.max(0, productTotal || (grandTotal - deliveryFee))
       }
 
+      const costMap = new Map(
+        merchantProducts.map((product) => [String(product.id), Number(product.cost_price || 0)]),
+      )
+
+      const getItemCost = (item: any) => {
+        const quantity = Math.max(1, Number(item?.quantity || 1))
+        const productId = String(item?.product_id || item?.products?.id || '')
+        const unitCost = Number(item?.products?.cost_price ?? costMap.get(productId) ?? 0)
+        return Math.max(0, unitCost * quantity)
+      }
+
       const completedOrders = merchantOrders.filter((order) => {
         const status = String(order?.status || '').toLowerCase()
         const escrowStatus = String(order?.escrow_status || '').toLowerCase()
-        return status === 'delivered' || status === 'completed' || escrowStatus === 'released'
+        const paymentStatus = String(order?.payment_status || '').toLowerCase()
+        return status === 'delivered' || status === 'completed' || escrowStatus === 'released' || paymentStatus === 'completed'
       })
 
       const totalSales = completedOrders.reduce((sum, order) => sum + getMerchantAmount(order), 0)
+      const totalInventoryCost = merchantProducts.reduce(
+        (sum, product) => sum + (Number(product.cost_price || 0) * Number(product.stock || 0)),
+        0,
+      )
+      const totalCostOfSales = completedOrders.reduce(
+        (sum, order) => sum + (Array.isArray(order?.order_items) ? order.order_items.reduce((innerSum: number, item: any) => innerSum + getItemCost(item), 0) : 0),
+        0,
+      )
+      const profitLoss = totalSales - totalCostOfSales
       const activeOrders = merchantOrders.filter((order) => !['delivered', 'completed'].includes(String(order?.status || '').toLowerCase())).length
-      const paidOrders = merchantOrders.filter((order) => String(order?.payment_status || '').toLowerCase() === 'completed').length
       const escrowBalance = merchantOrders
         .filter((order) => String(order?.escrow_status || '').toLowerCase() === 'held')
         .reduce((sum, order) => sum + getMerchantAmount(order), 0)
 
       const statsData = [
-        { label: "Total Sales", value: formatNaira(totalSales), change: `${completedOrders.length} completed`, trend: "up", icon: NairaIcon },
-        { label: "Active Orders", value: String(activeOrders), change: `${merchantOrders.length} total`, trend: "up", icon: ShoppingBag },
-        { label: "Token Balance", value: String(nextTokenBalance), change: "Live", trend: "up", icon: Coins },
-        { label: "Escrow Balance", value: formatNaira(escrowBalance), change: paidOrders > 0 ? `${paidOrders} paid` : (escrowBalance > 0 ? "Held safely" : "No funds held"), trend: "up", icon: Clock },
+        { label: "Total Cost Price", value: formatNaira(totalInventoryCost), change: `${merchantProducts.length} products`, trend: "up", icon: DollarSign },
+        { label: "Total Sales", value: formatNaira(totalSales), change: `${completedOrders.length} sales`, trend: "up", icon: NairaIcon },
+        { label: "Profit / Loss", value: profitLoss >= 0 ? formatNaira(profitLoss) : `-${formatNaira(Math.abs(profitLoss))}`, change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
+        { label: "Escrow Balance", value: formatNaira(escrowBalance), change: nextTokenBalance > 0 ? `${nextTokenBalance} tokens` : "Held safely", trend: "up", icon: Clock },
       ]
       setStats(statsData)
     } catch (error) {
@@ -1096,9 +1123,10 @@ export function MerchantDashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground text-sm truncate">{product.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-sm font-semibold text-foreground">{formatNaira(parseFloat(product.price))}</span>
-                        <span className="text-xs text-muted-foreground">In stock</span>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-sm font-semibold text-foreground">Sell: {formatNaira(parseFloat(product.price))}</span>
+                        <span className="text-xs text-muted-foreground">Cost: {formatNaira(Number(product.cost_price || 0))}</span>
+                        <span className="text-xs text-muted-foreground">Stock: {Number(product.stock || 0)}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
