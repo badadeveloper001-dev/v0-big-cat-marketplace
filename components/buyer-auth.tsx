@@ -77,12 +77,17 @@ export function BuyerAuth({
 
         const supabase = createClient()
 
+        const { error: sessionError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password,
+        })
+
+        if (sessionError) {
+          setError(sessionError.message || "Failed to establish your session. Please try again.")
+          return
+        }
+
         if (isSignUp) {
-          // Auto-login after signup to establish the Supabase session
-          await supabase.auth.signInWithPassword({
-            email: formData.email,
-            password: formData.password,
-          })
           setSuccessMessage("Account created successfully! Redirecting...")
           setTimeout(() => {
             setUser({
@@ -96,11 +101,6 @@ export function BuyerAuth({
             onSuccess?.()
           }, 1500)
         } else {
-          // Establish browser session directly — more reliable than setSession()
-          await supabase.auth.signInWithPassword({
-            email: formData.email,
-            password: formData.password,
-          })
           setUser({
             userId: user.id,
             email: user.email,

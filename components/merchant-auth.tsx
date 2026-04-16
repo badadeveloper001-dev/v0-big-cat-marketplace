@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRole } from "@/lib/role-context"
 import { createClient } from "@/lib/supabase/client"
 import { BrandWordmark } from "./brand-wordmark"
-import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Hash, Loader2, CheckCircle2, Store } from "lucide-react"
+import { ArrowLeft, Building2, Eye, EyeOff, Mail, Lock, MapPin, Phone, Hash, Loader2, CheckCircle2, Store } from "lucide-react"
 
 declare global {
   interface Window {
@@ -23,6 +23,17 @@ export function MerchantAuth({
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
 
+  const formatMerchantLocation = (city?: string | null, state?: string | null, location?: string | null) => {
+    const normalizedCity = city?.trim()
+    const normalizedState = state?.trim()
+
+    if (normalizedCity && normalizedState) {
+      return `${normalizedCity}, ${normalizedState}`
+    }
+
+    return location || normalizedCity || normalizedState || ""
+  }
+
   const normalizeMerchantUser = (user: any) => ({
     userId: user.id,
     email: user.email,
@@ -36,7 +47,9 @@ export function MerchantAuth({
       smedan_id: user.smedan_id || "",
       cac_id: user.cac_id || "",
       setup_completed: Boolean(user.setup_completed),
-      location: user.location || "",
+      city: user.city || "",
+      state: user.state || "",
+      location: formatMerchantLocation(user.city, user.state, user.location),
       avatar_url: user.avatar_url || "",
       logo_url: user.logo_url || user.avatar_url || "",
     },
@@ -50,6 +63,8 @@ export function MerchantAuth({
     businessName: "",
     email: "",
     phone: "",
+    city: "",
+    state: "",
     password: "",
     smedanId: "",
     cacId: "",
@@ -69,6 +84,8 @@ export function MerchantAuth({
             password: formData.password,
             name: formData.businessName,
             phone: formData.phone,
+            city: formData.city,
+            state: formData.state,
             role: 'merchant',
             smedanId: formData.smedanId,
             cacId: formData.cacId,
@@ -98,23 +115,23 @@ export function MerchantAuth({
 
         const supabase = createClient()
 
+        const { error: sessionError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password,
+        })
+
+        if (sessionError) {
+          setError(sessionError.message || "Failed to establish your session. Please try again.")
+          return
+        }
+
         if (isSignUp) {
-          // Auto-login after signup to establish the Supabase session
-          await supabase.auth.signInWithPassword({
-            email: formData.email,
-            password: formData.password,
-          })
           setSuccessMessage("Account created successfully! Redirecting...")
           setTimeout(() => {
             setUser(normalizeMerchantUser(user))
             setRole("merchant")
           }, 1500)
         } else {
-          // Establish browser session directly — more reliable than setSession()
-          await supabase.auth.signInWithPassword({
-            email: formData.email,
-            password: formData.password,
-          })
           setUser(normalizeMerchantUser(user))
           setRole("merchant")
         }
@@ -324,6 +341,38 @@ export function MerchantAuth({
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">State</label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        name="state"
+                        placeholder="Enter your state"
+                        value={formData.state}
+                        onChange={handleChange}
+                        className="w-full pl-11 pr-4 py-3 bg-secondary/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">City</label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        name="city"
+                        placeholder="Enter your city"
+                        value={formData.city}
+                        onChange={handleChange}
+                        className="w-full pl-11 pr-4 py-3 bg-secondary/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">SMEDAN ID</label>
                     <div className="relative">
                       <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -423,7 +472,7 @@ export function MerchantAuth({
                   setIsSignUp(!isSignUp)
                   setError("")
                   setSuccessMessage("")
-                  setFormData({ businessName: "", email: "", phone: "", password: "", smedanId: "", cacId: "" })
+                  setFormData({ businessName: "", email: "", phone: "", city: "", state: "", password: "", smedanId: "", cacId: "" })
                 }}
                 className="text-primary hover:text-primary/80 font-medium transition-colors"
               >

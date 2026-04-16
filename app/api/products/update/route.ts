@@ -4,7 +4,7 @@ import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 export async function PUT(request: NextRequest) {
   try {
-    const { productId, updates } = await request.json()
+    const { productId, updates, merchantId } = await request.json()
 
     if (!productId || !updates) {
       return NextResponse.json(
@@ -13,7 +13,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser()
+    const auth = await requireAuthenticatedUser(merchantId)
     if (auth.response) return auth.response
 
     const result = await updateProduct(productId, updates, auth.user.id)

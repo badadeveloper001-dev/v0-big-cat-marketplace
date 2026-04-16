@@ -93,6 +93,10 @@ export default function MerchantMiniWebsitePage() {
   }
 
   const handleAddToCart = (product: any) => {
+    if (Number(product.stock || 0) <= 0) {
+      return
+    }
+
     addItem({
       id: String(product.id),
       productId: String(product.id),
@@ -227,7 +231,11 @@ export default function MerchantMiniWebsitePage() {
             </div>
           ) : (
             <div className={gridClass}>
-              {products.slice(0, 12).map((product) => (
+              {products.slice(0, 12).map((product) => {
+                const availableStock = Math.max(0, Number(product.stock || 0))
+                const isOutOfStock = availableStock <= 0
+
+                return (
                 <div key={product.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
                   <div className="aspect-[4/3] bg-secondary overflow-hidden">
                     {product.images?.[0] ? (
@@ -267,12 +275,16 @@ export default function MerchantMiniWebsitePage() {
                       </button>
                     </div>
                     <p className="text-primary font-bold mt-1">{formatNaira(Number(product.price || 0))}</p>
+                    <p className={`mt-1 text-xs ${isOutOfStock ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      {isOutOfStock ? 'Out of stock' : `${availableStock} available`}
+                    </p>
                     <div className="mt-3 space-y-2">
                       <button
                         onClick={() => handleAddToCart(product)}
-                        className={`w-full rounded-xl ${themeStyle.button} py-2 text-sm font-semibold text-white`}
+                        disabled={isOutOfStock}
+                        className={`w-full rounded-xl py-2 text-sm font-semibold text-white ${isOutOfStock ? 'bg-slate-300 cursor-not-allowed' : themeStyle.button}`}
                       >
-                        Add to Cart
+                        {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
                       </button>
                       <Link
                         href={marketplaceCheckoutPath}
@@ -283,7 +295,7 @@ export default function MerchantMiniWebsitePage() {
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </div>

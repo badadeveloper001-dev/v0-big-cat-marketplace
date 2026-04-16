@@ -44,11 +44,9 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!isActive) return
 
-      const latestStoredRole = localStorage.getItem('userRole')
-      const latestStoredUser = localStorage.getItem('userData')
-
-      // Avoid clearing freshly logged-in state while the initial session check is still resolving.
-      if (!session && !latestStoredRole && !latestStoredUser) {
+      if (!session) {
+        localStorage.removeItem('userRole')
+        localStorage.removeItem('userData')
         setRoleState(null)
         setUserState(null)
       }

@@ -13,6 +13,7 @@ interface ProductCardProps {
   price: number
   category: string
   image?: string | null
+  stock?: number
   merchant: {
     id: string
     business_name: string
@@ -26,6 +27,7 @@ interface ProductCardProps {
     price: number
     category: string
     image?: string | null
+    stock?: number
     merchant: {
       id: string
       business_name: string
@@ -41,6 +43,7 @@ export function ProductCard({
   price,
   category,
   image,
+  stock = 0,
   merchant,
   onClick,
   onAddToCart,
@@ -56,13 +59,18 @@ export function ProductCard({
     price,
     category,
     image,
+    stock,
     merchant,
   }
 
   const savedToWishlist = isInWishlist(id)
+  const availableStock = Math.max(0, Number(stock || 0))
+  const isOutOfStock = availableStock <= 0
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (isOutOfStock) return
+
     addItem({
       id,
       productId: id,
@@ -131,9 +139,14 @@ export function ProductCard({
           <h3 className="font-semibold text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors min-h-[2.5rem]">
             {name}
           </h3>
-          <p className="text-lg font-bold text-foreground mt-1.5">
-            {formatNaira(price)}
-          </p>
+          <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+            <p className="text-lg font-bold text-foreground">
+              {formatNaira(price)}
+            </p>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isOutOfStock ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
+              {isOutOfStock ? 'Out of stock' : `${availableStock} in stock`}
+            </span>
+          </div>
         </div>
 
         {/* Merchant Info */}
@@ -157,13 +170,21 @@ export function ProductCard({
         {/* Add to Cart Button */}
         <button 
           onClick={handleAddToCart}
+          disabled={isOutOfStock}
           className={`w-full py-2 rounded-lg transition-colors font-medium text-xs flex items-center justify-center gap-1.5 ${
-            addedToCart 
-              ? 'bg-green-500 text-white' 
-              : 'bg-primary text-primary-foreground hover:bg-primary/90'
+            isOutOfStock
+              ? 'bg-secondary text-muted-foreground cursor-not-allowed'
+              : addedToCart 
+                ? 'bg-green-500 text-white' 
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
           }`}
         >
-          {addedToCart ? (
+          {isOutOfStock ? (
+            <>
+              <Package className="w-4 h-4" />
+              Out of stock
+            </>
+          ) : addedToCart ? (
             <>
               <Check className="w-4 h-4" />
               Added!
@@ -189,6 +210,7 @@ interface ProductGridProps {
     price: number
     category: string
     image?: string | null
+    stock?: number
     merchant: {
       id: string
       business_name: string

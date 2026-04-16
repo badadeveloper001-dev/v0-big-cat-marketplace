@@ -32,6 +32,13 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
     loadProduct()
   }, [productId])
 
+  useEffect(() => {
+    if (!product) return
+
+    const stockCount = Math.max(0, Number(product.stock || 0))
+    setQuantity((current) => (stockCount > 0 ? Math.min(Math.max(1, current), stockCount) : 1))
+  }, [product])
+
   const loadProduct = async () => {
     setLoading(true)
     try {
@@ -71,6 +78,8 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
   const cartCount = getItemCount()
   const cartTotal = getTotal()
   const savedToWishlist = isInWishlist(String(product.id))
+  const availableStock = Math.max(0, Number(product.stock || 0))
+  const isOutOfStock = availableStock <= 0
 
   const wishlistItem = {
     id: String(product.id),
@@ -79,6 +88,7 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
     price: Number(product.price || 0),
     category: product.category || 'General',
     image: product.images?.[0] || product.image_url || null,
+    stock: availableStock,
     merchant: {
       id: String(product.merchant_id || ''),
       business_name: merchant.business_name || merchant.name || 'Merchant',
@@ -211,12 +221,12 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
             </div>
           )}
 
-          {product.status === 'active' && (
-            <div className="flex items-center gap-3 text-sm text-primary">
-              <div className="w-2 h-2 rounded-full bg-primary" />
-              <span>In Stock</span>
-            </div>
-          )}
+          <div className={`flex items-center gap-3 text-sm ${isOutOfStock ? 'text-destructive' : availableStock <= 5 ? 'text-chart-4' : 'text-primary'}`}>
+            <div className={`w-2 h-2 rounded-full ${isOutOfStock ? 'bg-destructive' : availableStock <= 5 ? 'bg-chart-4' : 'bg-primary'}`} />
+            <span>
+              {isOutOfStock ? 'Out of stock' : `${availableStock} item${availableStock !== 1 ? 's' : ''} available`}
+            </span>
+          </div>
 
           {product.status === 'pending_weight_verification' && (
             <div className="flex items-center gap-3 text-sm text-chart-4">
@@ -283,18 +293,25 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
 
         {/* Quantity Selector */}
         <div className="space-y-3">
-          <label className="block text-sm font-medium text-foreground">Quantity</label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="block text-sm font-medium text-foreground">Quantity</label>
+            <span className={`text-xs ${isOutOfStock ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {isOutOfStock ? 'Unavailable right now' : `Up to ${availableStock} available`}
+            </span>
+          </div>
           <div className="flex items-center gap-3 bg-secondary rounded-lg p-3 w-fit">
             <button
               onClick={() => setQuantity(Math.max(1, quantity - 1))}
-              className="w-8 h-8 flex items-center justify-center bg-card rounded hover:bg-border transition-colors"
+              disabled={isOutOfStock}
+              className="w-8 h-8 flex items-center justify-center bg-card rounded hover:bg-border transition-colors disabled:opacity-50"
             >
               −
             </button>
             <span className="w-8 text-center font-semibold text-foreground">{quantity}</span>
             <button
-              onClick={() => setQuantity(quantity + 1)}
-              className="w-8 h-8 flex items-center justify-center bg-card rounded hover:bg-border transition-colors"
+              onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
+              disabled={isOutOfStock || quantity >= availableStock}
+              className="w-8 h-8 flex items-center justify-center bg-card rounded hover:bg-border transition-colors disabled:opacity-50"
             >
               +
             </button>
@@ -328,6 +345,8 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
         <div className="space-y-3">
           <button 
             onClick={() => {
+              if (isOutOfStock) return
+
               addItem({
                 id: product.id,
                 productId: product.id,
@@ -341,13 +360,21 @@ export function ProductDetailsPage({ productId, onBack, onViewMerchant, onOpenCa
               setShowAddedPopup(true)
               setTimeout(() => setAddedToCart(false), 2000)
             }}
+            disabled={isOutOfStock}
             className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors ${
-              addedToCart
-                ? 'bg-green-500 text-white'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+              isOutOfStock
+                ? 'bg-secondary text-muted-foreground cursor-not-allowed'
+                : addedToCart
+                  ? 'bg-green-500 text-white'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90'
             }`}
           >
-            {addedToCart ? (
+            {isOutOfStock ? (
+              <>
+                <Package className="w-5 h-5" />
+                Out of stock
+              </>
+            ) : addedToCart ? (
               <>
                 <CheckCircle2 className="w-5 h-5" />
                 Added to Cart ✓

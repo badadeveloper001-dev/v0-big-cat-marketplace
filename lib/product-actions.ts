@@ -16,6 +16,7 @@ interface ProductInput {
 }
 
 const MAX_DECIMAL_VALUE = 99999999.99
+const MAX_STOCK_VALUE = 99999999
 
 function isBigZeeWears(value: unknown) {
   const normalized = String(value || '').toLowerCase()
@@ -61,6 +62,35 @@ function sanitizeDecimal(
   return Number(parsed.toFixed(2))
 }
 
+function sanitizeWholeNumber(
+  value: number | undefined,
+  fieldName: string,
+  options: { required?: boolean; min?: number } = {},
+) {
+  if (value === undefined || value === null) {
+    if (options.required) {
+      throw new Error(`${fieldName} is required`)
+    }
+    return undefined
+  }
+
+  const parsed = typeof value === 'number' ? value : Number(value)
+
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    throw new Error(`${fieldName} must be a whole number`)
+  }
+
+  if (options.min !== undefined && parsed < options.min) {
+    throw new Error(`${fieldName} must be at least ${options.min}`)
+  }
+
+  if (parsed > MAX_STOCK_VALUE) {
+    throw new Error(`${fieldName} is too large. Maximum allowed is ${MAX_STOCK_VALUE.toLocaleString()}`)
+  }
+
+  return parsed
+}
+
 function normalizeProduct(product: any) {
   const images = Array.isArray(product?.images)
     ? product.images.filter(Boolean)
@@ -74,6 +104,7 @@ function normalizeProduct(product: any) {
     ...product,
     images,
     image_url: product?.image_url ?? images[0] ?? null,
+    stock: Number.isFinite(Number(product?.stock)) ? Number(product.stock) : 0,
     status: product?.status ?? (product?.is_active === false ? 'inactive' : 'active'),
     merchant_profiles: merchant
       ? {
@@ -166,6 +197,7 @@ export async function createProduct(merchantId: string, product: ProductInput, a
     const normalizedProduct = {
       ...product,
       price: sanitizeDecimal(product.price, 'Product price', { required: true, min: 0.01 }),
+      stock: sanitizeWholeNumber(product.stock, 'Stock quantity', { min: 0 }),
       weight: sanitizeDecimal(product.weight, 'Product weight', { min: 0 }),
     }
 
@@ -201,6 +233,9 @@ export async function updateProduct(productId: string, updates: Partial<ProductI
       ...updates,
       ...(updates.price !== undefined
         ? { price: sanitizeDecimal(updates.price, 'Product price', { min: 0.01 }) }
+        : {}),
+      ...(updates.stock !== undefined
+        ? { stock: sanitizeWholeNumber(updates.stock, 'Stock quantity', { min: 0 }) }
         : {}),
       ...(updates.weight !== undefined
         ? { weight: sanitizeDecimal(updates.weight, 'Product weight', { min: 0 }) }

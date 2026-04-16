@@ -3,11 +3,18 @@ import { signupEnhanced } from '@/lib/auth-actions'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name, phone, role, smedanId, cacId } = await request.json()
+    const { email, password, name, phone, city, state, role, smedanId, cacId } = await request.json()
 
     if (!email || !password || !name || !phone || !role) {
       return NextResponse.json(
         { success: false, error: 'All fields are required' },
+        { status: 400 }
+      )
+    }
+
+    if (role === 'merchant' && (!city || !state)) {
+      return NextResponse.json(
+        { success: false, error: 'State and city are required for merchant accounts' },
         { status: 400 }
       )
     }
@@ -24,6 +31,8 @@ export async function POST(request: NextRequest) {
       password,
       name,
       phone,
+      city,
+      state,
       role: role as 'buyer' | 'merchant',
       smedanId,
       cacId,

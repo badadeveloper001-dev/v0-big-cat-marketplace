@@ -4,6 +4,40 @@ import bcrypt from 'bcrypt'
 
 const INITIAL_MERCHANT_TOKENS = 100
 
+function buildMerchantLocation(city?: string | null, state?: string | null, fallbackLocation?: string | null) {
+  const normalizedCity = city?.trim()
+  const normalizedState = state?.trim()
+
+  if (normalizedCity && normalizedState) {
+    return `${normalizedCity}, ${normalizedState}`
+  }
+
+  return fallbackLocation || normalizedCity || normalizedState || null
+}
+
+async function insertAuthUserWithFallback(admin: ReturnType<typeof createClient>, payload: Record<string, any>) {
+  let insertPayload = { ...payload }
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const result = await admin.from('auth_users').insert(insertPayload).select().single()
+
+    if (!result.error) {
+      return result
+    }
+
+    const message = String(result.error.message || '').toLowerCase()
+    const removableColumn = ['city', 'state', 'cac_id', 'google_id'].find((column) => message.includes(column))
+
+    if (!removableColumn || !(removableColumn in insertPayload)) {
+      return result
+    }
+
+    delete insertPayload[removableColumn]
+  }
+
+  return admin.from('auth_users').insert(insertPayload).select().single()
+}
+
 /** Anon-key client — only used for signInWithPassword (no service-role needed) */
 function getAnonClient() {
   return createAnonClient(
@@ -56,13 +90,15 @@ export async function signupEnhanced(params: {
   password: string
   name: string
   phone: string
+  city?: string
+  state?: string
   role: 'buyer' | 'merchant'
   smedanId?: string
   cacId?: string
 }) {
   try {
     const admin = createClient()
-    const { email, password, name, phone, role, smedanId, cacId } = params
+    const { email, password, name, phone, city, state, role, smedanId, cacId } = params
 
     // Create in Supabase Auth
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
@@ -89,6 +125,9 @@ export async function signupEnhanced(params: {
           name,
           phone,
           role,
+          city: city?.trim() || null,
+          state: state?.trim() || null,
+          location: buildMerchantLocation(city, state),
           smedan_id: smedanId || null,
           cac_id: cacId || null,
           token_balance: INITIAL_MERCHANT_TOKENS,
@@ -100,18 +139,11 @@ export async function signupEnhanced(params: {
           name,
           phone,
           role,
+          location: null,
           token_balance: 0,
         }
 
-    let { data, error } = await admin.from('auth_users').insert(baseData as any).select().single()
-
-    // Fallback for environments where cac_id column is not yet migrated.
-    if (error && String(error.message || '').toLowerCase().includes('cac_id')) {
-      const { cac_id, ...withoutCac } = baseData as any
-      const fallback = await admin.from('auth_users').insert(withoutCac).select().single()
-      data = fallback.data
-      error = fallback.error
-    }
+    const { data, error } = await insertAuthUserWithFallback(admin, baseData as any)
 
     if (error) {
       await admin.auth.admin.deleteUser(supabaseUserId)
@@ -184,6 +216,7 @@ export async function loginWithGoogle(params: {
           role,
           password_hash: '',
           google_id: googleId,
+          location: null,
           token_balance: INITIAL_MERCHANT_TOKENS,
         }
       : {
@@ -194,17 +227,11 @@ export async function loginWithGoogle(params: {
           role,
           password_hash: '',
           google_id: googleId,
+          location: null,
           token_balance: 0,
         }
 
-    let { data, error } = await admin.from('auth_users').insert(insertPayload as any).select('*').single()
-
-    if (error && String(error.message || '').toLowerCase().includes('google_id')) {
-      const { google_id, ...withoutGoogle } = insertPayload as any
-      const fallback = await admin.from('auth_users').insert(withoutGoogle).select('*').single()
-      data = fallback.data
-      error = fallback.error
-    }
+    const { data, error } = await insertAuthUserWithFallback(admin, insertPayload as any)
 
     if (error) {
       await admin.auth.admin.deleteUser(supabaseUserId)

@@ -903,6 +903,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               price: Number(product.price || 0),
               category: product.category || "General",
               image: product.images?.[0] || product.image_url || null,
+              stock: Number(product.stock || 0),
               merchant: {
                 id: String(product.merchant_id || product.merchant?.id || ''),
                 business_name: product.merchant_profiles?.business_name || product.merchant_profiles?.name || 'Merchant',

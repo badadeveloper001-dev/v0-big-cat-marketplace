@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS auth_users (
   password_hash TEXT,
   cac_id TEXT,
   google_id TEXT,
+  city TEXT,
+  state TEXT,
+  location TEXT,
   role TEXT NOT NULL CHECK (role IN ('buyer', 'merchant')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

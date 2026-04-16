@@ -228,6 +228,11 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
       return
     }
 
+    if (Number(product.stock || 0) <= 0) {
+      setPolicyNotice("This item is currently out of stock.")
+      return
+    }
+
     addItem({
       id: product.id,
       productId: product.id,
@@ -536,7 +541,9 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
                           <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                           <span className="text-muted-foreground">4.8</span>
                         </div>
-                        <span className="text-muted-foreground">In stock</span>
+                        <span className={`${Number(product.stock || 0) > 0 ? 'text-muted-foreground' : 'text-destructive'}`}>
+                          {Number(product.stock || 0) > 0 ? `${Number(product.stock || 0)} in stock` : 'Out of stock'}
+                        </span>
                       </div>
                     </div>
 
@@ -569,13 +576,16 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
                       </button>
                       <button
                         onClick={() => handleAddToCart(product)}
+                        disabled={Number(product.stock || 0) <= 0}
                         className={`flex-shrink-0 px-4 py-2 h-fit text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-                          addedToCart === product.id
-                            ? "bg-green-500 text-white"
-                            : "bg-primary text-primary-foreground hover:bg-primary/90"
+                          Number(product.stock || 0) <= 0
+                            ? "bg-secondary text-muted-foreground cursor-not-allowed"
+                            : addedToCart === product.id
+                              ? "bg-green-500 text-white"
+                              : "bg-primary text-primary-foreground hover:bg-primary/90"
                         }`}
                       >
-                        {addedToCart === product.id ? "Added ✓" : "Add to Cart"}
+                        {Number(product.stock || 0) <= 0 ? "Out of Stock" : addedToCart === product.id ? "Added ✓" : "Add to Cart"}
                       </button>
                     </div>
                   </div>

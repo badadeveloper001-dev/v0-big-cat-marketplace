@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { formatNaira } from '@/lib/currency-utils'
-import { Plus, Trash2, Edit2, AlertCircle, Package, Loader2, X, Check, ImageIcon } from 'lucide-react'
-import { ImageUpload, ProductImage } from './image-upload'
+import { Plus, Trash2, AlertCircle, Package, Loader2, X, Check, ImageIcon } from 'lucide-react'
+import { ImageUpload } from './image-upload'
 import Image from 'next/image'
 
 interface MerchantProductsProps {
@@ -30,15 +30,16 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [updatingStockId, setUpdatingStockId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: '',
     category: 'Electronics',
+    stock: '0',
     weight: '',
     images: [] as string[],
   })
-  const [editingId, setEditingId] = useState<string | null>(null)
 
   // Fetch products on mount
   useEffect(() => {
@@ -92,6 +93,17 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
       return
     }
 
+    const stock = formData.stock === '' ? 0 : Number(formData.stock)
+    if (!Number.isInteger(stock) || stock < 0) {
+      setError('Enter a valid stock quantity')
+      return
+    }
+
+    if (stock > 99999999) {
+      setError('Stock quantity is too large')
+      return
+    }
+
     const weight = formData.weight ? Number.parseFloat(formData.weight) : undefined
     if (formData.weight && (!Number.isFinite(weight) || (weight ?? 0) < 0)) {
       setError('Enter a valid weight')
@@ -116,6 +128,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
             description: formData.description,
             price,
             category: formData.category,
+            stock,
             weight,
             images: formData.images,
           }
@@ -125,7 +138,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
 
       if (result.success) {
         setSuccess('Product created successfully!')
-        setFormData({ name: '', description: '', price: '', category: 'Electronics', weight: '', images: [] })
+        setFormData({ name: '', description: '', price: '', category: 'Electronics', stock: '0', weight: '', images: [] })
         setShowAddForm(false)
         loadProducts()
       } else {
@@ -152,6 +165,47 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
       } catch (error) {
         setError('Failed to delete product')
       }
+    }
+  }
+
+  const handleUpdateStock = async (productId: string, stockValue: number) => {
+    if (!Number.isInteger(stockValue) || stockValue < 0) {
+      setError('Enter a valid stock quantity')
+      return
+    }
+
+    setError('')
+    setSuccess('')
+    setUpdatingStockId(productId)
+
+    try {
+      const response = await fetch('/api/products/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          productId,
+          merchantId,
+          updates: {
+            stock: stockValue,
+          },
+        }),
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setSuccess('Stock quantity updated successfully!')
+        loadProducts()
+      } else if (response.status === 401) {
+        setError('Your session expired. Please sign in again and retry.')
+      } else {
+        setError(result.error || 'Failed to update stock quantity')
+      }
+    } catch (error) {
+      setError('Failed to update stock quantity')
+    } finally {
+      setUpdatingStockId(null)
     }
   }
 
@@ -268,7 +322,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
                   Price
@@ -281,6 +335,22 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                   value={formData.price}
                   onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   placeholder="0.00"
+                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Stock Quantity
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="99999999"
+                  value={formData.stock}
+                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                  placeholder="0"
                   className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
@@ -372,6 +442,9 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                     <span className="text-xs px-2 py-1 bg-secondary rounded-full text-foreground">
                       {product.category}
                     </span>
+                    <span className={`text-xs px-2 py-1 rounded-full ${Number(product.stock || 0) > 5 ? 'bg-primary/10 text-primary' : Number(product.stock || 0) > 0 ? 'bg-chart-4/10 text-chart-4' : 'bg-destructive/10 text-destructive'}`}>
+                      {Number(product.stock || 0)} in stock
+                    </span>
                     {product.weight && (
                       <span className="text-xs text-muted-foreground">
                         {product.weight}kg
@@ -382,7 +455,7 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                         Pending Weight Verification
                       </span>
                     )}
-                    {product.status === 'active' && (
+                    {product.status === 'active' && Number(product.stock || 0) > 0 && (
                       <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full">
                         Active
                       </span>
@@ -390,23 +463,52 @@ export function MerchantProducts({ merchantId }: MerchantProductsProps) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 ml-4">
-                  {product.status === 'pending_weight_verification' && (
+                <div className="ml-4 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={String(product.stock ?? 0)}
+                      onChange={(e) =>
+                        setProducts((current) =>
+                          current.map((item) =>
+                            item.id === product.id
+                              ? { ...item, stock: e.target.value }
+                              : item
+                          )
+                        )
+                      }
+                      className="w-24 rounded-lg border border-border bg-secondary px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      aria-label={`Stock for ${product.name}`}
+                    />
                     <button
-                      onClick={() => handleRequestWeightVerification(product.id)}
-                      className="p-2 text-chart-4 hover:bg-chart-4/10 rounded-lg transition-colors"
-                      title="Request weight verification from agent"
+                      onClick={() => handleUpdateStock(product.id, Number(product.stock || 0))}
+                      disabled={updatingStockId === product.id}
+                      className="rounded-lg bg-secondary px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary/80 disabled:opacity-50"
                     >
-                      <AlertCircle className="w-5 h-5" />
+                      {updatingStockId === product.id ? 'Saving...' : 'Save stock'}
                     </button>
-                  )}
-                  <button
-                    onClick={() => handleDeleteProduct(product.id)}
-                    className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                    title="Delete product"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 justify-end">
+                    {product.status === 'pending_weight_verification' && (
+                      <button
+                        onClick={() => handleRequestWeightVerification(product.id)}
+                        className="p-2 text-chart-4 hover:bg-chart-4/10 rounded-lg transition-colors"
+                        title="Request weight verification from agent"
+                      >
+                        <AlertCircle className="w-5 h-5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDeleteProduct(product.id)}
+                      className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                      title="Delete product"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

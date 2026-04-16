@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS auth_users (
   cac_id VARCHAR(100),
   google_id VARCHAR(255),
   setup_completed BOOLEAN DEFAULT false,
+  city VARCHAR(100),
+  state VARCHAR(100),
   location VARCHAR(255),
   created_at TIMESTAMP DEFAULT now(),
   updated_at TIMESTAMP DEFAULT now()
