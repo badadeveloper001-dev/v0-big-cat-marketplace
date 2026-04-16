@@ -13,6 +13,46 @@ declare global {
   }
 }
 
+const NIGERIAN_STATES = [
+  "Abia",
+  "Adamawa",
+  "Akwa Ibom",
+  "Anambra",
+  "Bauchi",
+  "Bayelsa",
+  "Benue",
+  "Borno",
+  "Cross River",
+  "Delta",
+  "Ebonyi",
+  "Edo",
+  "Ekiti",
+  "Enugu",
+  "FCT Abuja",
+  "Gombe",
+  "Imo",
+  "Jigawa",
+  "Kaduna",
+  "Kano",
+  "Katsina",
+  "Kebbi",
+  "Kogi",
+  "Kwara",
+  "Lagos",
+  "Nasarawa",
+  "Niger",
+  "Ogun",
+  "Ondo",
+  "Osun",
+  "Oyo",
+  "Plateau",
+  "Rivers",
+  "Sokoto",
+  "Taraba",
+  "Yobe",
+  "Zamfara",
+]
+
 export function MerchantAuth({
   onBack,
   onNeedAgentOnboarding,
@@ -146,7 +186,7 @@ export function MerchantAuth({
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -181,6 +221,10 @@ export function MerchantAuth({
     setGoogleLoading(true)
 
     try {
+      if (isSignUp) {
+        setError('Use the merchant signup form so we can capture your business state and city.')
+        return
+      }
       const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
       if (!googleClientId) {
         setError('Google sign-in is not configured. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID.')
@@ -340,35 +384,51 @@ export function MerchantAuth({
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">State</label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <input
-                        type="text"
-                        name="state"
-                        placeholder="Enter your state"
-                        value={formData.state}
-                        onChange={handleChange}
-                        className="w-full pl-11 pr-4 py-3 bg-secondary/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground"
-                        required
-                      />
+                  <div className="rounded-xl border border-border/60 bg-secondary/30 p-4 space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Business Location</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Add your state and city so buyers can find your store more easily.
+                      </p>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">City</label>
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <input
-                        type="text"
-                        name="city"
-                        placeholder="Enter your city"
-                        value={formData.city}
-                        onChange={handleChange}
-                        className="w-full pl-11 pr-4 py-3 bg-secondary/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground"
-                        required
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">State</label>
+                        <div className="relative">
+                          <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+                          <select
+                            name="state"
+                            value={formData.state}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground"
+                            required
+                          >
+                            <option value="">Select your state</option>
+                            {NIGERIAN_STATES.map((stateName) => (
+                              <option key={stateName} value={stateName}>
+                                {stateName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">City</label>
+                        <div className="relative">
+                          <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                          <input
+                            type="text"
+                            name="city"
+                            placeholder="Enter your city"
+                            value={formData.city}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground"
+                            required
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -456,14 +516,20 @@ export function MerchantAuth({
             </form>
 
             <div className="mt-4">
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={googleLoading || loading}
-                className="w-full py-3 px-4 bg-white border border-border text-foreground font-semibold rounded-xl hover:bg-muted/50 transition-colors disabled:opacity-50"
-              >
-                {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
-              </button>
+              {isSignUp ? (
+                <div className="rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
+                  Merchant sign-up uses the form above so your business state and city are saved with the account.
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={googleLoading || loading}
+                  className="w-full py-3 px-4 bg-white border border-border text-foreground font-semibold rounded-xl hover:bg-muted/50 transition-colors disabled:opacity-50"
+                >
+                  {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
+                </button>
+              )}
             </div>
 
             <div className="mt-8 text-center">

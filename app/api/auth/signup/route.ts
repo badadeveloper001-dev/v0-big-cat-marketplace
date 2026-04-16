@@ -4,6 +4,8 @@ import { signupEnhanced } from '@/lib/auth-actions'
 export async function POST(request: NextRequest) {
   try {
     const { email, password, name, phone, city, state, role, smedanId, cacId } = await request.json()
+    const normalizedCity = typeof city === 'string' ? city.trim() : ''
+    const normalizedState = typeof state === 'string' ? state.trim() : ''
 
     if (!email || !password || !name || !phone || !role) {
       return NextResponse.json(
@@ -12,7 +14,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (role === 'merchant' && (!city || !state)) {
+    if (role === 'merchant' && (!normalizedCity || !normalizedState)) {
       return NextResponse.json(
         { success: false, error: 'State and city are required for merchant accounts' },
         { status: 400 }
@@ -31,8 +33,8 @@ export async function POST(request: NextRequest) {
       password,
       name,
       phone,
-      city,
-      state,
+      city: normalizedCity,
+      state: normalizedState,
       role: role as 'buyer' | 'merchant',
       smedanId,
       cacId,

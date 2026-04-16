@@ -99,6 +99,8 @@ export async function signupEnhanced(params: {
   try {
     const admin = createClient()
     const { email, password, name, phone, city, state, role, smedanId, cacId } = params
+    const normalizedCity = city?.trim() || null
+    const normalizedState = state?.trim() || null
 
     // Create in Supabase Auth
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
@@ -125,9 +127,9 @@ export async function signupEnhanced(params: {
           name,
           phone,
           role,
-          city: city?.trim() || null,
-          state: state?.trim() || null,
-          location: buildMerchantLocation(city, state),
+          city: normalizedCity,
+          state: normalizedState,
+          location: buildMerchantLocation(normalizedCity, normalizedState),
           smedan_id: smedanId || null,
           cac_id: cacId || null,
           token_balance: INITIAL_MERCHANT_TOKENS,
@@ -190,6 +192,13 @@ export async function loginWithGoogle(params: {
         .single()
 
       return { success: true, data: { user: updated || existing } }
+    }
+
+    if (role === 'merchant') {
+      return {
+        success: false,
+        error: 'Please sign up with the merchant form so you can provide your business state and city.',
+      }
     }
 
     // New user via Google — create Supabase Auth user with a random password
