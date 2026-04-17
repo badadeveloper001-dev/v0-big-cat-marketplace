@@ -79,6 +79,11 @@ interface DashboardNotification {
   createdAt?: string
 }
 
+function toAmount(value: unknown) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 export function MerchantDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
   const [activeTab, setActiveTab] = useState("home")
@@ -416,18 +421,18 @@ export function MerchantDashboard() {
             : []
 
         const itemsTotal = orderItems.reduce((sum: number, item: any) => {
-          const quantity = Math.max(1, Number(item?.quantity || 1))
-          const lineTotal = Number(item?.total_price || 0)
-          const unitAmount = Number(item?.unit_price || item?.price || 0)
+          const quantity = Math.max(1, toAmount(item?.quantity || 1))
+          const lineTotal = toAmount(item?.total_price || 0)
+          const unitAmount = toAmount(item?.unit_price || item?.price || 0)
 
           if (lineTotal > 0) return sum + lineTotal
           if (unitAmount > 0) return sum + (unitAmount * quantity)
           return sum
         }, 0)
 
-        const deliveryFee = Number(order?.delivery_fee || 0)
-        const productTotal = Number(order?.product_total || 0)
-        const grandTotal = Number(order?.grand_total || order?.total_amount || itemsTotal || 0)
+        const deliveryFee = toAmount(order?.delivery_fee || 0)
+        const productTotal = toAmount(order?.product_total || 0)
+        const grandTotal = toAmount(order?.grand_total || order?.total_amount || itemsTotal || 0)
         return Math.max(0, productTotal || (grandTotal - deliveryFee))
       }
 
@@ -467,10 +472,14 @@ export function MerchantDashboard() {
         return sum + getMerchantAmount(order)
       }, 0)
 
+      const profitValue = profitLoss >= 0
+        ? formatNaira(profitLoss)
+        : `-${formatNaira(Math.abs(profitLoss))}`
+
       const statsData = [
         { label: "Total Cost Price", value: formatNaira(totalInventoryCost), change: `${merchantProducts.length} products`, trend: "up", icon: NairaIcon },
         { label: "Total Sales", value: formatNaira(totalSales), change: `${completedOrders.length} sales`, trend: "up", icon: NairaIcon },
-        { label: "Profit / Loss", value: profitLoss >= 0 ? formatNaira(profitLoss) : `-${formatNaira(Math.abs(profitLoss))}`, change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
+        { label: profitLoss >= 0 ? "Profit" : "Loss", value: profitValue, valueClass: profitLoss >= 0 ? "text-primary" : "text-destructive", change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
         { label: "Escrow Balance", value: formatNaira(escrowBalance), change: nextTokenBalance > 0 ? `${nextTokenBalance} tokens` : "Held safely", trend: "up", icon: Clock },
       ]
       setStats(statsData)
@@ -1008,7 +1017,7 @@ export function MerchantDashboard() {
                       {stat.change}
                     </span>
                   </div>
-                  <p className="text-xl font-bold text-foreground">{stat.value}</p>
+                  <p className={`text-xl font-bold ${stat.valueClass || 'text-foreground'}`}>{stat.value}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
                 </div>
               ))}
@@ -1378,7 +1387,11 @@ export function MerchantDashboard() {
             </div>
           ) : (
             <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-              {recentOrders.map((order, index) => (
+              {recentOrders.map((order, index) => {
+                const cardTotal = Math.max(0, toAmount(order?.grand_total || order?.total_amount || 0))
+                const cardEscrow = Math.max(0, toAmount(getOrderEscrowAmount(order)))
+
+                return (
                 <div
                   key={order.id}
                   className={`flex items-center justify-between p-3 ${
@@ -1398,12 +1411,12 @@ export function MerchantDashboard() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-foreground text-sm">{formatNaira(order.grand_total || 0)}</p>
-                    <p className="text-[10px] text-primary font-medium">Escrow: {formatNaira(getOrderEscrowAmount(order))}</p>
+                    <p className="font-semibold text-foreground text-sm">{formatNaira(cardTotal)}</p>
+                    <p className="text-xs font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 mt-1 inline-block">Escrow {formatNaira(cardEscrow)}</p>
                     <p className="text-[10px] text-muted-foreground capitalize">{order.status}</p>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </section>
