@@ -3,6 +3,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { holdFundsInEscrow, releaseFundsFromEscrow } from '@/lib/escrow-actions'
 
+function isMissingColumnError(error: any) {
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes('column') && message.includes('does not exist')
+}
+
 export async function getBuyerOrders(buyerId: string) {
   try {
     const supabase = await createClient()
@@ -138,6 +143,26 @@ export async function createOrder(
           payment_provider: resolvedPaymentMethod,
           escrow_status: 'held',
         },
+        {
+          id: orderId,
+          buyer_id: payload.buyerId,
+          merchant_id: normalizedMerchantId,
+          status: 'paid',
+          total_amount: grandTotal,
+          delivery_fee: allocatedDeliveryFee,
+          delivery_address: payload.deliveryAddress,
+          payment_status: 'completed',
+          payment_provider: resolvedPaymentMethod,
+        },
+        {
+          id: orderId,
+          buyer_id: payload.buyerId,
+          merchant_id: normalizedMerchantId,
+          status: 'paid',
+          delivery_fee: allocatedDeliveryFee,
+          delivery_address: payload.deliveryAddress,
+          payment_provider: resolvedPaymentMethod,
+        },
       ]
 
       let orderResult: any = null
@@ -149,6 +174,11 @@ export async function createOrder(
           orderResult = result
           break
         }
+
+        if (!isMissingColumnError(result.error)) {
+          throw result.error
+        }
+
         lastOrderError = result.error
       }
 

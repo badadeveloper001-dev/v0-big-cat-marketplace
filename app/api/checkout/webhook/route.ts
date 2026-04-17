@@ -47,20 +47,53 @@ export async function POST(request: NextRequest) {
       escrowStatus = "pending"
     }
 
-    // Update order with payment status and hold funds in escrow after successful payment
-    const { data: order, error } = await supabase
-      .from("orders")
-      .update({
+    const updateAttempts = [
+      {
         payment_status: paymentStatus,
         payment_reference: paymentReference,
         escrow_status: escrowStatus,
         status: paymentStatus === "completed" ? "paid" : "pending",
-      })
-      .eq("id", orderId)
-      .select()
+      },
+      {
+        payment_status: paymentStatus,
+        payment_reference: paymentReference,
+        status: paymentStatus === "completed" ? "paid" : "pending",
+      },
+      {
+        payment_reference: paymentReference,
+        status: paymentStatus === "completed" ? "paid" : "pending",
+      },
+    ]
 
-    if (error) {
-      console.error("[v0] Failed to update order:", error)
+    let order: any[] | null = null
+    let lastError: any = null
+
+    for (const attempt of updateAttempts) {
+      const { data, error } = await supabase
+        .from("orders")
+        .update(attempt)
+        .eq("id", orderId)
+        .select()
+
+      if (!error) {
+        order = data || []
+        break
+      }
+
+      const message = String(error?.message || "").toLowerCase()
+      if (!(message.includes("column") && message.includes("does not exist"))) {
+        console.error("[v0] Failed to update order:", error)
+        return NextResponse.json(
+          { error: "Failed to update order" },
+          { status: 500 }
+        )
+      }
+
+      lastError = error
+    }
+
+    if (!order) {
+      console.error("[v0] Failed to update order:", lastError)
       return NextResponse.json(
         { error: "Failed to update order" },
         { status: 500 }
