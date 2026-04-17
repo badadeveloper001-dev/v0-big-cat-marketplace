@@ -68,7 +68,6 @@ export async function POST(request: NextRequest) {
         delivery_method: deliveryMethod,
         status: "pending",
         payment_status: "pending",
-        payment_provider: "palmpay",
       },
       {
         product_id: productId,
@@ -83,7 +82,6 @@ export async function POST(request: NextRequest) {
         delivery_method: deliveryMethod,
         status: "pending",
         payment_status: "pending",
-        payment_provider: "palmpay",
       },
       {
         product_id: productId,

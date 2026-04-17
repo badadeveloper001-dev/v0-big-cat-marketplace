@@ -117,7 +117,6 @@ export async function createOrder(
           shipping_address: payload.deliveryAddress,
           payment_method: resolvedPaymentMethod,
           payment_status: 'completed',
-          payment_provider: resolvedPaymentMethod,
         },
         {
           id: orderId,
@@ -131,7 +130,6 @@ export async function createOrder(
           delivery_address: payload.deliveryAddress,
           payment_method: resolvedPaymentMethod,
           payment_status: 'completed',
-          payment_provider: resolvedPaymentMethod,
         },
         {
           id: orderId,
@@ -142,7 +140,6 @@ export async function createOrder(
           delivery_fee: allocatedDeliveryFee,
           delivery_address: payload.deliveryAddress,
           payment_status: 'completed',
-          payment_provider: resolvedPaymentMethod,
         },
         {
           id: orderId,
@@ -153,7 +150,6 @@ export async function createOrder(
           delivery_fee: allocatedDeliveryFee,
           delivery_address: payload.deliveryAddress,
           payment_status: 'completed',
-          payment_provider: resolvedPaymentMethod,
         },
         {
           id: orderId,
@@ -162,7 +158,6 @@ export async function createOrder(
           status: 'paid',
           delivery_fee: allocatedDeliveryFee,
           delivery_address: payload.deliveryAddress,
-          payment_provider: resolvedPaymentMethod,
         },
       ]
 
@@ -225,7 +220,6 @@ export async function createOrder(
           total_amount: grandTotal,
           delivery_fee: allocatedDeliveryFee,
           payment_method: resolvedPaymentMethod,
-          payment_provider: resolvedPaymentMethod,
           status: orderResult.data?.status || 'pending',
         },
         resolvedPaymentMethod,

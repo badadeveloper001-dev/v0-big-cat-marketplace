@@ -42,7 +42,6 @@ function buildOrderUpdateAttempts(
     {
       status: orderStatus,
       payment_status: paymentStatus,
-      payment_provider: paymentMethod,
       payment_method: paymentMethod,
       updated_at: now,
       ...withRelease,
@@ -50,7 +49,6 @@ function buildOrderUpdateAttempts(
     {
       status: orderStatus,
       payment_status: paymentStatus,
-      payment_provider: paymentMethod,
       updated_at: now,
       ...withRelease,
     },
