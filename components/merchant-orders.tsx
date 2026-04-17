@@ -208,7 +208,18 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
             {orders.map((order) => {
               const StatusIcon = statusConfig[order.status]?.icon || Clock
               const isUpdating = updatingOrderId === order.id
-              const escrow = escrowMap[String(order.id)]
+              const orderId = String(order.id)
+              const fallbackTotal = Number(order.grand_total || order.total_amount || 0)
+              const fallbackDelivery = Number(order.delivery_fee || 0)
+              const fallbackProduct = Math.max(0, fallbackTotal - fallbackDelivery)
+              const escrow = escrowMap[orderId] || {
+                order_id: orderId,
+                total_amount: fallbackTotal,
+                product_amount: fallbackProduct,
+                delivery_fee: fallbackDelivery,
+                merchant_status: order.status === 'delivered' ? 'released' : 'held',
+                logistics_status: order.status === 'delivered' ? 'released' : 'held',
+              }
               const paymentHeld = escrow?.merchant_status === "held" || escrow?.logistics_status === "held"
               const orderItems = order.order_items || order.items || []
               
@@ -272,34 +283,32 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
                   </div>
 
                   {/* Escrow Status */}
-                  {escrow && (
-                    <div className="mt-3 pt-3 border-t border-border space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">Payment Status</p>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${paymentHeld ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
-                          {paymentHeld ? 'Held in Escrow' : 'Released from Escrow'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-foreground">Merchant Payment</span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass(escrow.merchant_status)}`}>
-                          {escrow.merchant_status === 'held' ? 'Held' : 'Released'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-foreground">Merchant Escrow Amount</span>
-                        <span className="font-semibold text-foreground">
-                          N{Number(escrow.product_amount || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-foreground">Logistics Payment</span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass(escrow.logistics_status)}`}>
-                          {escrow.logistics_status === 'held' ? 'Held' : 'Released'}
-                        </span>
-                      </div>
+                  <div className="mt-3 pt-3 border-t border-border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">Payment Status</p>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${paymentHeld ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                        {paymentHeld ? 'Held in Escrow' : 'Released from Escrow'}
+                      </span>
                     </div>
-                  )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-foreground">Merchant Payment</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass(escrow.merchant_status)}`}>
+                        {escrow.merchant_status === 'held' ? 'Held' : 'Released'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-foreground">Merchant Escrow Amount</span>
+                      <span className="font-semibold text-foreground">
+                        N{Number(escrow.product_amount || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-foreground">Logistics Payment</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass(escrow.logistics_status)}`}>
+                        {escrow.logistics_status === 'held' ? 'Held' : 'Released'}
+                      </span>
+                    </div>
+                  </div>
 
                   {/* Status Update */}
                   {order.status !== 'delivered' && (
