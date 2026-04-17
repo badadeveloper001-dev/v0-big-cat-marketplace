@@ -436,6 +436,38 @@ export function MerchantDashboard() {
         return Math.max(0, productTotal || (grandTotal - deliveryFee))
       }
 
+      const isSaleQualifiedOrder = (order: any) => {
+        const status = String(order?.status || '').toLowerCase()
+        const paymentStatus = String(order?.payment_status || '').toLowerCase()
+
+        if (['failed', 'cancelled', 'canceled', 'refunded'].includes(status)) return false
+        if (['failed', 'cancelled', 'canceled', 'refunded'].includes(paymentStatus)) return false
+
+        return ['paid', 'processing', 'shipped', 'delivered', 'completed'].includes(status)
+          || ['paid', 'processing', 'completed'].includes(paymentStatus)
+      }
+
+      const getOrderSellingTotal = (order: any) => {
+        const orderItems = Array.isArray(order?.order_items)
+          ? order.order_items
+          : Array.isArray(order?.items)
+            ? order.items
+            : []
+
+        const itemsTotal = orderItems.reduce((sum: number, item: any) => {
+          const quantity = Math.max(1, toAmount(item?.quantity || 1))
+          const lineTotal = toAmount(item?.total_price || 0)
+          const unitAmount = toAmount(item?.unit_price || item?.price || 0)
+
+          if (lineTotal > 0) return sum + lineTotal
+          if (unitAmount > 0) return sum + (unitAmount * quantity)
+          return sum
+        }, 0)
+
+        if (itemsTotal > 0) return itemsTotal
+        return getMerchantAmount(order)
+      }
+
       const getItemSellingAmount = (item: any) => {
         const quantity = Math.max(1, toAmount(item?.quantity || 1))
         const lineTotal = toAmount(item?.total_price || 0)
@@ -456,13 +488,13 @@ export function MerchantDashboard() {
         return Math.max(0, unitCost * quantity)
       }
 
+      const saleOrders = merchantOrders.filter((order) => isSaleQualifiedOrder(order))
       const completedOrders = merchantOrders.filter((order) => {
         const status = String(order?.status || '').toLowerCase()
-        const paymentStatus = String(order?.payment_status || '').toLowerCase()
-        return status === 'delivered' || status === 'completed' || paymentStatus === 'completed'
+        return status === 'delivered' || status === 'completed'
       })
 
-      const totalSales = completedOrders.reduce((sum, order) => sum + getMerchantAmount(order), 0)
+      const totalSales = saleOrders.reduce((sum, order) => sum + getOrderSellingTotal(order), 0)
       const totalInventoryCost = merchantProducts.reduce(
         (sum, product) => sum + (Number(product.cost_price || 0) * Number(product.stock || 0)),
         0,
@@ -502,7 +534,7 @@ export function MerchantDashboard() {
 
       const statsData = [
         { label: "Total Cost Price", value: formatNaira(totalInventoryCost), change: `${merchantProducts.length} products`, trend: "up", icon: NairaIcon },
-        { label: "Total Sales", value: formatNaira(totalSales), change: `${completedOrders.length} sales`, trend: "up", icon: NairaIcon },
+        { label: "Total Sales", value: formatNaira(totalSales), change: `${saleOrders.length} sales`, trend: "up", icon: NairaIcon },
         { label: profitLoss >= 0 ? "Profit" : "Loss", value: profitValue, valueClass: profitLoss >= 0 ? "text-primary" : "text-destructive", change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
         { label: "Escrow Balance", value: formatNaira(escrowBalance), change: nextTokenBalance > 0 ? `${nextTokenBalance} tokens` : "Held safely", trend: "up", icon: Clock },
       ]
