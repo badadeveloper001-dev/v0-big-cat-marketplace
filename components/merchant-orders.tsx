@@ -75,10 +75,12 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
       const orderId = String(order.id)
       const totalAmount = getOrderTotalAmount(order)
       const deliveryAmount = Number(order.delivery_fee || 0)
+      const itemAmount = getOrderItemsAmount(order)
+      const productAmount = itemAmount > 0 ? itemAmount : Math.max(0, totalAmount - deliveryAmount)
       let escrow = getEscrowByOrderId(orderId)
 
       if (!escrow) {
-        escrow = createEscrowRecord(orderId, totalAmount, deliveryAmount)
+        escrow = createEscrowRecord(orderId, totalAmount, deliveryAmount, productAmount)
       }
 
       if (order.status === "delivered") {

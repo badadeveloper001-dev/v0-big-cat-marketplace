@@ -160,14 +160,15 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
 
       createdOrders.forEach((createdOrder: any, index: number) => {
         const currentOrderId = String(createdOrder?.id || `${orderId}_${index}`)
-        const currentOrderTotal = Number(createdOrder?.grand_total || createdOrder?.total_amount || 0)
-        const currentDeliveryFee = Number(createdOrder?.delivery_fee || 0)
-
-        createEscrowRecord(currentOrderId, currentOrderTotal, currentDeliveryFee)
-
         const scopedItems = items.filter(
           (item) => String(item.merchantId || '') === String(createdOrder?.merchant_id || '')
         )
+        const productAmount = Number(createdOrder?.product_total || 0)
+          || scopedItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0)
+        const currentDeliveryFee = Number(createdOrder?.delivery_fee || 0)
+        const currentOrderTotal = Number(createdOrder?.grand_total || createdOrder?.total_amount || (productAmount + currentDeliveryFee))
+
+        createEscrowRecord(currentOrderId, currentOrderTotal, currentDeliveryFee, productAmount)
 
         sendOrderToLogistics({
           order_id: currentOrderId,

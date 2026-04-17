@@ -17,6 +17,24 @@ function toAmount(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function getOrderItemsAmount(order: any) {
+  const orderItems = Array.isArray(order?.order_items)
+    ? order.order_items
+    : Array.isArray(order?.items)
+      ? order.items
+      : []
+
+  return orderItems.reduce((sum: number, item: any) => {
+    const quantity = Math.max(1, toAmount(item?.quantity || 1))
+    const lineTotal = toAmount(item?.total_price || 0)
+    const unitAmount = toAmount(item?.unit_price || item?.price || 0)
+
+    if (lineTotal > 0) return sum + lineTotal
+    if (unitAmount > 0) return sum + (unitAmount * quantity)
+    return sum
+  }, 0)
+}
+
 function normalizeOrderStatus(status: string | null | undefined, releaseFunds = false) {
   if (releaseFunds) return 'delivered'
   if (!status) return 'pending'
@@ -103,8 +121,9 @@ async function persistOrderFinancialState(
 
 function getEscrowBreakdown(order: OrderFinancialRecord) {
   const deliveryFee = Math.max(0, toAmount(order.delivery_fee))
-  const totalAmount = Math.max(0, toAmount(order.grand_total ?? order.total_amount))
-  const productAmount = Math.max(0, toAmount(order.product_total) || (totalAmount - deliveryFee))
+  const itemTotal = Math.max(0, getOrderItemsAmount(order as any))
+  const totalAmount = Math.max(0, toAmount(order.grand_total ?? order.total_amount), itemTotal + deliveryFee)
+  const productAmount = Math.max(0, itemTotal || toAmount(order.product_total) || (totalAmount - deliveryFee))
 
   return {
     totalAmount,

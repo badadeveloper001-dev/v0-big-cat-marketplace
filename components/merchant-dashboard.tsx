@@ -433,7 +433,10 @@ export function MerchantDashboard() {
         const deliveryFee = toAmount(order?.delivery_fee || 0)
         const productTotal = toAmount(order?.product_total || 0)
         const grandTotal = toAmount(order?.grand_total || order?.total_amount || itemsTotal || 0)
-        return Math.max(0, productTotal || (grandTotal - deliveryFee))
+
+        if (itemsTotal > 0) return Math.max(0, itemsTotal)
+        if (productTotal > 0) return Math.max(0, productTotal)
+        return Math.max(0, grandTotal - deliveryFee)
       }
 
       const getOrderSellingTotal = (order: any) => {

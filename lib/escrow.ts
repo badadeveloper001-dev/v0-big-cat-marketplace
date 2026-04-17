@@ -37,16 +37,21 @@ export function getEscrowByOrderId(orderId: string) {
   return getEscrowData().find((record) => record.order_id === orderId)
 }
 
-export function createEscrowRecord(orderId: string, totalAmount: number, deliveryFee: number) {
+export function createEscrowRecord(orderId: string, totalAmount: number, deliveryFee: number, productAmountOverride?: number) {
   const all = getEscrowData()
   const existing = all.find((record) => record.order_id === orderId)
-  const productAmount = Math.max(0, totalAmount - deliveryFee)
+  const resolvedDeliveryFee = Math.max(0, Number(deliveryFee || 0))
+  const productAmount = Math.max(
+    0,
+    Number(productAmountOverride || 0) || (Number(totalAmount || 0) - resolvedDeliveryFee),
+  )
+  const resolvedTotalAmount = Math.max(0, Number(totalAmount || 0), productAmount + resolvedDeliveryFee)
 
   const record: EscrowRecord = {
     order_id: orderId,
-    total_amount: totalAmount,
+    total_amount: resolvedTotalAmount,
     product_amount: productAmount,
-    delivery_fee: deliveryFee,
+    delivery_fee: resolvedDeliveryFee,
     merchant_status: existing?.merchant_status || "held",
     logistics_status: existing?.logistics_status || "held",
   }

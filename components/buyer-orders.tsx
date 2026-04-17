@@ -26,6 +26,24 @@ const statusConfig: { [key: string]: { label: string; color: string; icon: any; 
 
 const orderSteps = ['Pending', 'Paid', 'Processing', 'Shipped', 'Delivered']
 
+function getOrderItemsAmount(order: any) {
+  const orderItems = Array.isArray(order?.order_items)
+    ? order.order_items
+    : Array.isArray(order?.items)
+      ? order.items
+      : []
+
+  return orderItems.reduce((sum: number, item: any) => {
+    const quantity = Math.max(1, Number(item?.quantity || 1))
+    const lineTotal = Number(item?.total_price || 0)
+    const unitAmount = Number(item?.unit_price || item?.price || 0)
+
+    if (lineTotal > 0) return sum + lineTotal
+    if (unitAmount > 0) return sum + (unitAmount * quantity)
+    return sum
+  }, 0)
+}
+
 export function BuyerOrders({ onBack }: BuyerOrdersProps) {
   const { user } = useRole()
   const [orders, setOrders] = useState<any[]>([])
@@ -44,12 +62,14 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
 
     orderList.forEach((order) => {
       const orderId = String(order.id)
-      const totalAmount = Number(order.grand_total || order.total_amount || 0)
+      const itemAmount = getOrderItemsAmount(order)
+      const totalAmount = Number(order.grand_total || order.total_amount || itemAmount || 0)
       const deliveryAmount = Number(order.delivery_fee || 0)
+      const productAmount = itemAmount > 0 ? itemAmount : Math.max(0, totalAmount - deliveryAmount)
       let escrow = getEscrowByOrderId(orderId)
 
       if (!escrow) {
-        escrow = createEscrowRecord(orderId, totalAmount, deliveryAmount)
+        escrow = createEscrowRecord(orderId, totalAmount, deliveryAmount, productAmount)
       }
 
       if (order.status === "delivered") {
