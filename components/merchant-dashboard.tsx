@@ -93,7 +93,9 @@ export function MerchantDashboard() {
   // Real data states
   const [stats, setStats] = useState<any[]>([])
   const [products, setProducts] = useState<any[]>([])
+  const [allProducts, setAllProducts] = useState<any[]>([])
   const [recentOrders, setRecentOrders] = useState<any[]>([])
+  const [allOrders, setAllOrders] = useState<any[]>([])
   const [loadingStats, setLoadingStats] = useState(true)
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [loadingOrders, setLoadingOrders] = useState(true)
@@ -403,6 +405,8 @@ export function MerchantDashboard() {
             : []
 
         merchantProducts = Array.isArray(productsResult.data) ? productsResult.data : []
+        setAllOrders(merchantOrders)
+        setAllProducts(merchantProducts)
       }
 
       const getMerchantAmount = (order: any) => {
@@ -466,6 +470,7 @@ export function MerchantDashboard() {
         const response = await fetch(`/api/products/merchant?merchantId=${user.userId}&includePrivate=1`)
         const result = await response.json()
         if (result.success && result.data) {
+          setAllProducts(result.data)
           setProducts(result.data.slice(0, 4))
         }
       }
@@ -506,6 +511,72 @@ export function MerchantDashboard() {
     "Respond quickly to customer messages to build trust and increase sales.",
     "Competitive pricing and fast delivery help increase your sales.",
   ]
+
+  const lowStockCount = allProducts.filter((item) => {
+    const stock = Number(item?.stock || 0)
+    return stock > 0 && stock <= 5
+  }).length
+
+  const outOfStockCount = allProducts.filter((item) => Number(item?.stock || 0) <= 0).length
+
+  const marginRiskCount = allProducts.filter((item) => Number(item?.price || 0) <= Number(item?.cost_price || 0)).length
+
+  const pendingFulfillmentCount = allOrders.filter((order) => {
+    const status = String(order?.status || '').toLowerCase()
+    return !['delivered', 'completed', 'cancelled', 'canceled', 'refunded'].includes(status)
+  }).length
+
+  const returnOrDisputeQueueCount = allOrders.filter((order) => {
+    const status = String(order?.status || '').toLowerCase()
+    return status.includes('refund') || status.includes('return') || status.includes('dispute')
+  }).length
+
+  const stalePendingCheckoutCount = allOrders.filter((order) => {
+    const paymentStatus = String(order?.payment_status || '').toLowerCase()
+    if (paymentStatus !== 'pending') return false
+    const createdAt = new Date(order?.created_at || 0).getTime()
+    return Number.isFinite(createdAt) && Date.now() - createdAt > 1000 * 60 * 60 * 24
+  }).length
+
+  const onboardingSteps = [
+    {
+      label: 'Complete business setup',
+      done: Boolean(user?.merchantProfile?.setup_completed ?? (user as any)?.setup_completed),
+      cta: 'Open Settings',
+      action: () => setShowSettings(true),
+    },
+    {
+      label: 'Add your first product',
+      done: allProducts.length > 0,
+      cta: 'Add Product',
+      action: () => setActiveTab('products'),
+    },
+    {
+      label: 'Set cost prices for P&L',
+      done: allProducts.length > 0 && allProducts.every((item) => Number(item?.cost_price || 0) > 0),
+      cta: 'Update Products',
+      action: () => setActiveTab('products'),
+    },
+    {
+      label: 'Receive first order',
+      done: allOrders.length > 0,
+      cta: 'View Orders',
+      action: () => setActiveTab('orders'),
+    },
+    {
+      label: 'Configure notification preferences',
+      done: notificationPermission === 'granted',
+      cta: 'Set Alerts',
+      action: () => setShowSettings(true),
+    },
+  ]
+
+  const completedOnboardingSteps = onboardingSteps.filter((step) => step.done).length
+  const onboardingProgress = onboardingSteps.length > 0
+    ? Math.round((completedOnboardingSteps / onboardingSteps.length) * 100)
+    : 0
+
+  const nextOnboardingStep = onboardingSteps.find((step) => !step.done)
 
   const handleLogout = async () => {
     const result = await logout()
@@ -920,6 +991,99 @@ export function MerchantDashboard() {
                 <span className="text-[10px] font-medium leading-tight text-center">{action.label}</span>
               </button>
             ))}
+          </div>
+        </section>
+
+        <section className="px-4 mb-6">
+          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Growth Onboarding Path</h3>
+                <p className="text-xs text-muted-foreground mt-1">Progressive setup based on your current business maturity.</p>
+              </div>
+              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-primary/10 text-primary">{onboardingProgress}% complete</span>
+            </div>
+            <div className="w-full h-2 bg-secondary rounded-full overflow-hidden mb-4">
+              <div className="h-full bg-primary" style={{ width: `${onboardingProgress}%` }} />
+            </div>
+            <div className="space-y-2 mb-4">
+              {onboardingSteps.map((step) => (
+                <div key={step.label} className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${step.done ? 'bg-primary' : 'bg-border'}`} />
+                    <span className={step.done ? 'text-foreground' : 'text-muted-foreground'}>{step.label}</span>
+                  </div>
+                  {!step.done && (
+                    <button onClick={step.action} className="text-xs font-medium text-primary hover:underline shrink-0">
+                      {step.cta}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {nextOnboardingStep && (
+              <button
+                onClick={nextOnboardingStep.action}
+                className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground"
+              >
+                Next best action: {nextOnboardingStep.cta}
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section className="px-4 mb-6">
+          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-foreground">Merchant Operations Cockpit</h3>
+              <span className="text-xs text-muted-foreground">Live operational signals</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                <p className="text-xs text-muted-foreground">Low-stock alerts</p>
+                <p className="text-lg font-bold text-chart-4 mt-1">{lowStockCount}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                <p className="text-xs text-muted-foreground">Out of stock</p>
+                <p className="text-lg font-bold text-destructive mt-1">{outOfStockCount}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                <p className="text-xs text-muted-foreground">Margin-risk SKUs</p>
+                <p className="text-lg font-bold text-destructive mt-1">{marginRiskCount}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                <p className="text-xs text-muted-foreground">Pending fulfillment</p>
+                <p className="text-lg font-bold text-primary mt-1">{pendingFulfillmentCount}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                <p className="text-xs text-muted-foreground">Return/refund queue</p>
+                <p className="text-lg font-bold text-purple-600 mt-1">{returnOrDisputeQueueCount}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                <p className="text-xs text-muted-foreground">Stale pending checkout</p>
+                <p className="text-lg font-bold text-amber-600 mt-1">{stalePendingCheckoutCount}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                onClick={() => setActiveTab('products')}
+                className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 text-left"
+              >
+                Launch low-stock campaign
+              </button>
+              <button
+                onClick={() => setActiveTab('products')}
+                className="rounded-lg bg-green-50 px-3 py-2 text-xs font-medium text-green-700 text-left"
+              >
+                Create bundle offer
+              </button>
+              <button
+                onClick={() => setActiveTab('orders')}
+                className="rounded-lg bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 text-left"
+              >
+                Review return/refund queue
+              </button>
+            </div>
           </div>
         </section>
 
