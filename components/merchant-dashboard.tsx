@@ -35,7 +35,6 @@ import {
   Plus,
   TrendingUp,
   TrendingDown,
-  DollarSign,
   ShoppingBag,
   ChevronRight,
   Sparkles,
@@ -429,9 +428,8 @@ export function MerchantDashboard() {
 
       const completedOrders = merchantOrders.filter((order) => {
         const status = String(order?.status || '').toLowerCase()
-        const escrowStatus = String(order?.escrow_status || '').toLowerCase()
         const paymentStatus = String(order?.payment_status || '').toLowerCase()
-        return status === 'delivered' || status === 'completed' || escrowStatus === 'released' || paymentStatus === 'completed'
+        return status === 'delivered' || status === 'completed' || paymentStatus === 'completed'
       })
 
       const totalSales = completedOrders.reduce((sum, order) => sum + getMerchantAmount(order), 0)
@@ -445,12 +443,16 @@ export function MerchantDashboard() {
       )
       const profitLoss = totalSales - totalCostOfSales
       const activeOrders = merchantOrders.filter((order) => !['delivered', 'completed'].includes(String(order?.status || '').toLowerCase())).length
-      const escrowBalance = merchantOrders
-        .filter((order) => String(order?.escrow_status || '').toLowerCase() === 'held')
-        .reduce((sum, order) => sum + getMerchantAmount(order), 0)
+      const escrowBalance = merchantOrders.reduce((sum, order) => {
+        const status = String(order?.status || '').toLowerCase()
+        if (status === 'delivered' || status === 'completed') {
+          return sum
+        }
+        return sum + getMerchantAmount(order)
+      }, 0)
 
       const statsData = [
-        { label: "Total Cost Price", value: formatNaira(totalInventoryCost), change: `${merchantProducts.length} products`, trend: "up", icon: DollarSign },
+        { label: "Total Cost Price", value: formatNaira(totalInventoryCost), change: `${merchantProducts.length} products`, trend: "up", icon: NairaIcon },
         { label: "Total Sales", value: formatNaira(totalSales), change: `${completedOrders.length} sales`, trend: "up", icon: NairaIcon },
         { label: "Profit / Loss", value: profitLoss >= 0 ? formatNaira(profitLoss) : `-${formatNaira(Math.abs(profitLoss))}`, change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
         { label: "Escrow Balance", value: formatNaira(escrowBalance), change: nextTokenBalance > 0 ? `${nextTokenBalance} tokens` : "Held safely", trend: "up", icon: Clock },
