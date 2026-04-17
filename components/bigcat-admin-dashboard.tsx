@@ -6,6 +6,7 @@ import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, 
 import { formatNaira } from "@/lib/currency-utils"
 import { SmedanAdminDashboard } from "./smedan-admin-dashboard"
 import { PalmpayAdminDashboard } from "./palmpay-admin-dashboard"
+import { LogisticsAdminDashboard } from "./logistics-admin-dashboard"
 
 export function BigcatAdminDashboard() {
   const router = useRouter()
@@ -40,7 +41,7 @@ export function BigcatAdminDashboard() {
   })
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activePanel, setActivePanel] = useState<'overview' | 'smedan' | 'palmpay'>('overview')
+  const [activePanel, setActivePanel] = useState<'overview' | 'smedan' | 'palmpay' | 'logistics'>('overview')
 
   // Agent management state - BigCat only sees count
   const [agentCount, setAgentCount] = useState(0)
@@ -223,6 +224,36 @@ export function BigcatAdminDashboard() {
     )
   }
 
+  if (activePanel === 'logistics') {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="border-b border-border">
+          <div className="flex items-center justify-between gap-3 p-4 max-w-7xl mx-auto">
+            <div>
+              <h1 className="text-xl font-bold text-foreground">BigCat Super Admin</h1>
+              <p className="text-sm text-muted-foreground">Viewing full Logistics dashboard</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActivePanel('overview')}
+                className="px-3 py-2 rounded-lg bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80"
+              >
+                Back to Overview
+              </button>
+              <button
+                onClick={() => setActivePanel('palmpay')}
+                className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
+              >
+                Open PalmPay View
+              </button>
+            </div>
+          </div>
+        </div>
+        <LogisticsAdminDashboard bypassAccessCheck embedded />
+      </div>
+    )
+  }
+
   const stats = [
     {
       label: "Total Users",
@@ -350,6 +381,12 @@ export function BigcatAdminDashboard() {
               className="px-3 py-2 rounded-lg bg-green-50 text-green-700 text-sm font-medium hover:bg-green-100"
             >
               PalmPay Admin View
+            </button>
+            <button
+              onClick={() => setActivePanel('logistics')}
+              className="px-3 py-2 rounded-lg bg-amber-50 text-amber-700 text-sm font-medium hover:bg-amber-100"
+            >
+              Logistics Admin View
             </button>
           </div>
         </div>

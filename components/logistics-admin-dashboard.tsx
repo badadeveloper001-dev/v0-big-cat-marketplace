@@ -48,7 +48,12 @@ type LogisticsRider = {
 
 const DEFAULT_ACCESS_CODE = "LOGISTICS_001"
 
-export function LogisticsAdminDashboard() {
+type LogisticsAdminDashboardProps = {
+  bypassAccessCheck?: boolean
+  embedded?: boolean
+}
+
+export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = false }: LogisticsAdminDashboardProps = {}) {
   const router = useRouter()
   const [accessCode, setAccessCode] = useState("")
   const [authorized, setAuthorized] = useState(false)
@@ -71,6 +76,13 @@ export function LogisticsAdminDashboard() {
   const [actionBusyKey, setActionBusyKey] = useState("")
 
   useEffect(() => {
+    if (bypassAccessCheck) {
+      setAccessCode(DEFAULT_ACCESS_CODE)
+      setAuthorized(true)
+      setCheckingAuth(false)
+      return
+    }
+
     if (typeof window === "undefined") return
 
     const saved = sessionStorage.getItem("logisticsAccessCode") || sessionStorage.getItem("adminAccess")
@@ -79,7 +91,7 @@ export function LogisticsAdminDashboard() {
       setAuthorized(true)
     }
     setCheckingAuth(false)
-  }, [])
+  }, [bypassAccessCheck])
 
   const authHeaders = useMemo(
     () => ({
@@ -318,12 +330,14 @@ export function LogisticsAdminDashboard() {
       <div className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push("/")}
-              className="p-2 -ml-2 text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
+            {!embedded && (
+              <button
+                onClick={() => router.push("/")}
+                className="p-2 -ml-2 text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
             <div>
               <h1 className="text-xl font-bold text-foreground">BigCat Logistics Hub</h1>
               <p className="text-xs text-muted-foreground">Standalone dispatch and delivery settlement website</p>
