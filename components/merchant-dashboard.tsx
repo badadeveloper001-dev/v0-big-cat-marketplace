@@ -723,6 +723,33 @@ export function MerchantDashboard() {
     }
   }
 
+  const getOrderEscrowAmount = (order: any) => {
+    const orderItems = Array.isArray(order?.order_items)
+      ? order.order_items
+      : Array.isArray(order?.items)
+        ? order.items
+        : []
+
+    const itemsTotal = orderItems.reduce((sum: number, item: any) => {
+      const quantity = Math.max(1, Number(item?.quantity || 1))
+      const lineTotal = Number(item?.total_price || 0)
+      const unitAmount = Number(item?.unit_price || item?.price || 0)
+
+      if (lineTotal > 0) return sum + lineTotal
+      if (unitAmount > 0) return sum + (unitAmount * quantity)
+      return sum
+    }, 0)
+
+    const deliveryFee = Number(order?.delivery_fee || 0)
+    const productTotal = Number(order?.product_total || 0)
+    const grandTotal = Number(order?.grand_total || order?.total_amount || itemsTotal || 0)
+    const merchantAmount = Math.max(0, productTotal || (grandTotal - deliveryFee))
+    const status = String(order?.status || '').toLowerCase()
+
+    if (status === 'delivered' || status === 'completed') return 0
+    return merchantAmount
+  }
+
   const getStockStyle = (status: string) => {
     switch (status) {
       case "active": return "text-primary"
@@ -1372,6 +1399,7 @@ export function MerchantDashboard() {
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-foreground text-sm">{formatNaira(order.grand_total || 0)}</p>
+                    <p className="text-[10px] text-primary font-medium">Escrow: {formatNaira(getOrderEscrowAmount(order))}</p>
                     <p className="text-[10px] text-muted-foreground capitalize">{order.status}</p>
                   </div>
                 </div>
