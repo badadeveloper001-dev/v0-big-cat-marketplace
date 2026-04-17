@@ -18,6 +18,7 @@ export function AdminAccessModal({ onClose }: AdminAccessModalProps) {
     "SMEDAN_123": "/admin/smedan",
     "PALMPAY_012": "/admin/palmpay",
     "BIGCAT_00": "/admin/bigcat",
+    "LOGISTICS_001": "/logistics",
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -1,4 +1,4 @@
-const LOGISTICS_API_URL = "https://v0-logistics-management-app-hx.vercel.app/api/orders"
+const LOGISTICS_API_URL = "/api/logistics/orders"
 
 export interface LogisticsOrderItem {
   product_name: string
@@ -19,8 +19,8 @@ export interface LogisticsOrderPayload {
 }
 
 /**
- * Send a placed order to the external logistics system.
- * Fire-and-forget — errors are logged but do NOT break the checkout flow.
+ * Send a placed order to the standalone in-platform logistics system.
+ * Fire-and-forget; errors are logged but do not block checkout.
  */
 export async function sendOrderToLogistics(payload: LogisticsOrderPayload): Promise<void> {
   try {
