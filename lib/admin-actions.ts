@@ -68,7 +68,7 @@ export async function getMerchants(options: { buyerLat?: number | null; buyerLng
       supabase.from('auth_users').select('*').eq('role', 'merchant'),
       supabase
         .from('orders')
-        .select('merchant_id, total_amount, grand_total, product_total, delivery_fee, status, payment_status, escrow_status, order_items(quantity, product_id, unit_price, price, total_price)'),
+        .select('merchant_id, total_amount, grand_total, product_total, delivery_fee, status, payment_status, order_items(quantity, product_id, unit_price, price, total_price)'),
     ])
 
     if (error) throw error
@@ -326,7 +326,7 @@ export async function getTransactionStats() {
     const supabase = await createClient()
     const { data: orders, error } = await supabase
       .from('orders')
-      .select('id, total_amount, grand_total, product_total, delivery_fee, status, payment_status, escrow_status')
+      .select('id, total_amount, grand_total, product_total, delivery_fee, status, payment_status')
 
     if (error) throw error
 
