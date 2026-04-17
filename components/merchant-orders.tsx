@@ -31,6 +31,30 @@ const statusConfig: { [key: string]: { label: string; color: string; icon: any }
   delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
 }
 
+function getOrderItemsAmount(order: any) {
+  const orderItems = Array.isArray(order?.order_items)
+    ? order.order_items
+    : Array.isArray(order?.items)
+      ? order.items
+      : []
+
+  return orderItems.reduce((sum: number, item: any) => {
+    const quantity = Math.max(1, Number(item?.quantity || 1))
+    const lineTotal = Number(item?.total_price || 0)
+    const unitAmount = Number(item?.unit_price || item?.price || 0)
+
+    if (lineTotal > 0) return sum + lineTotal
+    if (unitAmount > 0) return sum + (unitAmount * quantity)
+    return sum
+  }, 0)
+}
+
+function getOrderTotalAmount(order: any) {
+  const directTotal = Number(order?.grand_total || order?.total_amount || 0)
+  if (directTotal > 0) return directTotal
+  return getOrderItemsAmount(order)
+}
+
 export function MerchantOrders({ onBack }: MerchantOrdersProps) {
   const { user } = useRole()
   const [orders, setOrders] = useState<any[]>([])
@@ -49,7 +73,7 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
 
     orderList.forEach((order) => {
       const orderId = String(order.id)
-      const totalAmount = Number(order.grand_total || order.total_amount || 0)
+      const totalAmount = getOrderTotalAmount(order)
       const deliveryAmount = Number(order.delivery_fee || 0)
       let escrow = getEscrowByOrderId(orderId)
 
@@ -209,7 +233,7 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
               const StatusIcon = statusConfig[order.status]?.icon || Clock
               const isUpdating = updatingOrderId === order.id
               const orderId = String(order.id)
-              const fallbackTotal = Number(order.grand_total || order.total_amount || 0)
+              const fallbackTotal = getOrderTotalAmount(order)
               const fallbackDelivery = Number(order.delivery_fee || 0)
               const fallbackProduct = Math.max(0, fallbackTotal - fallbackDelivery)
               const escrow = escrowMap[orderId] || {
