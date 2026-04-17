@@ -436,17 +436,6 @@ export function MerchantDashboard() {
         return Math.max(0, productTotal || (grandTotal - deliveryFee))
       }
 
-      const isSaleQualifiedOrder = (order: any) => {
-        const status = String(order?.status || '').toLowerCase()
-        const paymentStatus = String(order?.payment_status || '').toLowerCase()
-
-        if (['failed', 'cancelled', 'canceled', 'refunded'].includes(status)) return false
-        if (['failed', 'cancelled', 'canceled', 'refunded'].includes(paymentStatus)) return false
-
-        return ['paid', 'processing', 'shipped', 'delivered', 'completed'].includes(status)
-          || ['paid', 'processing', 'completed'].includes(paymentStatus)
-      }
-
       const getOrderSellingTotal = (order: any) => {
         const orderItems = Array.isArray(order?.order_items)
           ? order.order_items
@@ -488,13 +477,14 @@ export function MerchantDashboard() {
         return Math.max(0, unitCost * quantity)
       }
 
-      const saleOrders = merchantOrders.filter((order) => isSaleQualifiedOrder(order))
-      const completedOrders = merchantOrders.filter((order) => {
+      const releasedOrders = merchantOrders.filter((order) => {
         const status = String(order?.status || '').toLowerCase()
-        return status === 'delivered' || status === 'completed'
+        const escrowStatus = String(order?.escrow_status || '').toLowerCase()
+        return status === 'delivered' || status === 'completed' || escrowStatus === 'released'
       })
+      const completedOrders = releasedOrders
 
-      const totalSales = saleOrders.reduce((sum, order) => sum + getOrderSellingTotal(order), 0)
+      const totalSales = releasedOrders.reduce((sum, order) => sum + getOrderSellingTotal(order), 0)
       const totalInventoryCost = merchantProducts.reduce(
         (sum, product) => sum + (Number(product.cost_price || 0) * Number(product.stock || 0)),
         0,
@@ -534,7 +524,7 @@ export function MerchantDashboard() {
 
       const statsData = [
         { label: "Total Cost Price", value: formatNaira(totalInventoryCost), change: `${merchantProducts.length} products`, trend: "up", icon: NairaIcon },
-        { label: "Total Sales", value: formatNaira(totalSales), change: `${saleOrders.length} sales`, trend: "up", icon: NairaIcon },
+        { label: "Total Sales", value: formatNaira(totalSales), change: `${releasedOrders.length} released`, trend: "up", icon: NairaIcon },
         { label: profitLoss >= 0 ? "Profit" : "Loss", value: profitValue, valueClass: profitLoss >= 0 ? "text-primary" : "text-destructive", change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
         { label: "Escrow Balance", value: formatNaira(escrowBalance), change: nextTokenBalance > 0 ? `${nextTokenBalance} tokens` : "Held safely", trend: "up", icon: Clock },
       ]
