@@ -118,7 +118,6 @@ export async function createOrder(
           payment_method: resolvedPaymentMethod,
           payment_status: 'completed',
           payment_provider: resolvedPaymentMethod,
-          escrow_status: 'held',
         },
         {
           id: orderId,
@@ -133,7 +132,6 @@ export async function createOrder(
           payment_method: resolvedPaymentMethod,
           payment_status: 'completed',
           payment_provider: resolvedPaymentMethod,
-          escrow_status: 'held',
         },
         {
           id: orderId,
@@ -145,7 +143,6 @@ export async function createOrder(
           delivery_address: payload.deliveryAddress,
           payment_status: 'completed',
           payment_provider: resolvedPaymentMethod,
-          escrow_status: 'held',
         },
         {
           id: orderId,
@@ -269,8 +266,8 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
 
     const updateAttempts = normalizedStatus === 'delivered'
       ? [
-          { status: normalizedStatus, payment_status: 'completed', escrow_status: 'released', updated_at: new Date().toISOString() },
-          { status: normalizedStatus, payment_status: 'completed', escrow_status: 'released' },
+          { status: normalizedStatus, payment_status: 'completed', updated_at: new Date().toISOString() },
+          { status: normalizedStatus, payment_status: 'completed' },
           { status: normalizedStatus, updated_at: new Date().toISOString() },
           { status: normalizedStatus },
         ]

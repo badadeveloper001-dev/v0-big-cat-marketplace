@@ -69,7 +69,6 @@ export async function POST(request: NextRequest) {
         status: "pending",
         payment_status: "pending",
         payment_provider: "palmpay",
-        escrow_status: "pending",
       },
       {
         product_id: productId,

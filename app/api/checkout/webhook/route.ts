@@ -44,23 +44,19 @@ export async function POST(request: NextRequest) {
 
     // Map payment status
     let paymentStatus = "failed"
-    let escrowStatus = "pending"
 
     if (status === "success" || status === "completed") {
       paymentStatus = "completed"
-      escrowStatus = "held"
     } else if (status === "pending" || status === "processing") {
       paymentStatus = "processing"
     } else if (status === "failed" || status === "cancelled") {
       paymentStatus = "failed"
-      escrowStatus = "pending"
     }
 
     const updateAttempts = [
       {
         payment_status: paymentStatus,
         payment_reference: paymentReference,
-        escrow_status: escrowStatus,
         status: paymentStatus === "completed" ? "paid" : "pending",
       },
       {

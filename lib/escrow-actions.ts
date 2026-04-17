@@ -31,7 +31,7 @@ function isMissingEscrowTable(message: string) {
 function buildOrderUpdateAttempts(
   orderStatus: string,
   paymentStatus: string,
-  escrowStatus: string,
+  _escrowStatus: string,
   paymentMethod: string,
   releasedAt?: string | null,
 ) {
@@ -44,7 +44,6 @@ function buildOrderUpdateAttempts(
       payment_status: paymentStatus,
       payment_provider: paymentMethod,
       payment_method: paymentMethod,
-      escrow_status: escrowStatus,
       updated_at: now,
       ...withRelease,
     },
@@ -52,14 +51,12 @@ function buildOrderUpdateAttempts(
       status: orderStatus,
       payment_status: paymentStatus,
       payment_provider: paymentMethod,
-      escrow_status: escrowStatus,
       updated_at: now,
       ...withRelease,
     },
     {
       status: orderStatus,
       payment_status: paymentStatus,
-      escrow_status: escrowStatus,
       updated_at: now,
       ...withRelease,
     },
