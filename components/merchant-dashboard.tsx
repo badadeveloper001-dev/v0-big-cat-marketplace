@@ -484,6 +484,28 @@ export function MerchantDashboard() {
       })
       const completedOrders = releasedOrders
 
+      const isOrderHeldInEscrow = (order: any) => {
+        const status = String(order?.status || '').toLowerCase()
+        const paymentStatus = String(order?.payment_status || '').toLowerCase()
+        const escrowStatus = String(order?.escrow_status || '').toLowerCase()
+
+        if (escrowStatus) {
+          return escrowStatus === 'held'
+        }
+
+        if (['delivered', 'completed', 'cancelled', 'canceled', 'failed', 'refunded'].includes(status)) {
+          return false
+        }
+
+        if (['cancelled', 'canceled', 'failed', 'refunded'].includes(paymentStatus)) {
+          return false
+        }
+
+        const paidByStatus = ['paid', 'processing', 'shipped'].includes(status)
+        const paidByPaymentStatus = ['paid', 'processing', 'completed'].includes(paymentStatus)
+        return paidByStatus || paidByPaymentStatus
+      }
+
       const totalSales = releasedOrders.reduce((sum, order) => sum + getOrderSellingTotal(order), 0)
       const totalInventoryCost = merchantProducts.reduce(
         (sum, product) => sum + (Number(product.cost_price || 0) * Number(product.stock || 0)),
@@ -511,8 +533,7 @@ export function MerchantDashboard() {
       }, 0)
       const activeOrders = merchantOrders.filter((order) => !['delivered', 'completed'].includes(String(order?.status || '').toLowerCase())).length
       const escrowBalance = merchantOrders.reduce((sum, order) => {
-        const status = String(order?.status || '').toLowerCase()
-        if (status === 'delivered' || status === 'completed') {
+        if (!isOrderHeldInEscrow(order)) {
           return sum
         }
         return sum + getMerchantAmount(order)
