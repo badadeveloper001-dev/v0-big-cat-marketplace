@@ -27,8 +27,7 @@ function isMissingColumn(errorMessage: string) {
 
 async function selectOrdersWithCompatibility(supabase: any, scope: 'single' | 'list', orderId?: string) {
   const selectAttempts = [
-    'id, buyer_id, merchant_id, status, payment_status, escrow_status, delivery_type, delivery_address, delivery_fee, grand_total, total_amount, created_at, order_items(product_name, quantity)',
-    'id, buyer_id, merchant_id, status, escrow_status, delivery_type, delivery_address, delivery_fee, grand_total, total_amount, created_at, order_items(product_name, quantity)',
+    'id, buyer_id, merchant_id, status, payment_status, delivery_type, delivery_address, delivery_fee, grand_total, total_amount, created_at, order_items(product_name, quantity)',
     'id, buyer_id, merchant_id, status, delivery_type, delivery_address, delivery_fee, grand_total, total_amount, created_at, order_items(product_name, quantity)',
     'id, buyer_id, merchant_id, status, delivery_address, delivery_fee, grand_total, total_amount, created_at, order_items(product_name, quantity)',
     'id, buyer_id, merchant_id, status, delivery_address, delivery_fee, grand_total, created_at, order_items(product_name, quantity)',
