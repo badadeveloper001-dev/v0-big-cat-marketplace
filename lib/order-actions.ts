@@ -5,7 +5,11 @@ import { holdFundsInEscrow, releaseFundsFromEscrow } from '@/lib/escrow-actions'
 
 function isMissingColumnError(error: any) {
   const message = String(error?.message || '').toLowerCase()
-  return message.includes('column') && message.includes('does not exist')
+  return message.includes('column') && (
+    message.includes('does not exist')
+    || message.includes('schema cache')
+    || message.includes('could not find')
+  )
 }
 
 export async function getBuyerOrders(buyerId: string) {

@@ -10,6 +10,15 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
+function isMissingColumnError(error: any) {
+  const message = String(error?.message || "").toLowerCase()
+  return message.includes("column") && (
+    message.includes("does not exist")
+    || message.includes("schema cache")
+    || message.includes("could not find")
+  )
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -102,8 +111,7 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      const message = String(error?.message || "").toLowerCase()
-      if (!(message.includes("column") && message.includes("does not exist"))) {
+      if (!isMissingColumnError(error)) {
         console.error("[v0] Database error:", error)
         return NextResponse.json(
           { error: "Failed to create order" },
