@@ -436,6 +436,15 @@ export function MerchantDashboard() {
         return Math.max(0, productTotal || (grandTotal - deliveryFee))
       }
 
+      const getItemSellingAmount = (item: any) => {
+        const quantity = Math.max(1, toAmount(item?.quantity || 1))
+        const lineTotal = toAmount(item?.total_price || 0)
+        const unitAmount = toAmount(item?.unit_price || item?.price || 0)
+
+        if (lineTotal > 0) return Math.max(0, lineTotal)
+        return Math.max(0, unitAmount * quantity)
+      }
+
       const costMap = new Map(
         merchantProducts.map((product) => [String(product.id), Number(product.cost_price || 0)]),
       )
@@ -458,11 +467,26 @@ export function MerchantDashboard() {
         (sum, product) => sum + (Number(product.cost_price || 0) * Number(product.stock || 0)),
         0,
       )
-      const totalCostOfSales = completedOrders.reduce(
-        (sum, order) => sum + (Array.isArray(order?.order_items) ? order.order_items.reduce((innerSum: number, item: any) => innerSum + getItemCost(item), 0) : 0),
-        0,
-      )
-      const profitLoss = totalSales - totalCostOfSales
+      const profitLoss = completedOrders.reduce((sum, order) => {
+        const orderItems = Array.isArray(order?.order_items)
+          ? order.order_items
+          : Array.isArray(order?.items)
+            ? order.items
+            : []
+
+        if (orderItems.length === 0) {
+          // Legacy fallback when item-level values are unavailable.
+          return sum + getMerchantAmount(order)
+        }
+
+        const orderProfit = orderItems.reduce((innerSum: number, item: any) => {
+          const sellingAmount = getItemSellingAmount(item)
+          const costAmount = getItemCost(item)
+          return innerSum + (sellingAmount - costAmount)
+        }, 0)
+
+        return sum + orderProfit
+      }, 0)
       const activeOrders = merchantOrders.filter((order) => !['delivered', 'completed'].includes(String(order?.status || '').toLowerCase())).length
       const escrowBalance = merchantOrders.reduce((sum, order) => {
         const status = String(order?.status || '').toLowerCase()
