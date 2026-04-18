@@ -362,13 +362,10 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
       // Ignore malformed cached location data.
     }
 
-    const fallbackQuery = [user?.city, user?.state].filter(Boolean).join(', ') || user?.location || ''
-
     if (!navigator.geolocation) {
-      if (fallbackQuery) {
-        setBuyerLocationLabel(fallbackQuery)
-        setLocationStatus('fallback')
-      }
+      setBuyerCoordinates(null)
+      setBuyerLocationLabel('Location services are unavailable on this device/browser.')
+      setLocationStatus('denied')
       return
     }
 
@@ -417,30 +414,12 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           setLocationStatus('ready')
         }
       },
-      async () => {
-        if (!fallbackQuery) {
-          setLocationStatus('denied')
-          return
-        }
-
-        setBuyerLocationLabel(fallbackQuery)
-
-        try {
-          const response = await fetch(`/api/location?query=${encodeURIComponent(fallbackQuery)}`, { cache: 'no-store' })
-          const result = await response.json()
-          if (result.success && result.data) {
-            setBuyerCoordinates({
-              latitude: Number(result.data.latitude),
-              longitude: Number(result.data.longitude),
-            })
-          }
-        } catch {
-          // Keep the saved location label even if geocoding fails.
-        }
-
-        setLocationStatus('fallback')
+      () => {
+        setBuyerCoordinates(null)
+        setBuyerLocationLabel('Live GPS permission denied. Please allow location access in browser settings.')
+        setLocationStatus('denied')
       },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
     )
   }
 
