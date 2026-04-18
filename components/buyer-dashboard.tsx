@@ -276,14 +276,21 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     state?: string | null
     displayName?: string | null
   }) => {
-    const preciseDisplayName = String(payload.displayName || '')
+    const city = String(payload.city || '').trim()
+    const state = String(payload.state || '').trim()
+
+    const displayParts = String(payload.displayName || '')
       .split(',')
       .map((part) => part.trim())
       .filter(Boolean)
-      .slice(0, 3)
+      .filter((part) => !/^\d+$/.test(part))
+
+    const broadDisplayTail = displayParts
+      .filter((part) => !/^(nigeria|federal republic of nigeria)$/i.test(part))
+      .slice(-3)
       .join(', ')
 
-    const label = preciseDisplayName || [payload.city, payload.state].filter(Boolean).join(', ') || ''
+    const label = [city, state].filter(Boolean).join(', ') || city || state || broadDisplayTail
 
     setBuyerCoordinates({ latitude: payload.latitude, longitude: payload.longitude })
     setBuyerLocationLabel(label)
@@ -304,8 +311,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
     const nextUser = {
       ...user,
-      city: payload.city || user.city,
-      state: payload.state || user.state,
+      city: city || user.city,
+      state: state || user.state,
       location: label || user.location,
       latitude: payload.latitude,
       longitude: payload.longitude,
@@ -320,8 +327,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
         body: JSON.stringify({
           userId: user.userId,
           updates: {
-            city: payload.city || user.city,
-            state: payload.state || user.state,
+            city: city || user.city,
+            state: state || user.state,
             location: label || user.location,
           },
         }),

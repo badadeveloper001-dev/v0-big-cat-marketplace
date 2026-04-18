@@ -17,6 +17,18 @@ function getCacheKey(prefix: string, value: string) {
   return `${prefix}:${value.trim().toLowerCase()}`
 }
 
+function resolveAddressCity(address: any) {
+  return (
+    address?.city ||
+    address?.town ||
+    address?.village ||
+    address?.suburb ||
+    address?.city_district ||
+    address?.county ||
+    null
+  )
+}
+
 export function buildLocationQuery(city?: string | null, state?: string | null, fallbackLocation?: string | null) {
   return [city, state].filter(Boolean).join(', ') || fallbackLocation || ''
 }
@@ -59,7 +71,7 @@ export async function geocodeLocation(query: string): Promise<ResolvedLocation |
     const result: ResolvedLocation = {
       latitude: Number(match.lat),
       longitude: Number(match.lon),
-      city: match.address?.city || match.address?.town || match.address?.village || null,
+      city: resolveAddressCity(match.address),
       state: match.address?.state || null,
       displayName: match.display_name || finalQuery,
     }
@@ -105,7 +117,7 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
     const result: ResolvedLocation = {
       latitude: lat,
       longitude: lng,
-      city: data?.address?.city || data?.address?.town || data?.address?.village || null,
+      city: resolveAddressCity(data?.address),
       state: data?.address?.state || null,
       displayName: data?.display_name || [data?.address?.city, data?.address?.state].filter(Boolean).join(', '),
     }
