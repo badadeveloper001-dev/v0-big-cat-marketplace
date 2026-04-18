@@ -343,7 +343,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
         if (
           Number.isFinite(Number(parsed?.latitude)) &&
           Number.isFinite(Number(parsed?.longitude)) &&
-          Date.now() - Number(parsed?.updatedAt || 0) < 1000 * 60 * 30
+          Date.now() - Number(parsed?.updatedAt || 0) < 1000 * 60 * 5
         ) {
           setBuyerCoordinates({ latitude: Number(parsed.latitude), longitude: Number(parsed.longitude) })
           setBuyerLocationLabel(parsed.label || '')
@@ -365,15 +365,17 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
       return
     }
 
-    if (!hasFreshCache) {
-      setLocationStatus('detecting')
-    }
+    setLocationStatus('detecting')
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
           const latitude = position.coords.latitude
           const longitude = position.coords.longitude
+
+          // Clear previously cached/saved label so stale city names don't linger.
+          setBuyerLocationLabel('')
+
           const response = await fetch(`/api/location?latitude=${latitude}&longitude=${longitude}`, { cache: 'no-store' })
           const result = await response.json()
 
@@ -387,10 +389,24 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             })
           } else {
             setBuyerCoordinates({ latitude, longitude })
+
+            const coordinateLabel = `Lat ${latitude.toFixed(5)}, Lng ${longitude.toFixed(5)}`
+            setBuyerLocationLabel(coordinateLabel)
+
+            localStorage.setItem(
+              'bigcat_buyer_location_cache',
+              JSON.stringify({
+                latitude,
+                longitude,
+                label: coordinateLabel,
+                updatedAt: Date.now(),
+              }),
+            )
           }
 
           setLocationStatus('ready')
         } catch {
+          setBuyerLocationLabel(hasFreshCache ? buyerLocationLabel : '')
           setLocationStatus('ready')
         }
       },
