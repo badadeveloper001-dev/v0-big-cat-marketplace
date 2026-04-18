@@ -276,7 +276,14 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     state?: string | null
     displayName?: string | null
   }) => {
-    const label = [payload.city, payload.state].filter(Boolean).join(', ') || payload.displayName || ''
+    const preciseDisplayName = String(payload.displayName || '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(', ')
+
+    const label = preciseDisplayName || [payload.city, payload.state].filter(Boolean).join(', ') || ''
 
     setBuyerCoordinates({ latitude: payload.latitude, longitude: payload.longitude })
     setBuyerLocationLabel(label)
@@ -327,6 +334,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const detectBuyerLocation = async () => {
     if (typeof window === 'undefined') return
 
+    let hasFreshCache = false
+
     try {
       const cached = localStorage.getItem('bigcat_buyer_location_cache')
       if (cached) {
@@ -339,7 +348,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           setBuyerCoordinates({ latitude: Number(parsed.latitude), longitude: Number(parsed.longitude) })
           setBuyerLocationLabel(parsed.label || '')
           setLocationStatus('ready')
-          return
+          hasFreshCache = true
         }
       }
     } catch {
@@ -356,7 +365,9 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
       return
     }
 
-    setLocationStatus('detecting')
+    if (!hasFreshCache) {
+      setLocationStatus('detecting')
+    }
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -406,7 +417,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
         setLocationStatus('fallback')
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
     )
   }
 

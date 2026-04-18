@@ -264,6 +264,8 @@ export function ProductsMarketplace({
           <div className={`rounded-xl border px-4 py-3 text-sm ${locationStatus === 'ready' || locationStatus === 'fallback' ? 'border-primary/20 bg-primary/5 text-foreground' : 'border-border bg-card text-muted-foreground'}`}>
             {locationStatus === 'detecting'
               ? 'Detecting your live location to show the nearest merchants...'
+              : locationStatus === 'fallback' && buyerLocationLabel
+                ? `Using your saved location (${buyerLocationLabel}). Allow live location for more accurate nearby results.`
               : buyerLocationLabel
                 ? `Showing merchants closest to ${buyerLocationLabel}.`
                 : 'Allow location access to see merchants nearest to you.'}
