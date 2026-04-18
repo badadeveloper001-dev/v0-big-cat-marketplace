@@ -296,9 +296,9 @@ export function BuyerAuth({
 
       <main className={isModal ? "" : "flex-1 flex flex-col items-center justify-center p-4"}>
         <div className="w-full max-w-sm">
-          <div className="bg-card rounded-3xl shadow-2xl border border-border/50 p-8">
+          <div className={`bg-card rounded-3xl shadow-2xl border border-border/50 ${isModal ? "p-6" : "p-8 my-1"}`}>
             {isModal && (
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <BrandWordmark compact />
                 <button
                   onClick={onBack}
@@ -309,11 +309,12 @@ export function BuyerAuth({
                 </button>
               </div>
             )}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-5 shadow-lg shadow-primary/25">
-                <ShoppingBag className="w-8 h-8 text-primary-foreground" />
+
+            <div className={`text-center ${isModal ? "mb-6" : "mb-8"}`}>
+              <div className={`inline-flex items-center justify-center ${isModal ? "w-14 h-14 mb-4" : "w-16 h-16 mb-5"} rounded-2xl bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/25`}>
+                <ShoppingBag className={`${isModal ? "w-7 h-7" : "w-8 h-8"} text-primary-foreground`} />
               </div>
-              <h1 className="text-2xl font-bold text-foreground mb-2">
+              <h1 className={`${isModal ? "text-xl" : "text-2xl"} font-bold text-foreground mb-2`}>
                 {isSignUp ? "Create Buyer Account" : isModal ? "Login to continue" : "Welcome Back"}
               </h1>
               <p className="text-muted-foreground text-sm">

@@ -42,6 +42,9 @@ export function BigcatAdminDashboard() {
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [activePanel, setActivePanel] = useState<'overview' | 'smedan' | 'palmpay' | 'logistics'>('overview')
+  const [issues, setIssues] = useState<any[]>([])
+  const [issueStatusFilter, setIssueStatusFilter] = useState<'all' | 'open' | 'in_review' | 'resolved' | 'rejected'>('all')
+  const [updatingIssueId, setUpdatingIssueId] = useState<string | null>(null)
 
   // Agent management state - BigCat only sees count
   const [agentCount, setAgentCount] = useState(0)
@@ -128,6 +131,11 @@ export function BigcatAdminDashboard() {
             joined: new Date(m.created_at).toLocaleDateString(),
           }))
         setPendingMerchants(pending)
+      }
+
+      const issuesRes = await fetch('/api/admin/issues', { cache: 'no-store' }).then(r => r.json())
+      if (issuesRes.success) {
+        setIssues(Array.isArray(issuesRes.data) ? issuesRes.data : [])
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -304,6 +312,9 @@ export function BigcatAdminDashboard() {
   const conversionRate = platformStats.totalUsers > 0
     ? ((platformStats.totalOrders / platformStats.totalUsers) * 100).toFixed(1)
     : "0.0"
+  const filteredIssues = issueStatusFilter === 'all'
+    ? issues
+    : issues.filter((issue) => String(issue?.status || '').toLowerCase() === issueStatusFilter)
 
   const handleApprove = async (id: string) => {
     setApprovingId(id)
@@ -337,6 +348,25 @@ export function BigcatAdminDashboard() {
       console.error('Error rejecting merchant:', error)
     } finally {
       setApprovingId(null)
+    }
+  }
+
+  const updateIssueStatus = async (issueId: string, status: 'open' | 'in_review' | 'resolved' | 'rejected') => {
+    setUpdatingIssueId(issueId)
+    try {
+      const res = await fetch('/api/admin/issues', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issueId, status }),
+      })
+      const result = await res.json()
+      if (result.success) {
+        setIssues(prev => prev.map(issue => issue.id === issueId ? { ...issue, status } : issue))
+      }
+    } catch (error) {
+      console.error('Error updating issue status:', error)
+    } finally {
+      setUpdatingIssueId(null)
     }
   }
 
@@ -389,6 +419,78 @@ export function BigcatAdminDashboard() {
               Logistics Admin View
             </button>
           </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-6 mb-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="font-bold text-lg text-foreground">Reported Issues (BigCat Inbox)</h2>
+              <p className="text-sm text-muted-foreground">Buyers use Report issue and BigCat admin resolves complaints here.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {(['all', 'open', 'in_review', 'resolved', 'rejected'] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setIssueStatusFilter(status)}
+                  className={`px-3 py-1 rounded text-xs font-medium ${issueStatusFilter === status ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground'}`}
+                >
+                  {status === 'all' ? 'All' : status.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filteredIssues.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No reported issues found.</p>
+          ) : (
+            <div className="space-y-3">
+              {filteredIssues.map((issue) => (
+                <div key={issue.id} className="rounded-lg border border-border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{String(issue.issue_type || 'issue').replace('_', ' ')}</p>
+                      <p className="text-xs text-muted-foreground">Order: {String(issue.order_id || '').slice(0, 8).toUpperCase()} · Buyer: {String(issue.buyer_id || '').slice(0, 8)}</p>
+                    </div>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      issue.status === 'resolved' ? 'bg-green-100 text-green-700' :
+                      issue.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                      issue.status === 'in_review' ? 'bg-blue-100 text-blue-700' :
+                      'bg-amber-100 text-amber-700'
+                    }`}>
+                      {String(issue.status || 'open').replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-foreground mb-1">{issue.description}</p>
+                  <p className="text-xs text-muted-foreground mb-3">Reported: {issue.created_at ? new Date(issue.created_at).toLocaleString() : 'Unknown time'}</p>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => updateIssueStatus(issue.id, 'in_review')}
+                      disabled={updatingIssueId === issue.id}
+                      className="px-3 py-1 rounded bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 disabled:opacity-50"
+                    >
+                      Mark In Review
+                    </button>
+                    <button
+                      onClick={() => updateIssueStatus(issue.id, 'resolved')}
+                      disabled={updatingIssueId === issue.id}
+                      className="px-3 py-1 rounded bg-green-50 text-green-700 text-xs font-medium hover:bg-green-100 disabled:opacity-50"
+                    >
+                      Resolve
+                    </button>
+                    <button
+                      onClick={() => updateIssueStatus(issue.id, 'rejected')}
+                      disabled={updatingIssueId === issue.id}
+                      className="px-3 py-1 rounded bg-red-50 text-red-700 text-xs font-medium hover:bg-red-100 disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Key Stats */}

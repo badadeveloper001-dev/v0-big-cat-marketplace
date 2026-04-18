@@ -56,6 +56,12 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null)
   const [reorderMessage, setReorderMessage] = useState('')
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number>(Date.now())
+  const [reportingOrderId, setReportingOrderId] = useState<string | null>(null)
+  const [reportIssueType, setReportIssueType] = useState('not_delivered')
+  const [reportDescription, setReportDescription] = useState('')
+  const [submittingReportFor, setSubmittingReportFor] = useState<string | null>(null)
+  const [reportFeedback, setReportFeedback] = useState('')
+  const [issuesByOrder, setIssuesByOrder] = useState<Record<string, any>>({})
 
   const badgeClass = (status: "held" | "released") =>
     status === "held"
@@ -87,6 +93,118 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
     setEscrowMap(next)
   }
 
+  const getNotificationStorageKey = (buyerId: string) => `app_notifications_buyer_${buyerId}`
+  const getIssueStatusCacheKey = (buyerId: string) => `bigcat_issue_status_cache_${buyerId}`
+
+  const getIssueStatusLabel = (status: string) => {
+    const normalized = String(status || 'open').toLowerCase().trim()
+    if (normalized === 'open') return 'Reported'
+    if (normalized === 'in_review') return 'In Review'
+    if (normalized === 'resolved') return 'Resolved'
+    if (normalized === 'rejected') return 'Closed'
+    return 'Reported'
+  }
+
+  const getIssueStatusClass = (status: string) => {
+    const normalized = String(status || 'open').toLowerCase().trim()
+    if (normalized === 'resolved') return 'bg-green-100 text-green-700'
+    if (normalized === 'rejected') return 'bg-slate-100 text-slate-700'
+    if (normalized === 'in_review') return 'bg-blue-100 text-blue-700'
+    return 'bg-amber-100 text-amber-700'
+  }
+
+  const appendBuyerIssueNotification = (payload: {
+    issueId: string
+    title: string
+    message: string
+    type?: 'system' | 'warning'
+  }) => {
+    if (typeof window === 'undefined' || !user?.userId) return
+
+    const storageKey = getNotificationStorageKey(user.userId)
+    const existing = JSON.parse(localStorage.getItem(storageKey) || '[]') as any[]
+
+    const next = [
+      {
+        id: `issue_${payload.issueId}_${Date.now()}`,
+        type: payload.type || 'system',
+        title: payload.title,
+        message: payload.message,
+        time: 'Just now',
+        read: false,
+        createdAt: new Date().toISOString(),
+      },
+      ...existing,
+    ].slice(0, 100)
+
+    localStorage.setItem(storageKey, JSON.stringify(next))
+    window.dispatchEvent(new Event('bigcat-notifications-updated'))
+  }
+
+  const syncIssueStatusNotifications = (issues: any[]) => {
+    if (typeof window === 'undefined' || !user?.userId) return
+
+    const cacheKey = getIssueStatusCacheKey(user.userId)
+    const previousStatus = JSON.parse(localStorage.getItem(cacheKey) || '{}') as Record<string, string>
+    const nextStatusMap: Record<string, string> = { ...previousStatus }
+
+    issues.forEach((issue) => {
+      const issueId = String(issue?.id || '')
+      if (!issueId) return
+
+      const nextStatus = String(issue?.status || 'open').toLowerCase().trim()
+      const prevStatus = previousStatus[issueId]
+
+      nextStatusMap[issueId] = nextStatus
+
+      if (prevStatus && prevStatus !== nextStatus) {
+        appendBuyerIssueNotification({
+          issueId,
+          title: 'Issue progress update',
+          message: `Your reported issue is now ${getIssueStatusLabel(nextStatus)}.`,
+          type: nextStatus === 'rejected' ? 'warning' : 'system',
+        })
+      }
+    })
+
+    localStorage.setItem(cacheKey, JSON.stringify(nextStatusMap))
+  }
+
+  const fetchIssues = async () => {
+    if (!user?.userId) return
+
+    try {
+      const response = await fetch(`/api/issues/buyer?buyerId=${user.userId}`, { cache: 'no-store' })
+      const result = await response.json()
+      if (!result?.success) return
+
+      const issueList = Array.isArray(result.data) ? result.data : []
+      syncIssueStatusNotifications(issueList)
+
+      const nextMap: Record<string, any> = {}
+      issueList.forEach((issue: any) => {
+        const orderId = String(issue?.order_id || '')
+        if (!orderId) return
+
+        const existing = nextMap[orderId]
+        if (!existing) {
+          nextMap[orderId] = issue
+          return
+        }
+
+        const existingTime = new Date(existing?.updated_at || existing?.created_at || 0).getTime()
+        const issueTime = new Date(issue?.updated_at || issue?.created_at || 0).getTime()
+        if (issueTime >= existingTime) {
+          nextMap[orderId] = issue
+        }
+      })
+
+      setIssuesByOrder(nextMap)
+    } catch {
+      // Ignore issue fetch failures without interrupting order rendering.
+    }
+  }
+
   const fetchOrders = async (showLoader = true) => {
     if (!user?.userId) return
 
@@ -108,6 +226,9 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
         setOrders(merged)
         syncEscrowForOrders(merged)
         setLastUpdatedAt(Date.now())
+        fetchIssues()
+        fetchIssues()
+        fetchIssues()
       } else {
         if (demoOrders.length > 0) {
           setOrders(demoOrders)
@@ -135,6 +256,7 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
 
   useEffect(() => {
     fetchOrders(true)
+    fetchIssues()
 
     const interval = window.setInterval(() => {
       fetchOrders(false)
@@ -177,6 +299,68 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
     setReorderMessage('Items added to cart. Ready to checkout.')
     window.setTimeout(() => setReorderMessage(''), 3000)
     onOpenCart?.()
+  }
+
+  const submitIssueReport = async (orderId: string) => {
+    if (!user?.userId) {
+      setReportFeedback('Please sign in to report an issue.')
+      return
+    }
+
+    const description = reportDescription.trim()
+    if (!description) {
+      setReportFeedback('Please describe the issue before submitting.')
+      return
+    }
+
+    setSubmittingReportFor(orderId)
+    setReportFeedback('')
+
+    try {
+      const response = await fetch('/api/issues/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          buyerId: user.userId,
+          issueType: reportIssueType,
+          description,
+        }),
+      })
+      const result = await response.json()
+
+      if (!result.success) {
+        setReportFeedback(result.error || 'Unable to submit your report right now.')
+        return
+      }
+
+      setReportFeedback('Report submitted. BigCat admin will review and update you shortly.')
+
+      if (result?.data?.id) {
+        const issueId = String(result.data.id)
+        appendBuyerIssueNotification({
+          issueId,
+          title: 'Issue reported',
+          message: 'Your issue has been reported to BigCat admin and is currently Reported.',
+        })
+
+        if (typeof window !== 'undefined' && user?.userId) {
+          const cacheKey = getIssueStatusCacheKey(user.userId)
+          const existingMap = JSON.parse(localStorage.getItem(cacheKey) || '{}') as Record<string, string>
+          existingMap[issueId] = 'open'
+          localStorage.setItem(cacheKey, JSON.stringify(existingMap))
+        }
+      }
+
+      fetchIssues()
+      setReportingOrderId(null)
+      setReportDescription('')
+      setReportIssueType('not_delivered')
+    } catch {
+      setReportFeedback('Unable to submit your report right now.')
+    } finally {
+      setSubmittingReportFor(null)
+    }
   }
 
   const handleMarkAsDelivered = async (orderId: string) => {
@@ -284,9 +468,15 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                 {reorderMessage}
               </div>
             )}
+            {reportFeedback && (
+              <div className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+                {reportFeedback}
+              </div>
+            )}
             {orders.map((order) => {
               const StatusIcon = statusConfig[order.status]?.icon || Clock
               const escrow = escrowMap[String(order.id)]
+              const orderIssue = issuesByOrder[String(order.id)]
               const paymentHeld = escrow?.merchant_status === "held" || escrow?.logistics_status === "held"
               return (
                 <div
@@ -388,8 +578,16 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                           : 'Normal Delivery'}
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Eligible issues can be escalated from order details for quick resolution.
+                      Use Report issue from order details when you need BigCat admin support.
                     </p>
+                    {orderIssue && (
+                      <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-border bg-secondary/40 px-2.5 py-2">
+                        <p className="text-xs text-muted-foreground">Issue Status</p>
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getIssueStatusClass(orderIssue.status)}`}>
+                          {getIssueStatusLabel(orderIssue.status)}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Escrow Status */}
@@ -443,6 +641,53 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                       Buy Again
                     </button>
                   </div>
+
+                  <div className="mt-2">
+                    <button
+                      onClick={() => {
+                        setReportingOrderId((prev) => prev === String(order.id) ? null : String(order.id))
+                        setReportFeedback('')
+                      }}
+                      className="w-full rounded-lg border border-primary/30 bg-primary/5 py-2.5 text-sm font-medium text-primary hover:bg-primary/10"
+                    >
+                      Report issue
+                    </button>
+                    {orderIssue && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Status: {getIssueStatusLabel(orderIssue.status)}
+                      </p>
+                    )}
+                  </div>
+
+                  {reportingOrderId === String(order.id) && (
+                    <div className="mt-3 rounded-lg border border-border bg-secondary/40 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-foreground">Report issue to BigCat admin</p>
+                      <select
+                        value={reportIssueType}
+                        onChange={(e) => setReportIssueType(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                      >
+                        <option value="not_delivered">Order not delivered</option>
+                        <option value="wrong_item">Wrong item received</option>
+                        <option value="damaged_item">Damaged item</option>
+                        <option value="refund_request">Refund request</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <textarea
+                        value={reportDescription}
+                        onChange={(e) => setReportDescription(e.target.value)}
+                        placeholder="Tell BigCat admin what happened..."
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground min-h-[88px]"
+                      />
+                      <button
+                        onClick={() => submitIssueReport(String(order.id))}
+                        disabled={submittingReportFor === String(order.id)}
+                        className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        {submittingReportFor === String(order.id) ? 'Submitting...' : 'Submit report'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}
