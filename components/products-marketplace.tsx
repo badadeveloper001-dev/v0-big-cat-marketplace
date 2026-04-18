@@ -54,6 +54,11 @@ export function ProductsMarketplace({
   const [showFilters, setShowFilters] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [addedProduct, setAddedProduct] = useState<any | null>(null)
+  const [maxPrice, setMaxPrice] = useState('')
+  const [distanceLimit, setDistanceLimit] = useState('')
+  const [sortBy, setSortBy] = useState<'relevance' | 'nearest' | 'priceAsc' | 'priceDesc'>('relevance')
+  const [loadError, setLoadError] = useState('')
+  const [isOffline, setIsOffline] = useState(false)
   const { getItemCount, getTotal } = useCart()
   const ITEMS_PER_PAGE = 24
 
@@ -62,14 +67,31 @@ export function ProductsMarketplace({
     loadProducts()
   }, [buyerLatitude, buyerLongitude])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const onOnline = () => setIsOffline(false)
+    const onOffline = () => setIsOffline(true)
+    setIsOffline(!navigator.onLine)
+
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
+
   // Filter products when search query or category changes
   useEffect(() => {
     filterProducts()
     setCurrentPage(1) // Reset to first page when filters change
-  }, [searchQuery, selectedCategory, products])
+  }, [searchQuery, selectedCategory, maxPrice, distanceLimit, sortBy, products])
 
   const loadProducts = async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const searchParams = new URLSearchParams()
       if (Number.isFinite(Number(buyerLatitude)) && Number.isFinite(Number(buyerLongitude))) {
@@ -82,11 +104,23 @@ export function ProductsMarketplace({
       const result = await response.json()
       if (result.success) {
         setProducts(result.data)
+      } else {
+        setLoadError(result.error || 'Unable to load products right now.')
       }
-    } catch (error) {
-      console.error('Failed to load products')
+    } catch {
+      setLoadError('Unable to load products right now. Please retry.')
     }
     setLoading(false)
+  }
+
+  const isSubsequence = (needle: string, haystack: string) => {
+    if (!needle) return true
+    let index = 0
+    for (const char of haystack) {
+      if (char === needle[index]) index += 1
+      if (index === needle.length) return true
+    }
+    return false
   }
 
   const filterProducts = () => {
@@ -100,12 +134,43 @@ export function ProductsMarketplace({
     // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
+      const compactQuery = query.replace(/\s+/g, '')
       filtered = filtered.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          p.description.toLowerCase().includes(query) ||
-          p.merchant_profiles?.business_name?.toLowerCase().includes(query)
+        (p) => {
+          const fields = [p.name, p.description, p.merchant_profiles?.business_name]
+            .filter(Boolean)
+            .map((field) => String(field).toLowerCase())
+
+          return fields.some((field) => {
+            const compactField = field.replace(/\s+/g, '')
+            return (
+              field.includes(query) ||
+              compactField.includes(compactQuery) ||
+              isSubsequence(compactQuery, compactField)
+            )
+          })
+        }
       )
+    }
+
+    if (maxPrice && Number.isFinite(Number(maxPrice))) {
+      const cap = Number(maxPrice)
+      filtered = filtered.filter((p) => Number(p.price || 0) <= cap)
+    }
+
+    if (distanceLimit && Number.isFinite(Number(distanceLimit))) {
+      const limit = Number(distanceLimit)
+      filtered = filtered.filter((p) => Number.isFinite(Number(p?.merchant_profiles?.distance_km)) && Number(p.merchant_profiles.distance_km) <= limit)
+    }
+
+    if (sortBy === 'nearest') {
+      filtered.sort((a, b) => Number(a?.merchant_profiles?.distance_km || 9999) - Number(b?.merchant_profiles?.distance_km || 9999))
+    }
+    if (sortBy === 'priceAsc') {
+      filtered.sort((a, b) => Number(a?.price || 0) - Number(b?.price || 0))
+    }
+    if (sortBy === 'priceDesc') {
+      filtered.sort((a, b) => Number(b?.price || 0) - Number(a?.price || 0))
     }
 
     setFilteredProducts(filtered)
@@ -119,9 +184,12 @@ export function ProductsMarketplace({
   const handleClearFilters = () => {
     setSearchQuery('')
     setSelectedCategory('')
+    setMaxPrice('')
+    setDistanceLimit('')
+    setSortBy('relevance')
   }
 
-  const hasActiveFilters = searchQuery || selectedCategory
+  const hasActiveFilters = searchQuery || selectedCategory || maxPrice || distanceLimit || sortBy !== 'relevance'
   const cartCount = getItemCount()
   const cartTotal = getTotal()
 
@@ -254,12 +322,54 @@ export function ProductsMarketplace({
                 </span>
               </label>
             </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Max price (NGN)</label>
+                <input
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  placeholder="e.g. 50000"
+                  className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Max distance (km)</label>
+                <input
+                  value={distanceLimit}
+                  onChange={(e) => setDistanceLimit(e.target.value)}
+                  placeholder="e.g. 25"
+                  className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Sort</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                >
+                  <option value="relevance">Relevance</option>
+                  <option value="nearest">Nearest</option>
+                  <option value="priceAsc">Price: Low to High</option>
+                  <option value="priceDesc">Price: High to Low</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* Results Header */}
       <div className="px-4 space-y-3">
+        {(isOffline || loadError) && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <p>{isOffline ? 'You are offline. Showing cached results where available.' : loadError}</p>
+            <button onClick={loadProducts} className="mt-2 rounded-lg border border-amber-400 px-3 py-1 text-xs font-medium hover:bg-amber-100">
+              Retry
+            </button>
+          </div>
+        )}
         {(buyerLocationLabel || locationStatus === 'detecting' || locationStatus === 'denied') && (
           <div className={`rounded-xl border px-4 py-3 text-sm ${locationStatus === 'ready' || locationStatus === 'fallback' ? 'border-primary/20 bg-primary/5 text-foreground' : 'border-border bg-card text-muted-foreground'}`}>
             {locationStatus === 'detecting'
@@ -309,6 +419,7 @@ export function ProductsMarketplace({
               logo_url: p.merchant_profiles?.logo_url,
               location: p.merchant_profiles?.location,
               distance_km: p.merchant_profiles?.distance_km ?? p.distance_km ?? null,
+              verification_level: p.merchant_profiles?.verification_level || (p.merchant_profiles?.logo_url && p.merchant_profiles?.location ? 'verified' : 'basic'),
             },
           }))}
           onProductClick={onProductClick}

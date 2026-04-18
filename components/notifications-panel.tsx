@@ -33,6 +33,7 @@ interface NotificationsPanelProps {
 export function NotificationsPanel({ isOpen, onClose, onUnreadChange }: NotificationsPanelProps) {
   const { role, user } = useRole()
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [activeFilter, setActiveFilter] = useState<'all' | Notification['type']>('all')
 
   const getNotificationStorageKey = (currentRole: string, userId: string) => `app_notifications_${currentRole}_${userId}`
 
@@ -138,6 +139,9 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange }: Notifica
   }
 
   const unreadCount = notifications.filter(n => !n.read).length
+  const filteredNotifications = activeFilter === 'all'
+    ? notifications
+    : notifications.filter((notification) => notification.type === activeFilter)
 
   useEffect(() => {
     onUnreadChange?.(unreadCount)
@@ -181,7 +185,19 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange }: Notifica
 
         {/* Notifications List */}
         <div className="flex-1 overflow-auto p-4">
-          {notifications.length === 0 ? (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {(['all', 'order', 'delivery', 'message', 'warning', 'system'] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${activeFilter === filter ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground'}`}
+              >
+                {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {filteredNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
                 <Bell className="w-8 h-8 text-muted-foreground" />
@@ -193,7 +209,7 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange }: Notifica
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {notifications.map((notification) => (
+              {filteredNotifications.map((notification) => (
                 <button
                   key={notification.id}
                   onClick={() => markAsRead(notification.id)}

@@ -1313,7 +1313,14 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
         {/* Orders Tab */}
         {activeTab === "orders" && (
-          <BuyerOrders onBack={() => setActiveTab("home")} />
+          <BuyerOrders
+            onBack={() => setActiveTab("home")}
+            onOpenCart={() => {
+              setActiveTab("home")
+              setShowOrders(false)
+              setShowCart(true)
+            }}
+          />
         )}
 
         {/* Profile Tab */}

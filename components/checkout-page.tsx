@@ -31,7 +31,11 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const [walletBalance, setWalletBalance] = useState(0)
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
+  const [savedAddresses, setSavedAddresses] = useState<Array<{ id: string; label: string; address: string }>>([])
   const savedLocation = [user?.city, user?.state].filter(Boolean).join(', ')
+
+  const getCheckoutPrefsKey = () => `checkout_prefs_${user?.userId || 'guest'}`
+  const getSavedAddressesKey = () => `saved_addresses_${user?.userId || 'guest'}`
 
   // Calculate total weight
   const totalWeight = items.reduce((sum, item) => sum + (0.5 * item.quantity), 0) // Default 0.5kg per item
@@ -84,6 +88,46 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       setDeliveryAddress(savedLocation)
     }
   }, [savedLocation])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    try {
+      const savedPrefs = JSON.parse(localStorage.getItem(getCheckoutPrefsKey()) || '{}')
+      if (savedPrefs?.paymentMethod) setPaymentMethod(savedPrefs.paymentMethod)
+      if (savedPrefs?.deliveryType) setDeliveryType(savedPrefs.deliveryType)
+      if (savedPrefs?.fulfillmentMethod) setFulfillmentMethod(savedPrefs.fulfillmentMethod)
+    } catch {}
+
+    try {
+      const storedAddresses = JSON.parse(localStorage.getItem(getSavedAddressesKey()) || '[]')
+      if (Array.isArray(storedAddresses)) {
+        setSavedAddresses(storedAddresses.slice(0, 5))
+      }
+    } catch {}
+  }, [user?.userId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(
+      getCheckoutPrefsKey(),
+      JSON.stringify({ paymentMethod, deliveryType, fulfillmentMethod }),
+    )
+  }, [paymentMethod, deliveryType, fulfillmentMethod, user?.userId])
+
+  const saveCurrentAddress = () => {
+    const cleanAddress = deliveryAddress.trim()
+    if (!cleanAddress) return
+
+    const label = cleanAddress.length > 24 ? `${cleanAddress.slice(0, 24)}...` : cleanAddress
+    const next = [
+      { id: `${Date.now()}`, label, address: cleanAddress },
+      ...savedAddresses.filter((entry) => entry.address.toLowerCase() !== cleanAddress.toLowerCase()),
+    ].slice(0, 5)
+
+    setSavedAddresses(next)
+    localStorage.setItem(getSavedAddressesKey(), JSON.stringify(next))
+  }
 
   const handleSubmit = async () => {
     setError('')
@@ -370,6 +414,26 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
               Prefilled from your account location: {savedLocation}
             </p>
           )}
+          {savedAddresses.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {savedAddresses.map((entry) => (
+                <button
+                  key={entry.id}
+                  onClick={() => setDeliveryAddress(entry.address)}
+                  className="rounded-full border border-border px-3 py-1 text-xs text-foreground hover:bg-secondary"
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={saveCurrentAddress}
+            disabled={!deliveryAddress.trim()}
+            className="mt-3 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary disabled:opacity-50"
+          >
+            Save this address
+          </button>
         </section>
 
         {/* Payment Method Selection */}
@@ -442,6 +506,15 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
                 {deliveryAddress.trim() ? formatNaira(grandTotal) : '--'}
               </span>
             </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground space-y-1">
+            <p className="font-semibold">Why checkout is safe</p>
+            <p>Funds are held in escrow until delivery confirmation.</p>
+            <p>
+              Expected delivery window: {fulfillmentMethod === 'pickup' ? 'Same day pickup arrangement' : deliveryType === 'express' ? '1-2 business days' : '3-5 business days'}.
+            </p>
+            <p>Eligible issues can be escalated from your order details for quick resolution.</p>
           </div>
         </section>
 

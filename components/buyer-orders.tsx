@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw, Loader2 } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 import { useRole } from "@/lib/role-context"
+import { useCart } from "@/lib/cart-context"
 import {
   createEscrowRecord,
   getEscrowByOrderId,
@@ -14,6 +15,7 @@ import { getDemoBuyerOrders, updateDemoOrderStatus } from "@/lib/demo-orders"
 
 interface BuyerOrdersProps {
   onBack: () => void
+  onOpenCart?: () => void
 }
 
 const statusConfig: { [key: string]: { label: string; color: string; icon: any; step: number } } = {
@@ -44,13 +46,16 @@ function getOrderItemsAmount(order: any) {
   }, 0)
 }
 
-export function BuyerOrders({ onBack }: BuyerOrdersProps) {
+export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
   const { user } = useRole()
+  const { addItem } = useCart()
   const [orders, setOrders] = useState<any[]>([])
   const [escrowMap, setEscrowMap] = useState<Record<string, EscrowRecord>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null)
+  const [reorderMessage, setReorderMessage] = useState('')
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number>(Date.now())
 
   const badgeClass = (status: "held" | "released") =>
     status === "held"
@@ -82,46 +87,97 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
     setEscrowMap(next)
   }
 
-  useEffect(() => {
-    async function fetchOrders() {
-      if (!user?.userId) return
+  const fetchOrders = async (showLoader = true) => {
+    if (!user?.userId) return
 
+    if (showLoader) {
       setIsLoading(true)
-      try {
-        const response = await fetch(`/api/orders/buyer?buyerId=${user.userId}`)
-        const result = await response.json()
-        const demoOrders = getDemoBuyerOrders(user.userId)
+    }
 
-        if (result.success) {
-          const fetched = result.data || []
-          const merged = [
-            ...demoOrders,
-            ...fetched.filter((order: any) => !demoOrders.some((demo) => String(demo.id) === String(order.id))),
-          ]
-          setOrders(merged)
-          syncEscrowForOrders(merged)
-        } else {
-          if (demoOrders.length > 0) {
-            setOrders(demoOrders)
-            syncEscrowForOrders(demoOrders)
-          } else {
-            setError(result.error || 'Failed to fetch orders')
-          }
-        }
-      } catch {
-        const demoOrders = getDemoBuyerOrders(user.userId)
+    try {
+      const response = await fetch(`/api/orders/buyer?buyerId=${user.userId}`)
+      const result = await response.json()
+      const demoOrders = getDemoBuyerOrders(user.userId)
+
+      if (result.success) {
+        const fetched = result.data || []
+        const merged = [
+          ...demoOrders,
+          ...fetched.filter((order: any) => !demoOrders.some((demo) => String(demo.id) === String(order.id))),
+        ]
+        setOrders(merged)
+        syncEscrowForOrders(merged)
+        setLastUpdatedAt(Date.now())
+      } else {
         if (demoOrders.length > 0) {
           setOrders(demoOrders)
           syncEscrowForOrders(demoOrders)
+          setLastUpdatedAt(Date.now())
         } else {
-          setError('Failed to fetch orders')
+          setError(result.error || 'Failed to fetch orders')
         }
       }
-      setIsLoading(false)
+    } catch {
+      const demoOrders = getDemoBuyerOrders(user.userId)
+      if (demoOrders.length > 0) {
+        setOrders(demoOrders)
+        syncEscrowForOrders(demoOrders)
+        setLastUpdatedAt(Date.now())
+      } else {
+        setError('Failed to fetch orders')
+      }
     }
 
-    fetchOrders()
+    if (showLoader) {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchOrders(true)
+
+    const interval = window.setInterval(() => {
+      fetchOrders(false)
+    }, 20000)
+
+    return () => window.clearInterval(interval)
   }, [user?.userId])
+
+  const handleReorder = (order: any) => {
+    const orderItems = Array.isArray(order?.order_items)
+      ? order.order_items
+      : Array.isArray(order?.items)
+        ? order.items
+        : []
+
+    if (orderItems.length === 0) {
+      setReorderMessage('No items found in this order.')
+      return
+    }
+
+    orderItems.forEach((item: any) => {
+      const productId = String(item?.product_id || item?.id || '')
+      if (!productId) return
+
+      const quantity = Math.max(1, Number(item?.quantity || 1))
+      const lineTotal = Number(item?.total_price || 0)
+      const unitPrice = Number(item?.unit_price || item?.price || (lineTotal > 0 ? lineTotal / quantity : 0))
+
+      addItem({
+        id: productId,
+        productId,
+        name: item?.product_name || item?.name || 'Product',
+        price: Number.isFinite(unitPrice) ? unitPrice : 0,
+        quantity,
+        merchantId: String(order?.merchant_id || item?.merchant_id || 'unknown_merchant'),
+        merchantName: String(order?.merchant_name || 'Merchant'),
+      })
+    })
+
+    setReorderMessage('Items added to cart. Ready to checkout.')
+    window.setTimeout(() => setReorderMessage(''), 3000)
+    onOpenCart?.()
+  }
 
   const handleMarkAsDelivered = async (orderId: string) => {
     setUpdatingOrderId(orderId)
@@ -199,6 +255,7 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
           </button>
           <h1 className="font-semibold text-foreground">My Orders</h1>
         </div>
+        <p className="mt-1 text-xs text-muted-foreground">Auto-updates every 20s · Last sync {new Date(lastUpdatedAt).toLocaleTimeString()}</p>
       </header>
 
       <main className="flex-1 overflow-auto p-4">
@@ -222,6 +279,11 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
           </div>
         ) : (
           <div className="space-y-4">
+            {reorderMessage && (
+              <div className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+                {reorderMessage}
+              </div>
+            )}
             {orders.map((order) => {
               const StatusIcon = statusConfig[order.status]?.icon || Clock
               const escrow = escrowMap[String(order.id)]
@@ -325,6 +387,9 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
                           ? 'Express Delivery'
                           : 'Normal Delivery'}
                     </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Eligible issues can be escalated from order details for quick resolution.
+                    </p>
                   </div>
 
                   {/* Escrow Status */}
@@ -369,6 +434,15 @@ export function BuyerOrders({ onBack }: BuyerOrdersProps) {
                       </button>
                     </div>
                   )}
+
+                  <div className="mt-2">
+                    <button
+                      onClick={() => handleReorder(order)}
+                      className="w-full rounded-lg border border-border bg-secondary py-2.5 text-sm font-medium text-foreground hover:bg-secondary/80"
+                    >
+                      Buy Again
+                    </button>
+                  </div>
                 </div>
               )
             })}

@@ -20,6 +20,7 @@ interface ProductCardProps {
     logo_url?: string
     location?: string
     distance_km?: number | null
+    verification_level?: 'basic' | 'verified' | 'trusted'
   }
   onClick?: () => void
   onAddToCart?: (product: {
@@ -35,6 +36,7 @@ interface ProductCardProps {
       logo_url?: string
       location?: string
       distance_km?: number | null
+      verification_level?: 'basic' | 'verified' | 'trusted'
     }
   }) => void
 }
@@ -71,6 +73,8 @@ export function ProductCard({
   const distanceLabel = Number.isFinite(Number(merchant.distance_km))
     ? `${Number(merchant.distance_km) < 1 ? '<1' : Number(merchant.distance_km).toFixed(1)} km away`
     : null
+  const verificationLevel = merchant.verification_level || (merchant.logo_url && merchant.location ? 'verified' : 'basic')
+  const verificationLabel = verificationLevel === 'trusted' ? 'Trusted Seller' : verificationLevel === 'verified' ? 'Verified Seller' : 'New Seller'
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -163,6 +167,15 @@ export function ProductCard({
             <p className="text-xs font-medium text-foreground truncate">
               {merchant.business_name}
             </p>
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium mt-1 ${
+              verificationLevel === 'trusted'
+                ? 'bg-emerald-100 text-emerald-700'
+                : verificationLevel === 'verified'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-muted text-muted-foreground'
+            }`}>
+              {verificationLabel}
+            </span>
             {(merchant.location || distanceLabel) && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                 <MapPin className="w-3 h-3" />
@@ -224,6 +237,7 @@ interface ProductGridProps {
       logo_url?: string
       location?: string
       distance_km?: number | null
+      verification_level?: 'basic' | 'verified' | 'trusted'
     }
   }) => void
   loading?: boolean
