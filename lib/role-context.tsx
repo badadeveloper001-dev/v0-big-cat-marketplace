@@ -37,6 +37,25 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     const supabase = createClient()
     let isActive = true
 
+    const clearLocalAuthState = () => {
+      localStorage.removeItem('userRole')
+      localStorage.removeItem('userData')
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+      const projectRef = (() => {
+        try {
+          const host = new URL(supabaseUrl).hostname
+          return host.split('.')[0] || ''
+        } catch {
+          return ''
+        }
+      })()
+
+      if (projectRef) {
+        localStorage.removeItem(`sb-${projectRef}-auth-token`)
+      }
+    }
+
     // Read localStorage immediately for a fast first render
     const stored = localStorage.getItem('userRole')
     const storedUser = localStorage.getItem('userData')
@@ -46,12 +65,26 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     }
 
     const initializeSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session }, error } = await supabase.auth.getSession()
       if (!isActive) return
 
+      if (error) {
+        const message = String(error.message || '').toLowerCase()
+        const isInvalidRefreshToken = message.includes('invalid refresh token')
+          || message.includes('refresh token not found')
+
+        if (isInvalidRefreshToken) {
+          await supabase.auth.signOut({ scope: 'local' })
+          clearLocalAuthState()
+          setRoleState(null)
+          setUserState(null)
+          setIsLoading(false)
+          return
+        }
+      }
+
       if (!session) {
-        localStorage.removeItem('userRole')
-        localStorage.removeItem('userData')
+        clearLocalAuthState()
         setRoleState(null)
         setUserState(null)
       }
@@ -71,8 +104,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (event === 'SIGNED_OUT' || !session) {
-        localStorage.removeItem('userRole')
-        localStorage.removeItem('userData')
+        clearLocalAuthState()
         setRoleState(null)
         setUserState(null)
         setIsLoading(false)
