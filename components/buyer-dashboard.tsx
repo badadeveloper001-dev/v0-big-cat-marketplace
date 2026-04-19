@@ -9,6 +9,7 @@ import { ProductsMarketplace } from "@/components/products-marketplace"
 import { CartView } from "@/components/cart-view"
 import { CheckoutPage } from "@/components/checkout-page"
 import { BuyerOrders } from "@/components/buyer-orders"
+import { ServicesMarketplace } from "@/components/services-marketplace"
 import { ProductDetailsPage } from "@/components/product-details-page"
 import { ProfilePage } from "@/components/profile-page"
 import { SettingsPage } from "@/components/settings-page"
@@ -57,7 +58,7 @@ declare global {
 const categories = [
   { name: "Fashion", icon: "👗", color: "bg-rose-50" },
   { name: "Electronics", icon: "💻", color: "bg-blue-50" },
-  { name: "Home Services", icon: "🏠", color: "bg-amber-50" },
+  { name: "Services", icon: "🛠️", color: "bg-amber-50", target: "services" },
   { name: "Beauty", icon: "💄", color: "bg-purple-50" },
   { name: "Sports", icon: "⚽", color: "bg-green-50" },
   { name: "Food", icon: "🍔", color: "bg-orange-50" },
@@ -69,6 +70,16 @@ const aiSuggestions = [
   "Best electronics deals today",
   "Compare prices for iPhone 15",
 ]
+
+interface BuyerDashboardNotification {
+  id: string
+  type: "order" | "delivery" | "message" | "system" | "warning"
+  title: string
+  message: string
+  time: string
+  read: boolean
+  createdAt?: string
+}
 
 export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () => void } = {}) {
   const { setRole, setUser, user, isLoading } = useRole()
@@ -84,6 +95,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [showCart, setShowCart] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
   const [showOrders, setShowOrders] = useState(false)
+  const [showServices, setShowServices] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null)
   const { items: cartItems, getItemCount: getCartItemCount } = useCart()
   const { items: wishlistItems, getItemCount: getWishlistCount, clearWishlist } = useWishlist()
@@ -112,6 +124,108 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [buyerCoordinates, setBuyerCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'detecting' | 'ready' | 'fallback' | 'denied'>('idle')
   const [buyerLocationLabel, setBuyerLocationLabel] = useState('')
+
+  const getBuyerNotificationStorageKey = (buyerId: string) => `app_notifications_buyer_${buyerId}`
+  const getBuyerOrdersInitKey = (buyerId: string) => `buyer_notif_orders_initialized_${buyerId}`
+  const getBuyerOrderStatusKey = (buyerId: string) => `buyer_notif_order_status_${buyerId}`
+  const getBuyerUnreadInitKey = (buyerId: string) => `buyer_notif_unread_initialized_${buyerId}`
+  const getBuyerUnreadCountKey = (buyerId: string) => `buyer_notif_unread_count_${buyerId}`
+
+  const appendBuyerNotification = (notification: BuyerDashboardNotification) => {
+    if (typeof window === "undefined" || !user?.userId) return
+
+    const storageKey = getBuyerNotificationStorageKey(user.userId)
+    const existing = JSON.parse(localStorage.getItem(storageKey) || "[]") as BuyerDashboardNotification[]
+
+    if (existing.some((item) => item.id === notification.id)) {
+      return
+    }
+
+    const nextNotifications = [notification, ...existing].slice(0, 100)
+    localStorage.setItem(storageKey, JSON.stringify(nextNotifications))
+    window.dispatchEvent(new Event("bigcat-notifications-updated"))
+  }
+
+  const trackBuyerOrderNotifications = (orders: any[]) => {
+    if (typeof window === "undefined" || !user?.userId) return
+
+    const initKey = getBuyerOrdersInitKey(user.userId)
+    const statusKey = getBuyerOrderStatusKey(user.userId)
+    const existingMap = JSON.parse(localStorage.getItem(statusKey) || "{}") as Record<string, string>
+    const nextMap: Record<string, string> = { ...existingMap }
+    const isInitialized = localStorage.getItem(initKey) === "true"
+
+    orders.forEach((order) => {
+      const orderId = String(order?.id || "")
+      if (!orderId) return
+
+      const nextStatus = String(order?.status || "pending").toLowerCase().trim()
+      const prevStatus = existingMap[orderId]
+
+      if (isInitialized && !prevStatus) {
+        appendBuyerNotification({
+          id: `buyer-order-created-${orderId}`,
+          type: "order",
+          title: "New order placed",
+          message: `Your order ${orderId.slice(0, 8)} has been placed successfully.`,
+          time: "Just now",
+          read: false,
+          createdAt: new Date().toISOString(),
+        })
+      }
+
+      if (isInitialized && prevStatus && prevStatus !== nextStatus) {
+        appendBuyerNotification({
+          id: `buyer-order-status-${orderId}-${nextStatus}`,
+          type: "delivery",
+          title: "Order status updated",
+          message: `Order ${orderId.slice(0, 8)} is now ${nextStatus}.`,
+          time: "Just now",
+          read: false,
+          createdAt: new Date().toISOString(),
+        })
+      }
+
+      nextMap[orderId] = nextStatus
+    })
+
+    localStorage.setItem(statusKey, JSON.stringify(nextMap))
+    if (!isInitialized) {
+      localStorage.setItem(initKey, "true")
+    }
+  }
+
+  const trackBuyerUnreadMessageNotifications = (totalUnread: number) => {
+    if (typeof window === "undefined" || !user?.userId) return
+
+    const initKey = getBuyerUnreadInitKey(user.userId)
+    const countKey = getBuyerUnreadCountKey(user.userId)
+    const initialized = localStorage.getItem(initKey) === "true"
+    const previousCount = Number(localStorage.getItem(countKey) || 0)
+
+    if (!initialized) {
+      localStorage.setItem(initKey, "true")
+      localStorage.setItem(countKey, String(totalUnread))
+      return
+    }
+
+    if (totalUnread > previousCount) {
+      const incomingCount = totalUnread - previousCount
+      appendBuyerNotification({
+        id: `buyer-unread-message-${Date.now()}-${totalUnread}`,
+        type: "message",
+        title: "New message",
+        message: incomingCount === 1
+          ? "You received a new message from a merchant."
+          : `You received ${incomingCount} new messages from merchants.`,
+        time: "Just now",
+        read: false,
+        createdAt: new Date().toISOString(),
+      })
+    }
+
+    localStorage.setItem(countKey, String(totalUnread))
+  }
 
   const cleanupStaleVoiceflowUi = (target?: HTMLElement | null) => {
     if (typeof document === "undefined") return
@@ -493,6 +607,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const loadUnreadMessages = async () => {
     if (!user?.userId) {
       setUnreadMessages(0)
+      trackBuyerUnreadMessageNotifications(0)
       return
     }
 
@@ -502,11 +617,14 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
       if (result.success && Array.isArray(result.data)) {
         const totalUnread = result.data.reduce((sum: number, conv: any) => sum + Number(conv.unread_count || 0), 0)
         setUnreadMessages(totalUnread)
+        trackBuyerUnreadMessageNotifications(totalUnread)
       } else {
         setUnreadMessages(0)
+        trackBuyerUnreadMessageNotifications(0)
       }
     } catch {
       setUnreadMessages(0)
+      trackBuyerUnreadMessageNotifications(0)
     }
   }
 
@@ -516,6 +634,12 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
       if (user?.userId) {
         const response = await fetch(`/api/orders/buyer?buyerId=${user.userId}`)
         const result = await response.json()
+        const allOrders = Array.isArray(result.data) ? result.data : []
+
+        if (result.success) {
+          trackBuyerOrderNotifications(allOrders)
+        }
+
         if (result.success && result.data && result.data.length > 0) {
           const ordersData = result.data.slice(0, 3).map((o: any) => ({
             id: o.id?.substring(0, 8) || "NX-0000",
@@ -846,6 +970,20 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     return <BuyerOrders onBack={() => setShowOrders(false)} />
   }
 
+  if (showServices && user?.userId) {
+    return (
+      <ServicesMarketplace
+        buyerId={user.userId}
+        onBack={() => setShowServices(false)}
+        onChatMerchant={(conversation) => {
+          setShowServices(false)
+          setInitialConversation(conversation || null)
+          setShowChat(true)
+        }}
+      />
+    )
+  }
+
   const displayName = user?.name || (user ? "Customer" : "Guest")
   const displayMerchants = showAllMerchants ? merchants : merchants.slice(0, 6)
   const formatDistanceLabel = (distance: unknown) => {
@@ -860,6 +998,18 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
       isOpen={showNotifications} 
       onClose={() => setShowNotifications(false)}
       onUnreadChange={setNotificationCount}
+      onOpenOrders={() => {
+        setShowNotifications(false)
+        setShowOrders(false)
+        setShowChat(false)
+        setActiveTab("orders")
+      }}
+      onOpenMessages={() => {
+        setShowNotifications(false)
+        setShowOrders(false)
+        setShowChat(false)
+        setActiveTab("chat")
+      }}
     />
     {isSuspended && (
       <div className="mx-4 mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
@@ -954,6 +1104,20 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               title="Browse products"
             >
               <Package className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => {
+                if (!user) {
+                  setShowAuthPrompt(true)
+                  return
+                }
+                setShowServices(true)
+              }}
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Services"
+              title="Book services"
+            >
+              <Zap className="w-5 h-5" />
             </button>
             <button 
               onClick={() => setShowCart(true)}
@@ -1074,10 +1238,18 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             </button>
           </div>
           <div className="flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-hide">
-            {categories.map((cat) => (
+            {categories.map((cat: any) => (
               <button
                 key={cat.name}
                 onClick={() => {
+                  if (cat.target === "services") {
+                    if (!user) {
+                      setShowAuthPrompt(true)
+                      return
+                    }
+                    setShowServices(true)
+                    return
+                  }
                   setSelectedCategory(cat.name)
                   setShowProducts(true)
                 }}

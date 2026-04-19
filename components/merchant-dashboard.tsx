@@ -17,6 +17,7 @@ import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-client"
 import { MerchantProducts } from "@/components/merchant-products"
 import { MerchantOrders } from "@/components/merchant-orders"
+import { MerchantServices } from "@/components/merchant-services"
 import { ProfilePage } from "@/components/profile-page"
 import { MerchantProfilePage } from "@/components/merchant-profile-page"
 import { SettingsPage } from "@/components/settings-page"
@@ -117,6 +118,7 @@ export function MerchantDashboard() {
   const [todoForm, setTodoForm] = useState({ title: "", dueDate: "", dueTime: "" })
   const [todoError, setTodoError] = useState("")
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default")
+  const [unreadMessages, setUnreadMessages] = useState(0)
 
   const getTodoStorageKey = (merchantId: string) => `merchant_todos_${merchantId}`
   const getNotificationStorageKey = (merchantId: string) => `app_notifications_merchant_${merchantId}`
@@ -163,6 +165,107 @@ export function MerchantDashboard() {
 
     localStorage.setItem(storageKey, JSON.stringify(nextNotifications))
     window.dispatchEvent(new Event("bigcat-notifications-updated"))
+  }
+
+  const getMerchantOrdersInitKey = (merchantId: string) => `merchant_notif_orders_initialized_${merchantId}`
+  const getMerchantOrderStatusKey = (merchantId: string) => `merchant_notif_order_status_${merchantId}`
+  const getMerchantUnreadInitKey = (merchantId: string) => `merchant_notif_unread_initialized_${merchantId}`
+  const getMerchantUnreadCountKey = (merchantId: string) => `merchant_notif_unread_count_${merchantId}`
+
+  const appendMerchantNotification = (notification: DashboardNotification) => {
+    if (typeof window === "undefined" || !user?.userId) return
+
+    const storageKey = getNotificationStorageKey(user.userId)
+    const existing = JSON.parse(localStorage.getItem(storageKey) || "[]") as DashboardNotification[]
+
+    if (existing.some((item) => item.id === notification.id)) {
+      return
+    }
+
+    const nextNotifications = [notification, ...existing].slice(0, 100)
+    localStorage.setItem(storageKey, JSON.stringify(nextNotifications))
+    window.dispatchEvent(new Event("bigcat-notifications-updated"))
+  }
+
+  const trackMerchantOrderNotifications = (orders: any[]) => {
+    if (typeof window === "undefined" || !user?.userId) return
+
+    const initKey = getMerchantOrdersInitKey(user.userId)
+    const statusKey = getMerchantOrderStatusKey(user.userId)
+    const existingMap = JSON.parse(localStorage.getItem(statusKey) || "{}") as Record<string, string>
+    const nextMap: Record<string, string> = { ...existingMap }
+    const isInitialized = localStorage.getItem(initKey) === "true"
+
+    orders.forEach((order) => {
+      const orderId = String(order?.id || "")
+      if (!orderId) return
+
+      const nextStatus = String(order?.status || "pending").toLowerCase().trim()
+      const prevStatus = existingMap[orderId]
+
+      if (isInitialized && !prevStatus) {
+        appendMerchantNotification({
+          id: `merchant-order-created-${orderId}`,
+          type: "order",
+          title: "New buyer order",
+          message: `You received a new order ${orderId.slice(0, 8)}.`,
+          time: "Just now",
+          read: false,
+          createdAt: new Date().toISOString(),
+        })
+      }
+
+      if (isInitialized && prevStatus && prevStatus !== nextStatus) {
+        appendMerchantNotification({
+          id: `merchant-order-status-${orderId}-${nextStatus}`,
+          type: "delivery",
+          title: "Order status changed",
+          message: `Order ${orderId.slice(0, 8)} is now ${nextStatus}.`,
+          time: "Just now",
+          read: false,
+          createdAt: new Date().toISOString(),
+        })
+      }
+
+      nextMap[orderId] = nextStatus
+    })
+
+    localStorage.setItem(statusKey, JSON.stringify(nextMap))
+    if (!isInitialized) {
+      localStorage.setItem(initKey, "true")
+    }
+  }
+
+  const trackMerchantUnreadMessageNotifications = (totalUnread: number) => {
+    if (typeof window === "undefined" || !user?.userId) return
+
+    const initKey = getMerchantUnreadInitKey(user.userId)
+    const countKey = getMerchantUnreadCountKey(user.userId)
+    const initialized = localStorage.getItem(initKey) === "true"
+    const previousCount = Number(localStorage.getItem(countKey) || 0)
+
+    if (!initialized) {
+      localStorage.setItem(initKey, "true")
+      localStorage.setItem(countKey, String(totalUnread))
+      return
+    }
+
+    if (totalUnread > previousCount) {
+      const incomingCount = totalUnread - previousCount
+      appendMerchantNotification({
+        id: `merchant-unread-message-${Date.now()}-${totalUnread}`,
+        type: "message",
+        title: "New customer message",
+        message: incomingCount === 1
+          ? "You received a new message from a customer."
+          : `You received ${incomingCount} new messages from customers.`,
+        time: "Just now",
+        read: false,
+        createdAt: new Date().toISOString(),
+      })
+    }
+
+    localStorage.setItem(countKey, String(totalUnread))
   }
 
   const requestNotificationAccess = async () => {
@@ -252,8 +355,20 @@ export function MerchantDashboard() {
       loadStats()
       loadProducts()
       loadOrders()
+      loadUnreadMessages()
     }
   }, [user])
+
+  useEffect(() => {
+    if (!user?.userId) return
+
+    const intervalId = window.setInterval(() => {
+      loadOrders()
+      loadUnreadMessages()
+    }, 30000)
+
+    return () => window.clearInterval(intervalId)
+  }, [user?.userId])
 
   // Suppress Voiceflow inline prop warning
   useEffect(() => {
@@ -586,6 +701,7 @@ export function MerchantDashboard() {
         const result = await response.json()
         const nextOrders = Array.isArray(result.data) ? result.data : Array.isArray(result.orders) ? result.orders : []
         if (result.success) {
+          trackMerchantOrderNotifications(nextOrders)
           setRecentOrders(nextOrders.slice(0, 3))
         }
       }
@@ -596,8 +712,36 @@ export function MerchantDashboard() {
     }
   }
 
+  const loadUnreadMessages = async () => {
+    if (!user?.userId) {
+      setUnreadMessages(0)
+      trackMerchantUnreadMessageNotifications(0)
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/messages/conversation?userId=${encodeURIComponent(user.userId)}`, { cache: 'no-store' })
+      const result = await response.json()
+
+      if (result.success && Array.isArray(result.data)) {
+        const totalUnread = result.data.reduce((sum: number, conv: any) => sum + Number(conv.unread_count || 0), 0)
+        setUnreadMessages(totalUnread)
+        trackMerchantUnreadMessageNotifications(totalUnread)
+      } else {
+        setUnreadMessages(0)
+        trackMerchantUnreadMessageNotifications(0)
+      }
+    } catch {
+      setUnreadMessages(0)
+      trackMerchantUnreadMessageNotifications(0)
+    }
+  }
+
   const quickActions = [
-    { label: "Add Product", icon: Plus, primary: true, action: () => setActiveTab("products") },
+    ...(user?.merchantType === 'services' 
+      ? [{ label: "Add Service", icon: Plus, primary: true, action: () => setActiveTab("services") }]
+      : [{ label: "Add Product", icon: Plus, primary: true, action: () => setActiveTab("products") }]
+    ),
     { label: "View Orders", icon: ShoppingBag, primary: false, action: () => setActiveTab("orders") },
     { label: "Analytics", icon: BarChart3, primary: false, action: () => setActiveTab("analytics") },
     { label: "AI BizPilot", icon: Sparkles, primary: false, highlight: true, action: () => setActiveTab("ai") },
@@ -642,18 +786,32 @@ export function MerchantDashboard() {
       cta: 'Open Settings',
       action: () => setShowSettings(true),
     },
-    {
-      label: 'Add your first product',
-      done: allProducts.length > 0,
-      cta: 'Add Product',
-      action: () => setActiveTab('products'),
-    },
-    {
-      label: 'Set cost prices for P&L',
-      done: allProducts.length > 0 && allProducts.every((item) => Number(item?.cost_price || 0) > 0),
-      cta: 'Update Products',
-      action: () => setActiveTab('products'),
-    },
+    user?.merchantType === 'services'
+      ? {
+          label: 'Add your first service',
+          done: allProducts.length > 0,
+          cta: 'Add Service',
+          action: () => setActiveTab('services'),
+        }
+      : {
+          label: 'Add your first product',
+          done: allProducts.length > 0,
+          cta: 'Add Product',
+          action: () => setActiveTab('products'),
+        },
+    user?.merchantType === 'services'
+      ? {
+          label: 'Set service pricing',
+          done: allProducts.length > 0 && allProducts.every((item) => Number(item?.base_price || 0) > 0),
+          cta: 'Update Services',
+          action: () => setActiveTab('services'),
+        }
+      : {
+          label: 'Set cost prices for P&L',
+          done: allProducts.length > 0 && allProducts.every((item) => Number(item?.cost_price || 0) > 0),
+          cta: 'Update Products',
+          action: () => setActiveTab('products'),
+        },
     {
       label: 'Receive first order',
       done: allOrders.length > 0,
@@ -856,6 +1014,14 @@ export function MerchantDashboard() {
       isOpen={showNotifications} 
       onClose={() => setShowNotifications(false)}
       onUnreadChange={setNotificationCount}
+      onOpenOrders={() => {
+        setShowNotifications(false)
+        setActiveTab("orders")
+      }}
+      onOpenMessages={() => {
+        setShowNotifications(false)
+        setActiveTab("messages")
+      }}
     />
     
     {/* Token Purchase Dialog */}
@@ -996,6 +1162,7 @@ export function MerchantDashboard() {
             Overview
           </div>
         </button>
+        {user?.merchantType === 'products' && (
         <button
           onClick={() => setActiveTab("products")}
           className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
@@ -1009,6 +1176,22 @@ export function MerchantDashboard() {
             Products
           </div>
         </button>
+        )}
+        {user?.merchantType === 'services' && (
+        <button
+          onClick={() => setActiveTab("services")}
+          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "services"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Package className="w-4 h-4" />
+            Services
+          </div>
+        </button>
+        )}
         <button
           onClick={() => setActiveTab("orders")}
           className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
@@ -1495,6 +1678,8 @@ export function MerchantDashboard() {
           <MerchantProducts merchantId={user?.userId || ""} />
         ) : activeTab === "orders" ? (
           <MerchantOrders onBack={() => setActiveTab("home")} />
+        ) : activeTab === "services" ? (
+          <MerchantServices merchantId={user?.userId || ""} />
         ) : activeTab === "messages" ? (
           <ChatInterface />
         ) : activeTab === "ai" ? (
@@ -1637,6 +1822,7 @@ export function MerchantDashboard() {
 {[
                   { id: "home", icon: Home, label: "Home", action: () => setActiveTab("home") },
                   { id: "products", icon: Package, label: "Products", action: () => setActiveTab("products") },
+                  { id: "services", icon: Package, label: "Services", action: () => setActiveTab("services") },
                   { id: "orders", icon: ShoppingBag, label: "Orders", action: () => setActiveTab("orders") },
                   { id: "messages", icon: MessageSquare, label: "Messages", action: () => setActiveTab("messages") },
                   { id: "ai", icon: Sparkles, label: "AI", action: () => setActiveTab("ai") },
