@@ -6,8 +6,8 @@ import {
   containsBlockedContactRequest,
   getUserStrikeCount,
   isUserSuspended,
-  recordSafetyViolation,
   resetSafetyState,
+  syncSafetyStateFromServer,
 } from "@/lib/trust-safety"
 import {
   ArrowLeft,
@@ -137,7 +137,7 @@ function ChatListScreen({
             </div>
             <h3 className="font-semibold text-foreground mb-2">No conversations yet</h3>
             <p className="text-sm text-muted-foreground">
-              Tap <strong>Chat Merchant</strong> on any SME/Merchant page to start messaging.
+              Tap <strong>Chat Service Provider</strong> on any SME/Merchant page to start messaging.
             </p>
           </div>
         ) : (
@@ -201,6 +201,37 @@ function ChatConversationScreen({
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
 
+  const syncFromServerStatus = async () => {
+    if (!user?.userId) return
+
+    try {
+      const response = await fetch(`/api/safety/status?userId=${encodeURIComponent(user.userId)}`)
+      const result = await response.json()
+      if (result.success) {
+        const nextStrikes = Number(result.strikes || 0)
+        const nextSuspended = Boolean(result.suspended)
+        const nextRemainingMs = Number(result.remainingMs || 0)
+
+        syncSafetyStateFromServer(user.userId, {
+          strikes: nextStrikes,
+          suspended: nextSuspended,
+          remainingMs: nextRemainingMs,
+        })
+
+        setStrikeCount(nextStrikes)
+        setSuspended(nextSuspended)
+        return
+      }
+    } catch (error) {
+      console.error("Failed to fetch safety status:", error)
+    }
+
+    // Fallback to local safety state when status endpoint is unavailable.
+    const userId = user.userId
+    setSuspended(isUserSuspended(userId))
+    setStrikeCount(getUserStrikeCount(userId))
+  }
+
   const handleVoiceInput = () => {
     if (typeof window === "undefined") return
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -221,9 +252,7 @@ function ChatConversationScreen({
   }
 
   useEffect(() => {
-    const userId = user?.userId
-    setSuspended(isUserSuspended(userId))
-    setStrikeCount(getUserStrikeCount(userId))
+    syncFromServerStatus()
   }, [user?.userId])
 
   useEffect(() => {
@@ -251,19 +280,6 @@ function ChatConversationScreen({
     setError("")
     setWarning("")
 
-    if (containsBlockedContactRequest(newMessage)) {
-      const result = recordSafetyViolation(user.userId)
-      setStrikeCount(result.strikes)
-
-      if (result.suspended) {
-        setSuspended(true)
-        setError("Your account has been temporarily suspended for violating platform policies.")
-      } else {
-        setWarning("For your safety, please keep all conversations within the platform.")
-      }
-      return
-    }
-
     setSending(true)
     try {
       const response = await fetch('/api/messages/send', {
@@ -283,6 +299,28 @@ function ChatConversationScreen({
         setMessages((prev) => [...prev, mapMessage(result.data, user.userId)])
         setNewMessage("")
       } else {
+        if (result.code === 'POLICY_CONTACT_REQUEST_BLOCKED' || result.code === 'POLICY_USER_SUSPENDED') {
+          const nextStrikes = Number(result.strikes || 0)
+          const nextSuspended = Boolean(result.suspended)
+          const nextRemainingMs = Number(result.remainingMs || 0)
+
+          syncSafetyStateFromServer(user.userId, {
+            strikes: nextStrikes,
+            suspended: nextSuspended,
+            remainingMs: nextRemainingMs,
+          })
+
+          setStrikeCount(nextStrikes)
+
+          if (nextSuspended) {
+            setSuspended(true)
+            setError(result.error || "Your account has been temporarily suspended for violating platform policies.")
+          } else {
+            setWarning(result.error || "For your safety, please keep all conversations within the platform.")
+          }
+          return
+        }
+
         setError(result.error || "Failed to send message")
       }
     } catch (error) {
@@ -477,6 +515,39 @@ export function ChatInterface({
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
 
+  const refreshSafetyStatus = async () => {
+    if (!user?.userId) {
+      setSuspended(false)
+      setStrikeCount(0)
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/safety/status?userId=${encodeURIComponent(user.userId)}`)
+      const result = await response.json()
+      if (result.success) {
+        const nextStrikes = Number(result.strikes || 0)
+        const nextSuspended = Boolean(result.suspended)
+        const nextRemainingMs = Number(result.remainingMs || 0)
+
+        syncSafetyStateFromServer(user.userId, {
+          strikes: nextStrikes,
+          suspended: nextSuspended,
+          remainingMs: nextRemainingMs,
+        })
+
+        setStrikeCount(nextStrikes)
+        setSuspended(nextSuspended)
+        return
+      }
+    } catch (error) {
+      console.error("Failed to fetch safety status:", error)
+    }
+
+    setSuspended(isUserSuspended(user.userId))
+    setStrikeCount(getUserStrikeCount(user.userId))
+  }
+
   const loadConversations = async () => {
     if (suspended) {
       setLoading(false)
@@ -511,8 +582,7 @@ export function ChatInterface({
   }
 
   useEffect(() => {
-    setSuspended(isUserSuspended(user?.userId))
-    setStrikeCount(getUserStrikeCount(user?.userId))
+    refreshSafetyStatus()
   }, [user?.userId])
 
   useEffect(() => {
