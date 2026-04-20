@@ -41,18 +41,8 @@ import { formatNaira } from "@/lib/currency-utils"
 import { NotificationsPanel } from "./notifications-panel"
 import { ProductGrid } from "./product-card"
 import { BrandWordmark } from "./brand-wordmark"
+import { NigeriaAiAssistant } from "./nigeria-ai-assistant"
 import { getUserStrikeCount, isUserSuspended, resetSafetyState } from "@/lib/trust-safety"
-
-declare global {
-  interface Window {
-    voiceflow?: {
-      chat?: {
-        load?: (config: Record<string, unknown>) => void
-      }
-    }
-    __voiceflowLoaded?: boolean
-  }
-}
 
 const categories = [
   { name: "Fashion", icon: "👗", color: "bg-rose-50" },
@@ -85,7 +75,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [activeTab, setActiveTab] = useState("home")
   const [searchQuery, setSearchQuery] = useState("")
   const [aiFullscreenOpen, setAiFullscreenOpen] = useState(false)
-  const [voiceflowReady, setVoiceflowReady] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState<any | null>(null)
   const [showProducts, setShowProducts] = useState(false)
   const [showAllMerchants, setShowAllMerchants] = useState(false)
@@ -226,19 +215,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     localStorage.setItem(countKey, String(totalUnread))
   }
 
-  const cleanupStaleVoiceflowUi = (target?: HTMLElement | null) => {
-    if (typeof document === "undefined") return
-
-    const widgets = Array.from(document.querySelectorAll<HTMLElement>(".vfrc-widget"))
-    widgets.forEach((widget) => {
-      if (target && target.contains(widget)) return
-      widget.remove()
-    })
-
-    const launchers = Array.from(document.querySelectorAll<HTMLElement>(".vfrc-launcher"))
-    launchers.forEach((launcher) => launcher.remove())
-  }
-
   useEffect(() => {
     detectBuyerLocation()
   }, [user?.userId])
@@ -253,90 +229,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   useEffect(() => {
     loadUnreadMessages()
   }, [activeTab, showChat, user?.userId])
-
-    useEffect(() => {
-      // Voiceflow currently emits known benign warnings/errors in some environments.
-      // Filter only specific messages so genuine warnings still surface.
-      const suppressedPatterns = [
-        "Received `true` for a non-boolean attribute `inline`",
-        "Socket.io connection failed: timeout",
-      ]
-    const originalError = console.error
-    const originalWarn = console.warn
-
-    const shouldSuppress = (args: unknown[]) =>
-        args.some(
-          (arg) =>
-            typeof arg === "string" &&
-            suppressedPatterns.some((pattern) => arg.includes(pattern)),
-        )
-
-    console.error = (...args: any[]) => {
-      if (shouldSuppress(args)) return
-      originalError(...args)
-    }
-
-    console.warn = (...args: any[]) => {
-      if (shouldSuppress(args)) return
-      originalWarn(...args)
-    }
-
-    return () => {
-      console.error = originalError
-      console.warn = originalWarn
-    }
-  }, [])
-
-    useEffect(() => {
-      if (typeof window === "undefined" || !aiFullscreenOpen) return
-
-    if (window.__voiceflowLoaded) {
-      setVoiceflowReady(Boolean(window.voiceflow?.chat?.load))
-      return
-    }
-
-    const existingScript = document.getElementById("voiceflow-widget-script")
-    if (existingScript) {
-      setVoiceflowReady(Boolean(window.voiceflow?.chat?.load))
-      return
-    }
-
-    const script = document.createElement("script")
-    script.id = "voiceflow-widget-script"
-    script.src = "https://cdn.voiceflow.com/widget-next/bundle.mjs"
-    script.type = "text/javascript"
-    script.onload = () => {
-      window.__voiceflowLoaded = true
-      setVoiceflowReady(true)
-    }
-      script.onerror = () => {
-        setVoiceflowReady(false)
-      }
-
-    document.body.appendChild(script)
-    }, [aiFullscreenOpen])
-
-  useEffect(() => {
-    if (!aiFullscreenOpen || !voiceflowReady) return
-
-    const target = document.getElementById("bigcat-ai-embed-target")
-    if (!target) return
-
-    cleanupStaleVoiceflowUi(target)
-    target.innerHTML = ""
-    window.voiceflow?.chat?.load?.({
-      verify: { projectID: "69cd13f41da9471151f855b8" },
-      url: "https://general-runtime.voiceflow.com",
-      versionID: "production",
-      voice: {
-        url: "https://runtime-api.voiceflow.com",
-      },
-      render: {
-        mode: "embedded",
-        target,
-      },
-    })
-  }, [aiFullscreenOpen, voiceflowReady])
 
   useEffect(() => {
     const suspended = isUserSuspended(user?.userId)
@@ -784,7 +676,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
   const closeAiAssistant = () => {
     setAiFullscreenOpen(false)
-    cleanupStaleVoiceflowUi(null)
   }
 
   const authModal = showAuthPrompt ? (
@@ -1566,7 +1457,9 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div id="bigcat-ai-embed-target" className="h-full w-full" />
+            <div className="h-full w-full pt-14">
+              <NigeriaAiAssistant assistantMode="buyer" className="h-full" />
+            </div>
         </div>
       )}
 
@@ -1679,12 +1572,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           </button>
         </div>
     </div>
-
-    <style jsx global>{`
-      .vfrc-launcher {
-        display: none !important;
-      }
-    `}</style>
     </>
   )
 }

@@ -2,17 +2,6 @@
 
 // Force rebuild
 
-declare global {
-  interface Window {
-    voiceflow?: {
-      chat?: {
-        load?: (config: Record<string, unknown>) => void
-      }
-    }
-    __voiceflowMerchantLoaded?: boolean
-  }
-}
-
 import { useRole } from "@/lib/role-context"
 import { logout } from "@/lib/auth-client"
 import { MerchantProducts } from "@/components/merchant-products"
@@ -25,6 +14,7 @@ import { PaymentMethodsPage } from "@/components/payment-methods-page"
 import { ChatInterface } from "@/components/chat-interface"
 import { formatNaira } from "@/lib/currency-utils"
 import { BrandWordmark } from "./brand-wordmark"
+import { NigeriaAiAssistant } from "./nigeria-ai-assistant"
 import { ClipboardList } from "lucide-react"
 import {
   ArrowLeft,
@@ -88,8 +78,6 @@ function toAmount(value: unknown) {
 export function MerchantDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
   const [activeTab, setActiveTab] = useState("home")
-  const [aiMessage, setAiMessage] = useState("")
-  const [voiceflowMerchantReady, setVoiceflowMerchantReady] = useState(false)
   const [currentInsight, setCurrentInsight] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -369,66 +357,6 @@ export function MerchantDashboard() {
 
     return () => window.clearInterval(intervalId)
   }, [user?.userId])
-
-    // Suppress known Voiceflow console noise while preserving real errors
-  useEffect(() => {
-      const suppressedPatterns = [
-        "Received `true` for a non-boolean attribute `inline`",
-        "Socket.io connection failed: timeout",
-      ]
-    const originalError = console.error
-    const originalWarn = console.warn
-    const shouldSuppress = (args: unknown[]) =>
-        args.some(
-          (arg) =>
-            typeof arg === "string" &&
-            suppressedPatterns.some((pattern) => arg.includes(pattern)),
-        )
-    console.error = (...args: any[]) => { if (shouldSuppress(args)) return; originalError(...args) }
-    console.warn = (...args: any[]) => { if (shouldSuppress(args)) return; originalWarn(...args) }
-    return () => { console.error = originalError; console.warn = originalWarn }
-  }, [])
-
-  // Load Voiceflow script
-  useEffect(() => {
-      if (typeof window === "undefined" || activeTab !== "ai") return
-    if (window.__voiceflowMerchantLoaded) {
-      setVoiceflowMerchantReady(Boolean(window.voiceflow?.chat?.load))
-      return
-    }
-    const existingScript = document.getElementById("voiceflow-merchant-script")
-    if (existingScript) {
-      setVoiceflowMerchantReady(Boolean(window.voiceflow?.chat?.load))
-      return
-    }
-    const script = document.createElement("script")
-    script.id = "voiceflow-merchant-script"
-    script.src = "https://cdn.voiceflow.com/widget-next/bundle.mjs"
-    script.type = "text/javascript"
-    script.onload = () => {
-      window.__voiceflowMerchantLoaded = true
-      setVoiceflowMerchantReady(true)
-    }
-      script.onerror = () => {
-        setVoiceflowMerchantReady(false)
-      }
-    document.body.appendChild(script)
-    }, [activeTab])
-
-  // Mount Voiceflow widget when AI tab is active
-  useEffect(() => {
-    if (activeTab !== "ai" || !voiceflowMerchantReady) return
-    const target = document.getElementById("merchant-ai-embed-target")
-    if (!target) return
-    target.innerHTML = ""
-    window.voiceflow?.chat?.load?.({
-      verify: { projectID: "69dd08062ba6b506cadb4f4e" },
-      url: "https://general-runtime.voiceflow.com",
-      versionID: "production",
-      voice: { url: "https://runtime-api.voiceflow.com" },
-      render: { mode: "embedded", target },
-    })
-  }, [activeTab, voiceflowMerchantReady])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -1675,27 +1603,8 @@ export function MerchantDashboard() {
         ) : activeTab === "messages" ? (
           <ChatInterface />
         ) : activeTab === "ai" ? (
-          <div className="flex flex-col h-full">
-            <div className="px-4 pt-4 pb-2 flex items-center gap-2">
-              <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-primary">
-                <Sparkles className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-foreground">AI BizPilot</h2>
-                <p className="text-[11px] text-muted-foreground">Your intelligent business assistant</p>
-              </div>
-            </div>
-            {!voiceflowMerchantReady ? (
-              <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Loading AI assistant…</span>
-              </div>
-            ) : null}
-            <div
-              id="merchant-ai-embed-target"
-              className="flex-1 w-full overflow-hidden"
-              style={{ minHeight: "calc(100vh - 180px)" }}
-            />
+          <div className="h-full" style={{ minHeight: "calc(100vh - 180px)" }}>
+            <NigeriaAiAssistant assistantMode="merchant" className="h-full" />
           </div>
         ) : activeTab === "analytics" ? (
           <div className="px-4 py-6">
