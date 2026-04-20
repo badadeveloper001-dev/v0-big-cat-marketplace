@@ -237,6 +237,7 @@ export function detectConversationalIntent(query: string): ConversationalIntent 
   ]
   const wellbeingPatterns = [
     'how are you', 'how are you doing', 'how you dey', 'how body', 'se dada ni', 'kedu ka i mere', 'ya jiki',
+    "i'm good too", 'im good too', 'i am good too', 'doing good too',
   ]
   const thanksPatterns = ['thank you', 'thanks', 'thank u', 'nagode', 'daalu', 'ese', 'oshe']
   const identityPatterns = ['who are you', 'what are you', 'your name', 'wetin be your name', 'who be you']
@@ -627,6 +628,49 @@ export async function searchMarketplace(params: {
     }))
   }
 
+  const fetchMerchantProfiles = async (merchantIds: string[]) => {
+    const ids = Array.from(new Set(merchantIds.filter(Boolean)))
+    if (ids.length === 0) return new Map<string, { business_name?: string; name?: string; location?: string }>()
+
+    const { data, error } = await supabase
+      .from('auth_users')
+      .select('id, business_name, name, location')
+      .in('id', ids)
+
+    if (error) throw error
+
+    return new Map(
+      (data || []).map((merchant: any) => [
+        String(merchant.id),
+        {
+          business_name: merchant.business_name,
+          name: merchant.name,
+          location: merchant.location,
+        },
+      ])
+    )
+  }
+
+  const mapServicesWithMerchants = async (services: any[]): Promise<ServiceSearchResult[]> => {
+    const profileMap = await fetchMerchantProfiles(services.map((service) => String(service.merchant_id || '')))
+
+    return services.map((service: any) => {
+      const merchant = profileMap.get(String(service.merchant_id || ''))
+      return {
+        id: service.id,
+        name: service.title || 'Service',
+        description: service.description || '',
+        category: service.category || 'General Service',
+        price: Number(service.base_price || 0),
+        vendor: merchant?.business_name || merchant?.name || 'Unknown vendor',
+        location:
+          [service.service_city, service.service_state].filter(Boolean).join(', ') ||
+          merchant?.location ||
+          'Nigeria',
+      }
+    })
+  }
+
   const runServiceSearch = async (searchTerm: string): Promise<ServiceSearchResult[]> => {
     const safeQuery = escapeLike(searchTerm)
     const pattern = `%${safeQuery}%`
@@ -634,7 +678,7 @@ export async function searchMarketplace(params: {
 
     let request = supabase
       .from('service_listings')
-      .select('id, title, description, category, base_price, service_city, service_state, merchant_id, merchant_profiles:auth_users!merchant_id(business_name, name, location)')
+      .select('id, title, description, category, base_price, service_city, service_state, merchant_id')
       .eq('is_active', true)
       .limit(limit)
 
@@ -648,21 +692,7 @@ export async function searchMarketplace(params: {
     const { data, error } = await request
     if (error) throw error
 
-    return (data || []).map((service: any) => ({
-      id: service.id,
-      name: service.title || 'Service',
-      description: service.description || '',
-      category: service.category || 'General Service',
-      price: Number(service.base_price || 0),
-      vendor:
-        service?.merchant_profiles?.business_name ||
-        service?.merchant_profiles?.name ||
-        'Unknown vendor',
-      location:
-        [service.service_city, service.service_state].filter(Boolean).join(', ') ||
-        service?.merchant_profiles?.location ||
-        'Nigeria',
-    }))
+    return mapServicesWithMerchants(data || [])
   }
 
   const runProductFallback = async (): Promise<ProductSearchResult[]> => {
@@ -714,27 +744,13 @@ export async function searchMarketplace(params: {
   const runServiceFallback = async (): Promise<ServiceSearchResult[]> => {
     const { data, error } = await supabase
       .from('service_listings')
-      .select('id, title, description, category, base_price, service_city, service_state, merchant_id, merchant_profiles:auth_users!merchant_id(business_name, name, location)')
+      .select('id, title, description, category, base_price, service_city, service_state, merchant_id')
       .eq('is_active', true)
       .limit(limit)
 
     if (error) throw error
 
-    return (data || []).map((service: any) => ({
-      id: service.id,
-      name: service.title || 'Service',
-      description: service.description || '',
-      category: service.category || 'General Service',
-      price: Number(service.base_price || 0),
-      vendor:
-        service?.merchant_profiles?.business_name ||
-        service?.merchant_profiles?.name ||
-        'Unknown vendor',
-      location:
-        [service.service_city, service.service_state].filter(Boolean).join(', ') ||
-        service?.merchant_profiles?.location ||
-        'Nigeria',
-    }))
+    return mapServicesWithMerchants(data || [])
   }
 
   const prioritizeByLocation = <T extends { location?: string; vendor_location?: string }>(rows: T[]) => {

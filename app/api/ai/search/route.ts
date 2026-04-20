@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('query') || ''
-    const type = (searchParams.get('type') || 'both') as 'products' | 'vendors' | 'both'
+    const type = (searchParams.get('type') || 'both') as 'products' | 'vendors' | 'services' | 'both'
     const limit = Number(searchParams.get('limit') || 8)
 
     const result = await searchMarketplace({ query, type, limit })
