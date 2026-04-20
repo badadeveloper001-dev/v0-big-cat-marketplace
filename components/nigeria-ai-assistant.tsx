@@ -110,6 +110,12 @@ export function NigeriaAiAssistant({
   const [voiceHint, setVoiceHint] = useState("")
   const [voiceHintShown, setVoiceHintShown] = useState(false)
   const [voiceCaptureHint, setVoiceCaptureHint] = useState("")
+  const [voiceDebug, setVoiceDebug] = useState({
+    locale: "",
+    attempt: 0,
+    lastError: "",
+    transcriptChars: 0,
+  })
   const [recording, setRecording] = useState(false)
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [replyLanguage, setReplyLanguage] = useState<AssistantLanguage>("en")
@@ -252,6 +258,14 @@ export function NigeriaAiAssistant({
     let liveTranscript = ""
     let hadError = false
 
+    setVoiceDebug((prev) => ({
+      ...prev,
+      locale: currentLocale,
+      attempt: attempt + 1,
+      lastError: "",
+      transcriptChars: 0,
+    }))
+
   recognition.lang = currentLocale
     recognition.interimResults = true
     recognition.continuous = false
@@ -275,12 +289,20 @@ export function NigeriaAiAssistant({
       if (merged) {
         liveTranscript = merged
         setInput(merged)
+        setVoiceDebug((prev) => ({
+          ...prev,
+          transcriptChars: merged.length,
+        }))
       }
     }
 
     recognition.onerror = (event: any) => {
       hadError = true
       const errorType = String(event?.error || "")
+      setVoiceDebug((prev) => ({
+        ...prev,
+        lastError: errorType || "unknown",
+      }))
 
       if (errorType === "not-allowed" || errorType === "service-not-allowed") {
         setError("Microphone access is blocked. Please allow microphone permission in your browser settings.")
@@ -309,6 +331,11 @@ export function NigeriaAiAssistant({
       const captured = liveTranscript.trim() || finalTranscript.trim()
       if (captured) {
         setVoiceCaptureHint("Voice captured successfully.")
+        setVoiceDebug((prev) => ({
+          ...prev,
+          transcriptChars: captured.length,
+          lastError: "",
+        }))
         sendPrompt(captured)
         return
       }
@@ -521,6 +548,11 @@ export function NigeriaAiAssistant({
         {error ? <p className="mb-2 text-xs text-destructive">{error}</p> : null}
         {voiceHint ? <p className="mb-2 text-xs text-muted-foreground">{voiceHint}</p> : null}
         {voiceCaptureHint ? <p className="mb-2 text-xs text-muted-foreground">{voiceCaptureHint}</p> : null}
+        {error ? (
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Voice diagnostics: locale={voiceDebug.locale || "n/a"}, attempt={voiceDebug.attempt}, error={voiceDebug.lastError || "none"}, chars={voiceDebug.transcriptChars}
+          </p>
+        ) : null}
 
         <div className="flex items-center gap-2">
           <button
