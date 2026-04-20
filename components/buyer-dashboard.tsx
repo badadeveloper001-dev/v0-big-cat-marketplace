@@ -813,6 +813,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           onBack={() => setSelectedProductId(null)}
           onViewProduct={(productId) => setSelectedProductId(productId)}
           onViewMerchant={(merchant) => {
+              if (guardSuspendedAction()) return
             setSelectedProductId(null)
             setSelectedVendor(merchant)
           }}
@@ -821,6 +822,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             setShowCart(true)
           }}
           onCheckout={() => {
+              if (guardSuspendedAction()) return
             if (!user) {
               setPendingCheckout(true)
               setShowAuthPrompt(true)
@@ -879,6 +881,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             setShowCart(true)
           }}
           onCheckout={() => {
+              if (guardSuspendedAction()) return
             if (!user) {
               setPendingCheckout(true)
               setShowAuthPrompt(true)
@@ -915,6 +918,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             setShowCart(true)
           }}
           onCheckout={() => {
+              if (guardSuspendedAction()) return
             if (!user) {
               setPendingCheckout(true)
               setShowAuthPrompt(true)
@@ -976,6 +980,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
         buyerId={user.userId}
         onBack={() => setShowServices(false)}
         onChatMerchant={(conversation) => {
+            if (guardSuspendedAction()) return
           setShowServices(false)
           setInitialConversation(conversation || null)
           setShowChat(true)
@@ -1111,6 +1116,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
                   setShowAuthPrompt(true)
                   return
                 }
+                  if (guardSuspendedAction()) return
                 setShowServices(true)
               }}
               className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -1247,6 +1253,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
                       setShowAuthPrompt(true)
                       return
                     }
+                      if (guardSuspendedAction()) return
                     setShowServices(true)
                     return
                   }
@@ -1622,6 +1629,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               <button
                 onClick={() => {
                   setCartPopupProduct(null)
+                    if (guardSuspendedAction()) return
                   if (!user) {
                     setPendingCheckout(true)
                     setShowAuthPrompt(true)

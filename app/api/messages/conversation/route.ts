@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrCreateConversation, getUserConversations } from '@/lib/message-actions'
 import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
+import { getUserSafetyStatus } from '@/lib/server-trust-safety'
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,6 +42,22 @@ export async function POST(request: NextRequest) {
 
     const auth = await requireAuthenticatedUser()
     if (auth.response) return auth.response
+
+    const safetyStatus = await getUserSafetyStatus(auth.user.id)
+    if (safetyStatus.suspended) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Your account is temporarily suspended for violating platform messaging policies.',
+          code: 'POLICY_USER_SUSPENDED',
+          strikes: safetyStatus.strikes,
+          suspended: true,
+          suspendedUntil: safetyStatus.suspendedUntil,
+          remainingMs: safetyStatus.remainingMs,
+        },
+        { status: 403 }
+      )
+    }
 
     if (auth.user.id !== buyerId && auth.user.id !== merchantId) {
       return NextResponse.json(

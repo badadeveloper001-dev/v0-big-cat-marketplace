@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { holdFundsInEscrow, releaseFundsFromEscrow } from '@/lib/escrow-actions'
+import { getUserSafetyStatus } from '@/lib/server-trust-safety'
 
 function isMissingColumnError(error: any) {
   const message = String(error?.message || '').toLowerCase()
@@ -78,6 +79,15 @@ export async function createOrder(
 
     if (!payload.buyerId || !payload.items?.length) {
       return { success: false, error: 'Order items are required.' }
+    }
+
+    const safetyStatus = await getUserSafetyStatus(payload.buyerId)
+    if (safetyStatus.suspended) {
+      return {
+        success: false,
+        error: 'Your account is temporarily suspended for violating platform policies.',
+        code: 'POLICY_USER_SUSPENDED',
+      }
     }
 
     const groupedItems = payload.items.reduce<Record<string, CreateOrderInput['items']>>((acc, item) => {
