@@ -12,6 +12,7 @@ interface MerchantProfile {
   logo_url: string | null
   smedan_id: string
   setup_completed: boolean
+  merchant_type?: 'products' | 'services'
 }
 
 interface MiniWebsiteProfileProps {
@@ -132,26 +133,62 @@ export function MiniWebsiteProfile({ profile, isOwner = false, onEdit }: MiniWeb
             </div>
           </div>
 
-          {/* Featured Products Section */}
-          <div className="bg-card rounded-3xl shadow-xl shadow-primary/5 border border-border/50 p-6 md:p-8">
-            <h2 className="text-xl font-semibold text-foreground mb-6">Featured Products</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="rounded-xl bg-secondary/50 border border-border/50 p-4 text-center">
-                  <div className="w-full aspect-square rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-3">
-                    <Store className="w-6 h-6 text-muted-foreground" />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Coming soon</p>
+          {/* Products and Services Section */}
+          <div className="space-y-8">
+            {profile.merchant_type !== 'services' && (
+              <>
+              {/* Featured Products Section */}
+              <div className="bg-card rounded-3xl shadow-xl shadow-primary/5 border border-border/50 p-6 md:p-8">
+                <h2 className="text-xl font-semibold text-foreground mb-6">Products</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="rounded-xl bg-secondary/50 border border-border/50 p-4 text-center">
+                      <div className="w-full aspect-square rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-3">
+                        <Store className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Coming soon</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            {isOwner && (
-              <button
-                onClick={onEdit}
-                className="w-full mt-6 py-2 px-4 bg-secondary border border-border rounded-lg text-foreground hover:bg-secondary/80 transition-colors font-medium"
-              >
-                Add Products
-              </button>
+                {isOwner && (
+                  <button
+                    onClick={onEdit}
+                    className="w-full mt-6 py-2 px-4 bg-secondary border border-border rounded-lg text-foreground hover:bg-secondary/80 transition-colors font-medium"
+                  >
+                    Add Products
+                  </button>
+                )}
+              </div>
+              </>
+            )}
+
+            {profile.merchant_type !== 'products' && (
+              <>
+              {/* Featured Services Section */}
+              <div className="bg-card rounded-3xl shadow-xl shadow-primary/5 border border-border/50 p-6 md:p-8">
+                <h2 className="text-xl font-semibold text-foreground mb-6">Services</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="rounded-xl bg-secondary/50 border border-border/50 p-4 text-center">
+                      <div className="w-full aspect-square rounded-lg bg-gradient-to-br from-amber-100/50 to-amber-50/50 flex items-center justify-center mb-3">
+                        <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                        </svg>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Coming soon</p>
+                    </div>
+                  ))}
+                </div>
+                {isOwner && (
+                  <button
+                    onClick={onEdit}
+                    className="w-full mt-6 py-2 px-4 bg-secondary border border-border rounded-lg text-foreground hover:bg-secondary/80 transition-colors font-medium"
+                  >
+                    Add Services
+                  </button>
+                )}
+              </div>
+              </>
             )}
           </div>
         </div>

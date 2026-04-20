@@ -18,6 +18,7 @@ interface MerchantProfile {
   business_category?: string
   location?: string
   smedan_id?: string
+  merchant_type?: 'products' | 'services'
 }
 
 const CATEGORIES = [

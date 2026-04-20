@@ -56,16 +56,25 @@ export default function MerchantMiniWebsitePage() {
       }
 
       try {
-        const [profileResponse, productResponse] = await Promise.all([
-          fetch(`/api/user/profile?userId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' }),
-          fetch(`/api/products/merchant?merchantId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' }),
-        ])
+         const profileResponse = await fetch(`/api/user/profile?userId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' })
+         const profileResult = await profileResponse.json()
 
-        const profileResult = await profileResponse.json()
-        const productResult = await productResponse.json()
+         if (profileResult.success) {
+           setProfile(profileResult.data)
 
-        if (profileResult.success) setProfile(profileResult.data)
-        if (productResult.success && Array.isArray(productResult.data)) setProducts(productResult.data)
+           // Load products or services based on merchant_type
+           const merchantType = profileResult.data.merchant_type || 'products'
+           const itemsEndpoint = merchantType === 'services'
+             ? `/api/services?merchantId=${encodeURIComponent(merchantId)}`
+             : `/api/products/merchant?merchantId=${encodeURIComponent(merchantId)}`
+
+           const itemsResponse = await fetch(itemsEndpoint, { cache: 'no-store' })
+           const itemsResult = await itemsResponse.json()
+
+           if (itemsResult.success && Array.isArray(itemsResult.data)) {
+             setProducts(itemsResult.data)
+           }
+         }
       } catch {
         // ignore and show fallback UI
       } finally {
@@ -220,14 +229,14 @@ export default function MerchantMiniWebsitePage() {
 
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-bold text-foreground">Featured products</h2>
+             <h2 className="text-xl font-bold text-foreground">Featured {profile?.merchant_type === 'services' ? 'services' : 'products'}</h2>
             <span className="text-sm text-muted-foreground">{products.length} item{products.length !== 1 ? 's' : ''}</span>
           </div>
 
           {products.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-10 text-center">
               <Store className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Products will appear here as the merchant updates their storefront.</p>
+               <p className="text-sm text-muted-foreground">{profile?.merchant_type === 'services' ? 'Services will appear here as the merchant updates their storefront.' : 'Products will appear here as the merchant updates their storefront.'}</p>
             </div>
           ) : (
             <div className={gridClass}>

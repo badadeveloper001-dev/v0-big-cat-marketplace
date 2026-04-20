@@ -32,10 +32,24 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
   const [savedAddresses, setSavedAddresses] = useState<Array<{ id: string; label: string; address: string }>>([])
+  const [serviceBooking, setServiceBooking] = useState<any>(null)
   const savedLocation = [user?.city, user?.state].filter(Boolean).join(', ')
 
   const getCheckoutPrefsKey = () => `checkout_prefs_${user?.userId || 'guest'}`
   const getSavedAddressesKey = () => `saved_addresses_${user?.userId || 'guest'}`
+
+  // Load service booking from sessionStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = sessionStorage.getItem('serviceBookingDetails')
+    if (stored) {
+      try {
+        setServiceBooking(JSON.parse(stored))
+      } catch (err) {
+        console.error('Failed to parse service booking:', err)
+      }
+    }
+  }, [])
 
   // Calculate total weight
   const totalWeight = items.reduce((sum, item) => sum + (0.5 * item.quantity), 0) // Default 0.5kg per item
@@ -57,9 +71,10 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   }, [deliveryType, deliveryAddress, totalWeight, fulfillmentMethod])
 
   const productTotal = getTotal()
-  const grandTotal = productTotal + deliveryFee
+  const serviceTotal = Number(serviceBooking?.basePrice || 0)
+  const grandTotal = serviceBooking ? serviceTotal : (productTotal + deliveryFee)
   const isWalletPayment = paymentMethod === 'palmpay'
-  const isWalletInsufficient = isWalletPayment && deliveryAddress.trim() && walletBalance < grandTotal
+  const isWalletInsufficient = isWalletPayment && (serviceBooking || deliveryAddress.trim()) && walletBalance < grandTotal
   const walletShortfall = isWalletInsufficient ? grandTotal - walletBalance : 0
 
   const getWalletStorageKey = () => {
@@ -129,6 +144,63 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     localStorage.setItem(getSavedAddressesKey(), JSON.stringify(next))
   }
 
+  const handleServiceBookingCheckout = async () => {
+    if (!serviceBooking) return
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('/api/service-bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serviceId: serviceBooking.serviceId,
+          buyerId: user?.userId,
+          scheduledAt: serviceBooking.scheduledAt,
+          serviceAddress: serviceBooking.serviceAddress,
+          buyerNote: serviceBooking.buyerNote,
+          paymentMethod,
+          paymentStatus: 'completed',
+        }),
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        setError(result.error || 'Failed to book service')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Create escrow record for service
+      const bookingId = String(result.data?.id || `booking_${Date.now()}`)
+      createEscrowRecord(bookingId, Number(serviceBooking.basePrice || 0), 0, Number(serviceBooking.basePrice || 0))
+
+      // Update wallet if using palmpay
+      if (isWalletPayment) {
+        const currentBalance = getWalletBalance()
+        const updatedBalance = Math.max(0, currentBalance - Number(serviceBooking.basePrice || 0))
+        localStorage.setItem(getWalletStorageKey(), updatedBalance.toString())
+        setWalletBalance(updatedBalance)
+        setSuccess('Service booking confirmed! Payment secured in escrow.')
+      } else {
+        setSuccess('Service booking confirmed! Payment secured in escrow.')
+      }
+
+      // Clear session storage
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('serviceBookingDetails')
+      }
+
+      setIsSubmitting(false)
+      setTimeout(() => {
+        onSuccess(bookingId)
+      }, 700)
+    } catch (err) {
+      console.error('Service booking checkout failed:', err)
+      setError('Failed to complete service booking')
+      setIsSubmitting(false)
+    }
+  }
+
   const handleSubmit = async () => {
     setError('')
     setSuccess('')
@@ -138,17 +210,22 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       return
     }
 
+    if (!user?.userId) {
+      setError('Please log in to place an order')
+      return
+    }
+
+    // Handle service booking if present
+    if (serviceBooking) {
+      return handleServiceBookingCheckout()
+    }
+
     if (!deliveryAddress.trim()) {
       setError(
         fulfillmentMethod === 'pickup'
           ? 'Please enter your preferred drop-off point or pickup area'
           : 'Please enter a delivery address'
       )
-      return
-    }
-
-    if (!user?.userId) {
-      setError('Please log in to place an order')
       return
     }
 
@@ -258,7 +335,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     }
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !serviceBooking) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
         <Package className="w-16 h-16 text-muted-foreground mb-4" />
@@ -290,25 +367,43 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       </header>
 
       <main className="flex-1 overflow-auto pb-32">
-        {/* Order Summary */}
+        {/* Order/Service Booking Summary */}
         <section className="p-4 border-b border-border">
-          <h2 className="font-semibold text-foreground mb-3">Order Summary</h2>
+          <h2 className="font-semibold text-foreground mb-3">{serviceBooking ? 'Service Booking' : 'Order Summary'}</h2>
           <div className="space-y-3">
-            {items.map((item) => (
-              <div key={item.productId} className="flex justify-between items-center">
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">{item.name}</p>
-                  <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
+            {serviceBooking ? (
+              <>
+                <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">{serviceBooking.serviceTitle}</p>
+                    <p className="text-sm text-muted-foreground">{serviceBooking.merchantName}</p>
+                  </div>
+                  <p className="font-medium text-foreground">{formatNaira(Number(serviceBooking.basePrice || 0))}</p>
                 </div>
-                <p className="font-medium text-foreground">
-                  {formatNaira(item.price * item.quantity)}
-                </p>
-              </div>
-            ))}
+                {serviceBooking.scheduledAt && (
+                  <div className="text-sm text-muted-foreground">
+                    <p>Scheduled: {new Date(serviceBooking.scheduledAt).toLocaleString()}</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              items.map((item) => (
+                <div key={item.productId} className="flex justify-between items-center">
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
+                  </div>
+                  <p className="font-medium text-foreground">
+                    {formatNaira(item.price * item.quantity)}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </section>
 
-        {/* Delivery Options */}
+        {/* Delivery Options - Only for products */}
+        {!serviceBooking && (
         <section className="p-4 border-b border-border space-y-4">
           <h2 className="font-semibold text-foreground">Delivery Options</h2>
 
@@ -390,8 +485,35 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
             </div>
           )}
         </section>
+        )}
 
-        {/* Delivery Address */}
+        {/* Service Address - Only for services */}
+        {serviceBooking && (
+        <section className="p-4 border-b border-border">
+          <h2 className="font-semibold text-foreground mb-3">Service Details</h2>
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Service Address</p>
+              <p className="font-medium text-foreground">{serviceBooking.serviceAddress}</p>
+            </div>
+            {serviceBooking.scheduledAt && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Scheduled Date & Time</p>
+                <p className="font-medium text-foreground">{new Date(serviceBooking.scheduledAt).toLocaleString()}</p>
+              </div>
+            )}
+            {serviceBooking.buyerNote && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Notes</p>
+                <p className="font-medium text-foreground">{serviceBooking.buyerNote}</p>
+              </div>
+            )}
+          </div>
+        </section>
+        )}
+
+        {/* Delivery Address - Only for products */}
+        {!serviceBooking && (
         <section className="p-4 border-b border-border">
           <h2 className="font-semibold text-foreground mb-3">
             {fulfillmentMethod === 'pickup' ? 'Preferred Drop-off Point' : 'Delivery Address'}
@@ -435,18 +557,19 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
             Save this address
           </button>
         </section>
+        )}
 
-        {/* Payment Method Selection */}
-        <section className="p-4 border-b border-border">
+        {/* Pricing Summary */}
+        <section className="p-4 border-b border-border space-y-4">
           <PaymentMethodSelector selectedMethod={paymentMethod} onSelect={setPaymentMethod} />
 
           {isWalletPayment && (
-            <div className="mt-3 rounded-xl border border-[#E8D7FF] bg-[#F9F5FF] p-3">
+            <div className="rounded-xl border border-[#E8D7FF] bg-[#F9F5FF] p-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#5B21B6] font-medium">Wallet Balance</span>
                 <span className="font-semibold text-[#6C2BD9]">{formatNaira(walletBalance)}</span>
               </div>
-              {deliveryAddress.trim() && (
+              {(deliveryAddress.trim() || serviceBooking) && (
                 <div className="mt-2 space-y-1">
                   <p className={`text-xs ${isWalletInsufficient ? 'text-red-600' : 'text-[#6C2BD9]'}`}>
                     {isWalletInsufficient
@@ -489,32 +612,57 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         <section className="p-4">
           <h2 className="font-semibold text-foreground mb-3">Price Details</h2>
           <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Product Total</span>
-              <span className="font-medium text-foreground">{formatNaira(productTotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{fulfillmentMethod === 'pickup' ? 'Pickup Fee' : 'Delivery Fee'}</span>
-              <span className="font-medium text-foreground">
-                {deliveryAddress.trim() ? formatNaira(deliveryFee) : '--'}
-              </span>
-            </div>
-            <div className="h-px bg-border my-2" />
-            <div className="flex justify-between">
-              <span className="font-semibold text-foreground">Grand Total</span>
-              <span className="font-bold text-primary text-lg">
-                {deliveryAddress.trim() ? formatNaira(grandTotal) : '--'}
-              </span>
-            </div>
+            {serviceBooking ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Service Price</span>
+                  <span className="font-medium text-foreground">{formatNaira(Number(serviceBooking.basePrice || 0))}</span>
+                </div>
+                <div className="h-px bg-border my-2" />
+                <div className="flex justify-between">
+                  <span className="font-semibold text-foreground">Total Amount</span>
+                  <span className="font-bold text-primary text-lg">{formatNaira(Number(serviceBooking.basePrice || 0))}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Product Total</span>
+                  <span className="font-medium text-foreground">{formatNaira(productTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{fulfillmentMethod === 'pickup' ? 'Pickup Fee' : 'Delivery Fee'}</span>
+                  <span className="font-medium text-foreground">
+                    {deliveryAddress.trim() ? formatNaira(deliveryFee) : '--'}
+                  </span>
+                </div>
+                <div className="h-px bg-border my-2" />
+                <div className="flex justify-between">
+                  <span className="font-semibold text-foreground">Grand Total</span>
+                  <span className="font-bold text-primary text-lg">
+                    {deliveryAddress.trim() ? formatNaira(grandTotal) : '--'}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground space-y-1">
             <p className="font-semibold">Why checkout is safe</p>
-            <p>Funds are held in escrow until delivery confirmation.</p>
-            <p>
-              Expected delivery window: {fulfillmentMethod === 'pickup' ? 'Same day pickup arrangement' : deliveryType === 'express' ? '1-2 business days' : '3-5 business days'}.
-            </p>
-            <p>Eligible issues can be escalated from your order details for quick resolution.</p>
+            {serviceBooking ? (
+              <>
+                <p>Funds are held in escrow until service is completed.</p>
+                <p>You can release funds or dispute the service from your bookings.</p>
+              </>
+            ) : (
+              <>
+                <p>Funds are held in escrow until delivery confirmation.</p>
+                <p>
+                  Expected delivery window: {fulfillmentMethod === 'pickup' ? 'Same day pickup arrangement' : deliveryType === 'express' ? '1-2 business days' : '3-5 business days'}.
+                </p>
+                <p>Eligible issues can be escalated from your order details for quick resolution.</p>
+              </>
+            )}
           </div>
         </section>
 

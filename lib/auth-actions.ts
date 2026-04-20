@@ -95,10 +95,11 @@ export async function signupEnhanced(params: {
   role: 'buyer' | 'merchant'
   smedanId?: string
   cacId?: string
+  merchantType?: 'products' | 'services'
 }) {
   try {
     const admin = createClient()
-    const { email, password, name, phone, city, state, role, smedanId, cacId } = params
+    const { email, password, name, phone, city, state, role, smedanId, cacId, merchantType } = params
     const normalizedCity = city?.trim() || null
     const normalizedState = state?.trim() || null
 
@@ -132,6 +133,7 @@ export async function signupEnhanced(params: {
           location: buildMerchantLocation(normalizedCity, normalizedState),
           smedan_id: smedanId || null,
           cac_id: cacId || null,
+          merchant_type: merchantType || 'products',
           token_balance: INITIAL_MERCHANT_TOKENS,
         }
       : {

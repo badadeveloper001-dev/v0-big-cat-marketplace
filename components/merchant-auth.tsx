@@ -80,6 +80,7 @@ export function MerchantAuth({
     phone: user.phone,
     name: user.business_name || user.name,
     role: "merchant" as const,
+    merchantType: user.merchant_type || 'products',
     merchantProfile: {
       business_name: user.business_name || user.name,
       business_description: user.business_description || "",
@@ -98,6 +99,7 @@ export function MerchantAuth({
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string>("")
+  const [merchantType, setMerchantType] = useState<'products' | 'services'>('products')
   const [successMessage, setSuccessMessage] = useState<string>("")
   const [formData, setFormData] = useState({
     businessName: "",
@@ -129,6 +131,7 @@ export function MerchantAuth({
             role: 'merchant',
             smedanId: formData.smedanId,
             cacId: formData.cacId,
+            merchantType: merchantType,
           }
         : {
             email: formData.email,
@@ -432,8 +435,44 @@ export function MerchantAuth({
                     </div>
                   </div>
 
+                  <div className="rounded-xl border border-border/60 bg-secondary/30 p-4 space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">What will you offer?</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Choose whether you want to sell physical products or offer services. This determines your dashboard.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMerchantType('products')}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          merchantType === 'products'
+                            ? 'border-primary bg-primary/10 text-foreground'
+                            : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                        }`}
+                      >
+                        <div className="text-sm font-semibold">📦 Products</div>
+                        <div className="text-xs mt-1">Sell physical items</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setMerchantType('services')}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          merchantType === 'services'
+                            ? 'border-primary bg-primary/10 text-foreground'
+                            : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                        }`}
+                      >
+                        <div className="text-sm font-semibold">🔧 Services</div>
+                        <div className="text-xs mt-1">Offer professional services</div>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">SMEDAN ID</label>
                     <div className="relative">
                       <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                       <input
