@@ -370,13 +370,20 @@ export function MerchantDashboard() {
     return () => window.clearInterval(intervalId)
   }, [user?.userId])
 
-  // Suppress Voiceflow inline prop warning
+    // Suppress known Voiceflow console noise while preserving real errors
   useEffect(() => {
-    const pattern = "Received `true` for a non-boolean attribute `inline`"
+      const suppressedPatterns = [
+        "Received `true` for a non-boolean attribute `inline`",
+        "Socket.io connection failed: timeout",
+      ]
     const originalError = console.error
     const originalWarn = console.warn
     const shouldSuppress = (args: unknown[]) =>
-      args.some((arg) => typeof arg === "string" && arg.includes(pattern))
+        args.some(
+          (arg) =>
+            typeof arg === "string" &&
+            suppressedPatterns.some((pattern) => arg.includes(pattern)),
+        )
     console.error = (...args: any[]) => { if (shouldSuppress(args)) return; originalError(...args) }
     console.warn = (...args: any[]) => { if (shouldSuppress(args)) return; originalWarn(...args) }
     return () => { console.error = originalError; console.warn = originalWarn }
@@ -384,7 +391,7 @@ export function MerchantDashboard() {
 
   // Load Voiceflow script
   useEffect(() => {
-    if (typeof window === "undefined") return
+      if (typeof window === "undefined" || activeTab !== "ai") return
     if (window.__voiceflowMerchantLoaded) {
       setVoiceflowMerchantReady(Boolean(window.voiceflow?.chat?.load))
       return
@@ -402,8 +409,11 @@ export function MerchantDashboard() {
       window.__voiceflowMerchantLoaded = true
       setVoiceflowMerchantReady(true)
     }
+      script.onerror = () => {
+        setVoiceflowMerchantReady(false)
+      }
     document.body.appendChild(script)
-  }, [])
+    }, [activeTab])
 
   // Mount Voiceflow widget when AI tab is active
   useEffect(() => {
@@ -1157,10 +1167,7 @@ export function MerchantDashboard() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <div className="flex items-center gap-2">
-            <Home className="w-4 h-4" />
             Overview
-          </div>
         </button>
         {user?.merchantType === 'products' && (
         <button
@@ -1171,10 +1178,7 @@ export function MerchantDashboard() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4" />
             Products
-          </div>
         </button>
         )}
         {user?.merchantType === 'services' && (
@@ -1186,10 +1190,7 @@ export function MerchantDashboard() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4" />
             Services
-          </div>
         </button>
         )}
         <button
@@ -1200,10 +1201,7 @@ export function MerchantDashboard() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <div className="flex items-center gap-2">
-            <ClipboardList className="w-4 h-4" />
             Orders
-          </div>
         </button>
         <button
           onClick={() => setActiveTab("messages")}
@@ -1213,10 +1211,7 @@ export function MerchantDashboard() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4" />
             Messages
-          </div>
         </button>
         <button
           onClick={() => setActiveTab("ai")}
@@ -1226,10 +1221,7 @@ export function MerchantDashboard() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4" />
             AI
-          </div>
         </button>
       </div>
 

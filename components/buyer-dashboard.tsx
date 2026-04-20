@@ -34,7 +34,6 @@ import {
   Zap,
   X,
   LogOut,
-  ClipboardList,
   Loader2,
 } from "lucide-react"
 import { useState, useEffect } from "react"
@@ -255,15 +254,22 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     loadUnreadMessages()
   }, [activeTab, showChat, user?.userId])
 
-  useEffect(() => {
-    // Voiceflow currently triggers a known React warning for `inline`.
-    // Filter only that message so genuine warnings still surface.
-    const pattern = "Received `true` for a non-boolean attribute `inline`"
+    useEffect(() => {
+      // Voiceflow currently emits known benign warnings/errors in some environments.
+      // Filter only specific messages so genuine warnings still surface.
+      const suppressedPatterns = [
+        "Received `true` for a non-boolean attribute `inline`",
+        "Socket.io connection failed: timeout",
+      ]
     const originalError = console.error
     const originalWarn = console.warn
 
     const shouldSuppress = (args: unknown[]) =>
-      args.some((arg) => typeof arg === "string" && arg.includes(pattern))
+        args.some(
+          (arg) =>
+            typeof arg === "string" &&
+            suppressedPatterns.some((pattern) => arg.includes(pattern)),
+        )
 
     console.error = (...args: any[]) => {
       if (shouldSuppress(args)) return
@@ -281,8 +287,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     }
   }, [])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
+    useEffect(() => {
+      if (typeof window === "undefined" || !aiFullscreenOpen) return
 
     if (window.__voiceflowLoaded) {
       setVoiceflowReady(Boolean(window.voiceflow?.chat?.load))
@@ -303,9 +309,12 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
       window.__voiceflowLoaded = true
       setVoiceflowReady(true)
     }
+      script.onerror = () => {
+        setVoiceflowReady(false)
+      }
 
     document.body.appendChild(script)
-  }, [])
+    }, [aiFullscreenOpen])
 
   useEffect(() => {
     if (!aiFullscreenOpen || !voiceflowReady) return
@@ -1071,19 +1080,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               </button>
             )}
             <button 
-              onClick={() => setActiveTab("wishlist")}
-              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Wishlist"
-              title="Wishlist"
-            >
-              <Heart className="w-5 h-5" />
-              {getWishlistCount() > 0 && (
-                <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-rose-500 text-white rounded-full">
-                  {getWishlistCount()}
-                </span>
-              )}
-            </button>
-            <button 
               onClick={() => setShowNotifications(true)}
               className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Notifications"
@@ -1092,50 +1088,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               <Bell className="w-5 h-5" />
               {notificationCount > 0 && (
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
-              )}
-            </button>
-            <button 
-              onClick={() => setShowOrders(true)}
-              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="My Orders"
-              title="My Orders"
-            >
-              <ClipboardList className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => setShowProducts(true)}
-              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Products"
-              title="Browse products"
-            >
-              <Package className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => {
-                if (!user) {
-                  setShowAuthPrompt(true)
-                  return
-                }
-                  if (guardSuspendedAction()) return
-                setShowServices(true)
-              }}
-              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Services"
-              title="Book services"
-            >
-              <Zap className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => setShowCart(true)}
-              className="relative p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Shopping cart"
-              title="View cart"
-            >
-              <ShoppingBag className="w-5 h-5" />
-              {cartItems.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full">
-                  {getCartItemCount()}
-                </span>
               )}
             </button>
           </div>
