@@ -12,6 +12,7 @@ type AssistantMessage = {
   text: string
   products?: Array<{ id: string; name: string; price: number; vendor_name: string }>
   vendors?: Array<{ id: string; name: string; category: string; location: string }>
+  services?: Array<{ id: string; name: string; price: number; vendor: string; location: string }>
 }
 
 type SpeechRecognitionInstance = {
@@ -92,9 +93,11 @@ function safeLocale(value: AssistantLanguage) {
 export function NigeriaAiAssistant({
   assistantMode,
   className,
+  userLocation,
 }: {
   assistantMode: AssistantMode
   className?: string
+  userLocation?: string
 }) {
   const [language, setLanguage] = useState<AssistantLanguage>("auto")
   const [messages, setMessages] = useState<AssistantMessage[]>([
@@ -186,6 +189,10 @@ export function NigeriaAiAssistant({
     setMessages((prev) => [...prev, userMessage])
     setInput("")
 
+    const recentMessages = [...messages, userMessage]
+      .slice(-8)
+      .map((item) => item.text)
+
     try {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
@@ -194,6 +201,8 @@ export function NigeriaAiAssistant({
           message,
           language,
           assistantMode,
+          location: userLocation || "",
+          recentMessages,
         }),
       })
 
@@ -219,6 +228,7 @@ export function NigeriaAiAssistant({
           text: String(result.reply || "I am here to help."),
             products: Array.isArray(result?.data?.products) ? result.data.products.slice(0, 4) : [],
             vendors: Array.isArray(result?.data?.vendors) ? result.data.vendors.slice(0, 4) : [],
+            services: Array.isArray(result?.data?.services) ? result.data.services.slice(0, 4) : [],
         },
       ])
 
@@ -489,7 +499,7 @@ export function NigeriaAiAssistant({
           >
             {message.text}
 
-              {message.role === "assistant" && (message.products?.length || message.vendors?.length) ? (
+              {message.role === "assistant" && (message.products?.length || message.vendors?.length || message.services?.length) ? (
                 <div className="mt-2 space-y-2">
                   {message.products?.length ? (
                     <div>
@@ -513,6 +523,20 @@ export function NigeriaAiAssistant({
                           <div key={vendor.id} className="rounded-lg bg-secondary/60 px-2 py-1 text-xs">
                             <span className="font-semibold text-foreground">{vendor.name}</span>
                             <span className="text-muted-foreground"> - {vendor.category} - {vendor.location}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {message.services?.length ? (
+                    <div>
+                      <p className="text-[11px] font-semibold text-muted-foreground mb-1">Found services</p>
+                      <div className="space-y-1">
+                        {message.services.map((service) => (
+                          <div key={service.id} className="rounded-lg bg-secondary/60 px-2 py-1 text-xs">
+                            <span className="font-semibold text-foreground">{service.name}</span>
+                            <span className="text-muted-foreground"> - NGN {Number(service.price || 0).toLocaleString()} - {service.vendor} - {service.location}</span>
                           </div>
                         ))}
                       </div>

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 
-export type SearchType = 'products' | 'vendors' | 'both'
+export type SearchType = 'products' | 'vendors' | 'services' | 'both'
 export type AssistantMode = 'buyer' | 'merchant'
 export type AssistantLanguage = 'auto' | 'en' | 'pcm' | 'yo' | 'ig' | 'ha'
 export type ConversationalIntent = 'greeting' | 'wellbeing' | 'thanks' | 'identity' | 'help' | 'goodbye'
@@ -11,7 +11,56 @@ export type SupportIntent =
   | 'order_tracking'
   | 'messages_chat'
   | 'merchant_setup'
+  | 'payment_guide'
+  | 'logistics_guide'
+  | 'platform_safety'
   | 'report_issue'
+
+export type MarketplaceIntentType = 'product' | 'service' | 'vendor'
+
+type ProductSearchResult = {
+  id: string
+  name: string
+  description: string
+  category: string
+  price: number
+  stock: number
+  image_url: string | null
+  merchant_id: string
+  vendor_name: string
+  vendor_location: string
+}
+
+type VendorSearchResult = {
+  id: string
+  name: string
+  category: string
+  location: string
+  description: string
+  avatar_url: string | null
+}
+
+type ServiceSearchResult = {
+  id: string
+  name: string
+  description: string
+  category: string
+  price: number
+  vendor: string
+  location: string
+}
+
+export type StructuredAiResponse = {
+  type: MarketplaceIntentType
+  query: string
+  location: string
+  results: Array<{
+    name: string
+    price: string
+    vendor: string
+    location: string
+  }>
+}
 
 const STOP_WORDS = new Set([
   'i', 'me', 'my', 'the', 'a', 'an', 'of', 'for', 'to', 'in', 'at', 'on', 'with', 'and', 'or', 'is', 'are',
@@ -57,13 +106,41 @@ function detectSearchType(query: string): SearchType {
   const productKeywords = [
     'product', 'buy', 'price', 'cheap', 'order', 'item', 'need', 'find', 'kaya', 'ngwa', 'oja',
   ]
+  const serviceKeywords = [
+    'service', 'repair', 'plumber', 'electrician', 'tailor', 'cleaner', 'mechanic', 'salon', 'barber', 'technician',
+  ]
 
   const hasVendor = vendorKeywords.some((keyword) => q.includes(keyword))
   const hasProduct = productKeywords.some((keyword) => q.includes(keyword))
+  const hasService = serviceKeywords.some((keyword) => q.includes(keyword))
 
+  if (hasService && !hasProduct && !hasVendor) return 'services'
   if (hasVendor && !hasProduct) return 'vendors'
   if (hasProduct && !hasVendor) return 'products'
   return 'both'
+}
+
+export function detectMarketplaceIntentType(query: string): MarketplaceIntentType {
+  const q = String(query || '').toLowerCase()
+  const serviceKeywords = [
+    'service', 'repair', 'plumber', 'electrician', 'tailor', 'cleaner', 'mechanic', 'salon', 'barber', 'technician',
+  ]
+  const vendorKeywords = ['vendor', 'seller', 'merchant', 'shop', 'store', 'vendor near', 'find vendor']
+
+  if (serviceKeywords.some((keyword) => q.includes(keyword))) return 'service'
+  if (vendorKeywords.some((keyword) => q.includes(keyword))) return 'vendor'
+  return 'product'
+}
+
+export function detectContactBypassAttempt(query: string) {
+  const q = String(query || '').toLowerCase()
+  const patterns = [
+    'phone number', 'whatsapp', 'telegram', 'dm me', 'call me', 'contact me', '@gmail', '@yahoo',
+  ]
+
+  const hasPattern = patterns.some((pattern) => q.includes(pattern))
+  const hasLongDigits = /\d{7,}/.test(q)
+  return hasPattern || hasLongDigits
 }
 
 function tokenizeQuery(query: string) {
@@ -282,6 +359,11 @@ export function detectSupportIntent(query: string): SupportIntent | null {
   ].some((pattern) => q.includes(pattern))
   if (isCheckout) return 'checkout_payment'
 
+  const isPaymentGuide = [
+    'how payment works', 'how to pay', 'wallet payment', 'is payment safe', 'how escrow works',
+  ].some((pattern) => q.includes(pattern))
+  if (isPaymentGuide) return 'payment_guide'
+
   const isOrder = [
     'where is my order', 'track order', 'delivery delay', 'order status', 'order not delivered',
   ].some((pattern) => q.includes(pattern))
@@ -291,6 +373,16 @@ export function detectSupportIntent(query: string): SupportIntent | null {
     'chat not working', 'message not sending', 'cannot message', 'inbox issue', 'conversation issue',
   ].some((pattern) => q.includes(pattern))
   if (isMessages) return 'messages_chat'
+
+  const isLogistics = [
+    'delivery', 'shipping', 'logistics', 'delivery fee', 'track delivery', 'dispatch',
+  ].some((pattern) => q.includes(pattern))
+  if (isLogistics) return 'logistics_guide'
+
+  const isSafety = [
+    'contact details', 'outside platform', 'pay outside', 'is it safe', 'avoid scam',
+  ].some((pattern) => q.includes(pattern))
+  if (isSafety) return 'platform_safety'
 
   const isMerchantSetup = [
     'merchant setup', 'set up my store', 'create listing', 'product upload', 'service listing', 'merchant profile',
@@ -329,6 +421,12 @@ export function buildSupportReply(params: {
         mode === 'merchant'
           ? 'To set up your merchant profile: complete business details, choose products or services, add clear listings with pricing, then publish and monitor incoming orders/messages.'
           : 'To become a merchant: sign up as merchant, complete business profile, choose products or services, add listings, and start receiving buyer orders.',
+      payment_guide:
+        'Payment guidance: wallet payment is available, your funds are held in escrow, and payment is released only after successful delivery/service completion.',
+      logistics_guide:
+        'Delivery guidance: logistics handles shipment, fees depend on location and package weight, and you can track order status until delivery.',
+      platform_safety:
+        'For your safety, all transactions should remain within the platform.',
       report_issue:
         'I can help troubleshoot now. Tell me exactly what happened, what page you were on, and any error message. I will guide you step-by-step.',
     },
@@ -347,6 +445,12 @@ export function buildSupportReply(params: {
         mode === 'merchant'
           ? 'To setup your merchant page: complete business details, choose products/services, add clear listings with price, then publish am.'
           : 'If you wan become merchant, register as merchant, complete profile, add listings, and start receive orders.',
+      payment_guide:
+        'Payment guide: wallet dey available, escrow go hold money safe, payment go release only after delivery or service complete.',
+      logistics_guide:
+        'Delivery guide: logistics system dey handle am, fee depend on location and package weight, and you fit track am till delivery.',
+      platform_safety:
+        'For your safety, all transactions should remain within the platform.',
       report_issue:
         'I fit help you solve am now. Tell me wetin happen, which page you dey, and any error message wey you see.',
     },
@@ -363,6 +467,12 @@ export function buildSupportReply(params: {
         'Ti ifiranse ko ba n lọ, ṣayẹwo intanẹẹti, tun ṣii ibaraẹnisọrọ, ki o tun fi ranṣẹ.',
       merchant_setup:
         'Lati setup onisowo: pari alaye iṣowo, yan ọja tabi ise, fi listing pẹlu owo to ye han, ki o tẹjade.',
+      payment_guide:
+        'Itosona isanwo: owo wallet wa, escrow n daabo bo owo, a o si tu isanwo sile leyin ifijiṣẹ tabi ise to pari.',
+      logistics_guide:
+        'Itosona ifijiṣẹ: eto logistics lo n ṣakoso ifijiṣẹ, owo da lori ipo ati iwuwo package, o si le tọpa titi de opin.',
+      platform_safety:
+        'For your safety, all transactions should remain within the platform.',
       report_issue:
         'Mo le ran o lowo bayi. So pato ohun to sele, oju-iwe ti o wa, ati ifiranse aṣiṣe to ri.',
     },
@@ -379,6 +489,12 @@ export function buildSupportReply(params: {
         'Ọ bụrụ na message anaghị eje, lelee intaneti, mepee chat ọzọ, wee zipu ọzọ.',
       merchant_setup:
         'Maka setup merchant: mezue profile azụmahịa, họrọ ngwaahịa ma ọ bụ ọrụ, tinye listing na ọnụahịa ziri ezi.',
+      payment_guide:
+        'Nduzi ịkwụ ụgwọ: wallet dị, escrow na-echekwa ego, a na-ewepụta ego naanị mgbe e nyefere ihe ma ọ bụ ọrụ gwụchara.',
+      logistics_guide:
+        'Nduzi nnyefe: usoro logistics na-ahụ nnyefe, ego dabere na ebe na ibu package, ma ị nwere ike iso tracking ruo ngwụcha.',
+      platform_safety:
+        'For your safety, all transactions should remain within the platform.',
       report_issue:
         'Enwere m ike inyere gị ugbu a. Gwa m ihe kpọmkwem mere, peeji ị nọ, na ozi njehie ọ bụla ị hụrụ.',
     },
@@ -395,6 +511,12 @@ export function buildSupportReply(params: {
         'Idan chat baya aiki, duba intanet, sake bude conversation, sannan ka sake turawa.',
       merchant_setup:
         'Don setup merchant: cika bayanan kasuwanci, zabi kaya ko service, saka listing mai farashi a sarari.',
+      payment_guide:
+        'Jagorar biya: wallet payment akwai, escrow na kare kudinka, kuma ana sakin biya ne bayan isarwa ko kammala aiki.',
+      logistics_guide:
+        'Jagorar isarwa: tsarin logistics ne ke kula da delivery, kudin ya danganta da wuri da nauyi, kuma ana iya tracking har zuwa karshe.',
+      platform_safety:
+        'For your safety, all transactions should remain within the platform.',
       report_issue:
         'Zan taimaka yanzu. Ka fada min abin da ya faru, shafin da kake ciki, da duk wani kuskure da ka gani.',
     },
@@ -408,12 +530,14 @@ export async function searchMarketplace(params: {
   query: string
   type?: SearchType
   limit?: number
+  location?: string
 }) {
   const supabase = createClient()
   const query = params.query.trim()
   const type = params.type || detectSearchType(query)
   const limit = Math.max(1, Math.min(params.limit || 8, 20))
   const queryVariants = buildQueryVariants(query)
+  const preferredLocation = String(params.location || '').trim().toLowerCase()
 
   if (!query) {
     return {
@@ -425,7 +549,7 @@ export async function searchMarketplace(params: {
     }
   }
 
-  const runProductSearch = async (searchTerm: string) => {
+  const runProductSearch = async (searchTerm: string): Promise<ProductSearchResult[]> => {
     const safeQuery = escapeLike(searchTerm)
     const pattern = `%${safeQuery}%`
     const tokens = tokenizeQuery(searchTerm)
@@ -464,7 +588,7 @@ export async function searchMarketplace(params: {
     }))
   }
 
-  const runVendorSearch = async (searchTerm: string) => {
+  const runVendorSearch = async (searchTerm: string): Promise<VendorSearchResult[]> => {
     const safeQuery = escapeLike(searchTerm)
     const pattern = `%${safeQuery}%`
     const tokens = tokenizeQuery(searchTerm)
@@ -503,7 +627,45 @@ export async function searchMarketplace(params: {
     }))
   }
 
-  const runProductFallback = async () => {
+  const runServiceSearch = async (searchTerm: string): Promise<ServiceSearchResult[]> => {
+    const safeQuery = escapeLike(searchTerm)
+    const pattern = `%${safeQuery}%`
+    const tokens = tokenizeQuery(searchTerm)
+
+    let request = supabase
+      .from('service_listings')
+      .select('id, title, description, category, base_price, service_city, service_state, merchant_id, merchant_profiles:auth_users!merchant_id(business_name, name, location)')
+      .eq('is_active', true)
+      .limit(limit)
+
+    if (tokens.length >= 2) {
+      const tokenOr = buildTokenOrPattern(tokens, ['title', 'description', 'category', 'service_city', 'service_state'])
+      request = request.or(tokenOr)
+    } else {
+      request = request.or(`title.ilike.${pattern},description.ilike.${pattern},category.ilike.${pattern},service_city.ilike.${pattern},service_state.ilike.${pattern}`)
+    }
+
+    const { data, error } = await request
+    if (error) throw error
+
+    return (data || []).map((service: any) => ({
+      id: service.id,
+      name: service.title || 'Service',
+      description: service.description || '',
+      category: service.category || 'General Service',
+      price: Number(service.base_price || 0),
+      vendor:
+        service?.merchant_profiles?.business_name ||
+        service?.merchant_profiles?.name ||
+        'Unknown vendor',
+      location:
+        [service.service_city, service.service_state].filter(Boolean).join(', ') ||
+        service?.merchant_profiles?.location ||
+        'Nigeria',
+    }))
+  }
+
+  const runProductFallback = async (): Promise<ProductSearchResult[]> => {
     const { data, error } = await supabase
       .from('products')
       .select('id, name, description, category, price, stock, image_url, merchant_id, merchant_profiles:auth_users!merchant_id(business_name, name, location, avatar_url)')
@@ -529,7 +691,7 @@ export async function searchMarketplace(params: {
     }))
   }
 
-    const runVendorFallback = async () => {
+  const runVendorFallback = async (): Promise<VendorSearchResult[]> => {
     const { data, error } = await supabase
       .from('auth_users')
       .select('id, business_name, name, business_category, location, business_description, avatar_url, setup_completed')
@@ -549,15 +711,67 @@ export async function searchMarketplace(params: {
     }))
   }
 
+  const runServiceFallback = async (): Promise<ServiceSearchResult[]> => {
+    const { data, error } = await supabase
+      .from('service_listings')
+      .select('id, title, description, category, base_price, service_city, service_state, merchant_id, merchant_profiles:auth_users!merchant_id(business_name, name, location)')
+      .eq('is_active', true)
+      .limit(limit)
+
+    if (error) throw error
+
+    return (data || []).map((service: any) => ({
+      id: service.id,
+      name: service.title || 'Service',
+      description: service.description || '',
+      category: service.category || 'General Service',
+      price: Number(service.base_price || 0),
+      vendor:
+        service?.merchant_profiles?.business_name ||
+        service?.merchant_profiles?.name ||
+        'Unknown vendor',
+      location:
+        [service.service_city, service.service_state].filter(Boolean).join(', ') ||
+        service?.merchant_profiles?.location ||
+        'Nigeria',
+    }))
+  }
+
+  const prioritizeByLocation = <T extends { location?: string; vendor_location?: string }>(rows: T[]) => {
+    if (!preferredLocation) return rows
+    const preferred: T[] = []
+    const other: T[] = []
+
+    rows.forEach((row) => {
+      const candidate = String(row.location || row.vendor_location || '').toLowerCase()
+      if (candidate && candidate.includes(preferredLocation)) {
+        preferred.push(row)
+      } else {
+        other.push(row)
+      }
+    })
+
+    return [...preferred, ...other]
+  }
+
   try {
-      let products: Array<any> = []
-      let vendors: Array<any> = []
+      let products: ProductSearchResult[] = []
+      let vendors: VendorSearchResult[] = []
+      let services: ServiceSearchResult[] = []
 
       if (type !== 'vendors') {
         for (const variant of queryVariants) {
           const found = await runProductSearch(variant)
           products = mergeUniqueById(products, found, limit)
           if (products.length >= limit) break
+        }
+      }
+
+      if (type !== 'products' && type !== 'vendors') {
+        for (const variant of queryVariants) {
+          const found = await runServiceSearch(variant)
+          services = mergeUniqueById(services, found, limit)
+          if (services.length >= limit) break
         }
       }
 
@@ -577,11 +791,20 @@ export async function searchMarketplace(params: {
         vendors = await runVendorFallback()
       }
 
+      if (type !== 'products' && type !== 'vendors' && services.length === 0) {
+        services = await runServiceFallback()
+      }
+
+      products = prioritizeByLocation(products)
+      vendors = prioritizeByLocation(vendors)
+      services = prioritizeByLocation(services)
+
     return {
       success: true,
       type,
       products,
       vendors,
+      services,
     }
   } catch (error: any) {
     return {
@@ -589,6 +812,7 @@ export async function searchMarketplace(params: {
       error: error.message || 'Search failed',
       products: [],
       vendors: [],
+      services: [],
       type,
     }
   }
@@ -598,50 +822,71 @@ export function buildAiSearchReply(params: {
   query: string
   products: Array<{ name: string; price: number; vendor_name: string }>
   vendors: Array<{ name: string; category: string; location: string }>
+  services?: Array<{ name: string; price: number; vendor: string; location: string }>
+  userLocation?: string
+  intentType?: MarketplaceIntentType
   language?: string
   assistantMode?: AssistantMode
 }) {
   const { query, products, vendors } = params
+  const services = params.services || []
+  const userLocation = String(params.userLocation || '').trim()
+  const intentType: MarketplaceIntentType = params.intentType || detectMarketplaceIntentType(query)
   const language = String(params.language || 'auto').toLowerCase()
   const assistantMode: AssistantMode = params.assistantMode === 'merchant' ? 'merchant' : 'buyer'
 
   const localized = {
     en: {
       noResult: `I could not find a direct match for "${query}" yet. Try a broader term like a category or location in Nigeria.`,
+      noResultAlt: 'No exact match found, but here are similar options you might like.',
       topProducts: 'Top products',
+      topServices: 'Top services',
       topVendors: 'Top vendors',
+      nearbyPrefix: 'near you',
       merchantTip:
         'Merchant tip: refresh your product/service title, add clear pricing, and post a short promo to improve conversion.',
       buyerTip: 'Buyer tip: compare at least two vendors, then check location and reviews before placing your order.',
     },
     pcm: {
       noResult: `I no see exact result for "${query}" yet. Try broader word like category or location for Naija.`,
+      noResultAlt: 'No exact match found, but here are similar options you might like.',
       topProducts: 'Top products wey show',
+      topServices: 'Top services wey show',
       topVendors: 'Top vendors wey show',
+      nearbyPrefix: 'close to your side',
       merchantTip:
         'Merchant tip: update your product/service title, put clear price, and post short promo make conversion improve.',
       buyerTip: 'Buyer tip: compare at least two vendors, check location and review before you place order.',
     },
     yo: {
       noResult: `Mi o ri esi to pe fun "${query}" sibẹ. E gbiyanju oro to gbooro bii eya ọja tabi ipo ni Naijiria.`,
+      noResultAlt: 'No exact match found, but here are similar options you might like.',
       topProducts: 'Awon ọja to ga ju',
+      topServices: 'Awon ise to ga ju',
       topVendors: 'Awon onisowo to ga ju',
+      nearbyPrefix: 'to sunmo ipo re',
       merchantTip:
         'Imoran onisowo: se atunse oruko ọja/tabi ise, fi owo to ye han, ki o si fi ipolowo kukuru kun.',
       buyerTip: 'Imoran olura: fiwera o kere ju onisowo meji, ki o wo ipo ati ayewo ki o to paṣẹ.',
     },
     ig: {
       noResult: `Enwetaghi m nsonaazu ziri ezi maka "${query}" ugbu a. Nwalee okwu sara mbara dika udi ngwaahịa ma obu ebe.`,
+      noResultAlt: 'No exact match found, but here are similar options you might like.',
       topProducts: 'Ngwaahịa kacha elu',
+      topServices: 'Ọrụ kacha elu',
       topVendors: 'Ndi na-ere ahia kacha elu',
+      nearbyPrefix: 'nso gi',
       merchantTip:
         'Ndumodu maka onye ahia: melite aha ngwaahịa/oru gi, tinye ego doro anya, ma tinye obere mgbasa ozi.',
       buyerTip: 'Ndumodu maka onye na-azu: tulee ndi na-ere ahia abuo ma obu karie, nyochaa ebe na reviews tupu izu.',
     },
     ha: {
       noResult: `Ban samu sakamako kai tsaye ga "${query}" ba yanzu. Gwada kalma mai fadi kamar rukuni ko wuri a Najeriya.`,
+      noResultAlt: 'No exact match found, but here are similar options you might like.',
       topProducts: 'Manyan kayayyaki',
+      topServices: 'Manyan ayyuka',
       topVendors: 'Manyan dillalai',
+      nearbyPrefix: 'kusa da kai',
       merchantTip:
         'Shawara ga dan kasuwa: sabunta taken kaya/aiki, saka farashi a fili, sannan ka saka karamin talla.',
       buyerTip: 'Shawara ga mai siya: kwatanta dillalai akalla biyu, duba wuri da sharhi kafin oda.',
@@ -650,8 +895,12 @@ export function buildAiSearchReply(params: {
 
   const labels = localized[language as keyof typeof localized] || localized.en
 
-  if (products.length === 0 && vendors.length === 0) {
+  if (products.length === 0 && vendors.length === 0 && services.length === 0) {
     return labels.noResult
+  }
+
+  if (intentType === 'service' && services.length === 0 && (products.length > 0 || vendors.length > 0)) {
+    return labels.noResultAlt
   }
 
   const parts: string[] = []
@@ -662,6 +911,13 @@ export function buildAiSearchReply(params: {
     parts.push(`${labels.topProducts}: ${topProducts}.`)
   }
 
+  if (services.length > 0) {
+    const topServices = services.slice(0, 3)
+      .map((s) => `${s.name} (${s.vendor}, ${s.location}) - NGN ${s.price.toLocaleString()}`)
+      .join('; ')
+    parts.push(`${labels.topServices}: ${topServices}.`)
+  }
+
   if (vendors.length > 0) {
     const topVendors = vendors.slice(0, 3)
       .map((v) => `${v.name} (${v.category}, ${v.location})`)
@@ -669,7 +925,62 @@ export function buildAiSearchReply(params: {
     parts.push(`${labels.topVendors}: ${topVendors}.`)
   }
 
+  if (userLocation) {
+    parts.push(`Here are options ${labels.nearbyPrefix}: ${userLocation}.`)
+  }
+
   parts.push(assistantMode === 'merchant' ? labels.merchantTip : labels.buyerTip)
 
   return parts.join(' ')
+}
+
+export function buildStructuredMarketplaceResponse(params: {
+  intentType: MarketplaceIntentType
+  query: string
+  location?: string
+  products: ProductSearchResult[]
+  services: ServiceSearchResult[]
+  vendors: VendorSearchResult[]
+}): StructuredAiResponse {
+  const location = String(params.location || 'Unknown location')
+
+  if (params.intentType === 'service') {
+    return {
+      type: 'service',
+      query: params.query,
+      location,
+      results: params.services.slice(0, 6).map((service) => ({
+        name: service.name,
+        price: service.price ? `NGN ${service.price.toLocaleString()}` : 'Not specified',
+        vendor: service.vendor,
+        location: service.location,
+      })),
+    }
+  }
+
+  if (params.intentType === 'vendor') {
+    return {
+      type: 'vendor',
+      query: params.query,
+      location,
+      results: params.vendors.slice(0, 6).map((vendor) => ({
+        name: vendor.name,
+        price: 'N/A',
+        vendor: vendor.name,
+        location: vendor.location,
+      })),
+    }
+  }
+
+  return {
+    type: 'product',
+    query: params.query,
+    location,
+    results: params.products.slice(0, 6).map((product) => ({
+      name: product.name,
+      price: `NGN ${product.price.toLocaleString()}`,
+      vendor: product.vendor_name,
+      location: product.vendor_location,
+    })),
+  }
 }

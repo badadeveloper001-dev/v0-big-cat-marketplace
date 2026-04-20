@@ -1604,7 +1604,11 @@ export function MerchantDashboard() {
           <ChatInterface />
         ) : activeTab === "ai" ? (
           <div className="h-full" style={{ minHeight: "calc(100vh - 180px)" }}>
-            <NigeriaAiAssistant assistantMode="merchant" className="h-full" />
+            <NigeriaAiAssistant
+              assistantMode="merchant"
+              className="h-full"
+              userLocation={String(user?.location || [user?.city, user?.state].filter(Boolean).join(', '))}
+            />
           </div>
         ) : activeTab === "analytics" ? (
           <div className="px-4 py-6">

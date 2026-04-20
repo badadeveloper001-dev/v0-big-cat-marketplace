@@ -1458,7 +1458,11 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             </button>
           </div>
             <div className="h-full w-full pt-14">
-              <NigeriaAiAssistant assistantMode="buyer" className="h-full" />
+              <NigeriaAiAssistant
+                assistantMode="buyer"
+                className="h-full"
+                userLocation={buyerLocationLabel || user?.location || ""}
+              />
             </div>
         </div>
       )}

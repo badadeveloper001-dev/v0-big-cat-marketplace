@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   buildAiSearchReply,
   buildConversationalReply,
+  buildStructuredMarketplaceResponse,
   buildSupportReply,
+  detectContactBypassAttempt,
   detectConversationalIntent,
+  detectMarketplaceIntentType,
   detectReplyLanguage,
   detectSupportIntent,
   searchMarketplace,
@@ -15,10 +18,37 @@ export async function POST(request: NextRequest) {
     const message = String(body?.message || '').trim()
     const language = String(body?.language || 'auto')
     const assistantMode = body?.assistantMode === 'merchant' ? 'merchant' : 'buyer'
+    const userLocation = String(body?.location || '').trim()
+    const recentMessages = Array.isArray(body?.recentMessages)
+      ? body.recentMessages.filter((item: unknown) => typeof item === 'string').slice(-8)
+      : []
     const replyLanguage = detectReplyLanguage({ message, preferredLanguage: language })
+    const intentType = detectMarketplaceIntentType(message)
+
+    const emptyStructured = {
+      type: intentType,
+      query: message,
+      location: userLocation || 'Unknown location',
+      results: [],
+    }
 
     if (!message) {
       return NextResponse.json({ success: false, error: 'Message is required' }, { status: 400 })
+    }
+
+    if (detectContactBypassAttempt(message)) {
+      return NextResponse.json({
+        success: true,
+        reply:
+          'For your safety, all transactions should remain within the platform. I can still help you find trusted products, services, or verified vendors here.',
+        data: {
+          products: [],
+          vendors: [],
+          services: [],
+        },
+        structured: emptyStructured,
+        replyLanguage,
+      })
     }
 
     const supportIntent = detectSupportIntent(message)
@@ -33,7 +63,9 @@ export async function POST(request: NextRequest) {
         data: {
           products: [],
           vendors: [],
+          services: [],
         },
+        structured: emptyStructured,
         replyLanguage,
       })
     }
@@ -50,15 +82,25 @@ export async function POST(request: NextRequest) {
         data: {
           products: [],
           vendors: [],
+          services: [],
         },
+        structured: emptyStructured,
         replyLanguage,
       })
     }
 
+    const contextualQuery = [
+      ...recentMessages,
+      message,
+    ]
+      .join(' ')
+      .trim()
+
     const result = await searchMarketplace({
-      query: message,
+      query: contextualQuery || message,
       type: 'both',
       limit: 8,
+      location: userLocation,
     })
 
     if (!result.success) {
@@ -69,8 +111,20 @@ export async function POST(request: NextRequest) {
       query: message,
       products: result.products,
       vendors: result.vendors,
+      services: result.services,
+      userLocation,
+      intentType,
       language: replyLanguage,
       assistantMode,
+    })
+
+    const structured = buildStructuredMarketplaceResponse({
+      intentType,
+      query: message,
+      location: userLocation,
+      products: result.products,
+      services: result.services,
+      vendors: result.vendors,
     })
 
     return NextResponse.json({
@@ -79,8 +133,10 @@ export async function POST(request: NextRequest) {
       data: {
         products: result.products,
         vendors: result.vendors,
+        services: result.services,
       },
-        replyLanguage,
+      structured,
+      replyLanguage,
     })
   } catch (error: any) {
     return NextResponse.json(
