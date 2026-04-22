@@ -74,6 +74,7 @@ export function toPublicProfile(profile: Record<string, any> | null | undefined)
     business_name: profile.business_name,
     business_description: profile.business_description,
     business_category: profile.business_category,
+    merchant_type: profile.merchant_type,
     city: profile.city,
     state: profile.state,
     location: profile.location,

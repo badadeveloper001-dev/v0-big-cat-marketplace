@@ -157,8 +157,10 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
             ...user,
             phone: result.data.phone || user.phone,
             name: result.data.full_name || result.data.name || result.data.business_name || user.name,
+            merchantType: result.data.merchant_type || user.merchantType || user.merchantProfile?.merchant_type || 'products',
             merchantProfile: {
               ...user.merchantProfile,
+              merchant_type: result.data.merchant_type || user.merchantProfile?.merchant_type || user.merchantType || 'products',
               business_name: result.data.business_name || user.merchantProfile?.business_name,
               business_description: result.data.business_description || user.merchantProfile?.business_description,
               business_category: result.data.business_category || user.merchantProfile?.business_category,

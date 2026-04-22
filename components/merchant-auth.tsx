@@ -82,6 +82,7 @@ export function MerchantAuth({
     role: "merchant" as const,
     merchantType: user.merchant_type || 'products',
     merchantProfile: {
+      merchant_type: user.merchant_type || 'products',
       business_name: user.business_name || user.name,
       business_description: user.business_description || "",
       business_category: user.business_category || "",

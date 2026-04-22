@@ -110,6 +110,19 @@ export function MerchantDashboard() {
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [showNavMenu, setShowNavMenu] = useState(false)
 
+  const merchantKind = user?.merchantType || user?.merchantProfile?.merchant_type || 'products'
+  const isServiceMerchant = merchantKind === 'services'
+
+  useEffect(() => {
+    if (isServiceMerchant && activeTab === 'products') {
+      setActiveTab('services')
+    }
+
+    if (!isServiceMerchant && activeTab === 'services') {
+      setActiveTab('products')
+    }
+  }, [activeTab, isServiceMerchant])
+
   const getTodoStorageKey = (merchantId: string) => `merchant_todos_${merchantId}`
   const getNotificationStorageKey = (merchantId: string) => `app_notifications_merchant_${merchantId}`
 
@@ -678,7 +691,7 @@ export function MerchantDashboard() {
   }
 
   const quickActions = [
-    ...(user?.merchantType === 'services' 
+    ...(isServiceMerchant 
       ? [{ label: "Add Service", icon: Plus, primary: true, action: () => setActiveTab("services") }]
       : [{ label: "Add Product", icon: Plus, primary: true, action: () => setActiveTab("products") }]
     ),
@@ -688,7 +701,9 @@ export function MerchantDashboard() {
   ]
 
   const aiInsights = [
-    "Build your store by adding quality products with accurate descriptions.",
+    isServiceMerchant
+      ? "Build your service catalog with clear offerings, turnaround times, and pricing."
+      : "Build your store by adding quality products with accurate descriptions.",
     "Respond quickly to customer messages to build trust and increase sales.",
     "Competitive pricing and fast delivery help increase your sales.",
   ]
@@ -726,7 +741,7 @@ export function MerchantDashboard() {
       cta: 'Open Settings',
       action: () => setShowSettings(true),
     },
-    user?.merchantType === 'services'
+    isServiceMerchant
       ? {
           label: 'Add your first service',
           done: allProducts.length > 0,
@@ -739,7 +754,7 @@ export function MerchantDashboard() {
           cta: 'Add Product',
           action: () => setActiveTab('products'),
         },
-    user?.merchantType === 'services'
+    isServiceMerchant
       ? {
           label: 'Set service pricing',
           done: allProducts.length > 0 && allProducts.every((item) => Number(item?.base_price || 0) > 0),
@@ -1099,7 +1114,7 @@ export function MerchantDashboard() {
         >
             Overview
         </button>
-        {user?.merchantType === 'products' && (
+        {!isServiceMerchant && (
         <button
           onClick={() => setActiveTab("products")}
           className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
@@ -1111,7 +1126,7 @@ export function MerchantDashboard() {
             Products
         </button>
         )}
-        {user?.merchantType === 'services' && (
+        {isServiceMerchant && (
         <button
           onClick={() => setActiveTab("services")}
           className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
@@ -1268,18 +1283,37 @@ export function MerchantDashboard() {
               <span className="text-xs text-muted-foreground">Live operational signals</span>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="rounded-xl border border-border bg-secondary/40 p-3">
-                <p className="text-xs text-muted-foreground">Low-stock alerts</p>
-                <p className="text-lg font-bold text-chart-4 mt-1">{lowStockCount}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-secondary/40 p-3">
-                <p className="text-xs text-muted-foreground">Out of stock</p>
-                <p className="text-lg font-bold text-destructive mt-1">{outOfStockCount}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-secondary/40 p-3">
-                <p className="text-xs text-muted-foreground">Margin-risk SKUs</p>
-                <p className="text-lg font-bold text-destructive mt-1">{marginRiskCount}</p>
-              </div>
+              {isServiceMerchant ? (
+                <>
+                  <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                    <p className="text-xs text-muted-foreground">Active services</p>
+                    <p className="text-lg font-bold text-chart-4 mt-1">{allProducts.length}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                    <p className="text-xs text-muted-foreground">Unpriced services</p>
+                    <p className="text-lg font-bold text-destructive mt-1">{allProducts.filter((item) => Number(item?.base_price || 0) <= 0).length}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                    <p className="text-xs text-muted-foreground">Catalog gaps</p>
+                    <p className="text-lg font-bold text-destructive mt-1">{allProducts.filter((item) => !String(item?.description || '').trim()).length}</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                    <p className="text-xs text-muted-foreground">Low-stock alerts</p>
+                    <p className="text-lg font-bold text-chart-4 mt-1">{lowStockCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                    <p className="text-xs text-muted-foreground">Out of stock</p>
+                    <p className="text-lg font-bold text-destructive mt-1">{outOfStockCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                    <p className="text-xs text-muted-foreground">Margin-risk SKUs</p>
+                    <p className="text-lg font-bold text-destructive mt-1">{marginRiskCount}</p>
+                  </div>
+                </>
+              )}
               <div className="rounded-xl border border-border bg-secondary/40 p-3">
                 <p className="text-xs text-muted-foreground">Pending fulfillment</p>
                 <p className="text-lg font-bold text-primary mt-1">{pendingFulfillmentCount}</p>
@@ -1295,16 +1329,16 @@ export function MerchantDashboard() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button
-                onClick={() => setActiveTab('products')}
+                onClick={() => setActiveTab(isServiceMerchant ? 'services' : 'products')}
                 className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 text-left"
               >
-                Launch low-stock campaign
+                {isServiceMerchant ? 'Refresh service catalog' : 'Launch low-stock campaign'}
               </button>
               <button
-                onClick={() => setActiveTab('products')}
+                onClick={() => setActiveTab(isServiceMerchant ? 'services' : 'products')}
                 className="rounded-lg bg-green-50 px-3 py-2 text-xs font-medium text-green-700 text-left"
               >
-                Create bundle offer
+                {isServiceMerchant ? 'Update service pricing' : 'Create bundle offer'}
               </button>
               <button
                 onClick={() => setActiveTab('orders')}
@@ -1491,11 +1525,11 @@ export function MerchantDashboard() {
           </div>
         </section>
 
-        {/* Product Management */}
+        {/* Catalog Management */}
         <section className="px-4 mb-6">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-foreground">Products</h3>
-            <button onClick={() => setActiveTab("products")} className="text-xs text-primary font-medium">View All</button>
+            <h3 className="text-sm font-semibold text-foreground">{isServiceMerchant ? 'Services' : 'Products'}</h3>
+            <button onClick={() => setActiveTab(isServiceMerchant ? "services" : "products")} className="text-xs text-primary font-medium">View All</button>
           </div>
           {loadingProducts ? (
             <div className="flex items-center justify-center py-8">
@@ -1504,7 +1538,7 @@ export function MerchantDashboard() {
           ) : products.length === 0 ? (
             <div className="p-8 text-center">
               <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No products yet</p>
+              <p className="text-sm text-muted-foreground">{isServiceMerchant ? 'No services yet' : 'No products yet'}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -1512,28 +1546,36 @@ export function MerchantDashboard() {
                 <div key={product.id} className="bg-card border border-border rounded-2xl p-3 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center text-sm font-bold text-muted-foreground">
-                      📦
+                      {isServiceMerchant ? '🔧' : '📦'}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground text-sm truncate">{product.name}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-sm font-semibold text-foreground">Sell: {formatNaira(parseFloat(product.price))}</span>
-                        <span className="text-xs text-muted-foreground">Cost: {formatNaira(Number(product.cost_price || 0))}</span>
-                        <span className="text-xs text-muted-foreground">Stock: {Number(product.stock || 0)}</span>
+                        <span className="text-sm font-semibold text-foreground">
+                          {isServiceMerchant ? 'Price' : 'Sell'}: {formatNaira(parseFloat(product.price || product.base_price || 0))}
+                        </span>
+                        {isServiceMerchant ? (
+                          <span className="text-xs text-muted-foreground">Category: {product.category || 'Service'}</span>
+                        ) : (
+                          <>
+                            <span className="text-xs text-muted-foreground">Cost: {formatNaira(Number(product.cost_price || 0))}</span>
+                            <span className="text-xs text-muted-foreground">Stock: {Number(product.stock || 0)}</span>
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => setActiveTab("products")}
+                        onClick={() => setActiveTab(isServiceMerchant ? "services" : "products")}
                         className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
-                        aria-label="Edit product"
+                        aria-label={isServiceMerchant ? "Edit service" : "Edit product"}
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => setActiveTab("products")}
+                        onClick={() => setActiveTab(isServiceMerchant ? "services" : "products")}
                         className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                        aria-label="Delete product"
+                        aria-label={isServiceMerchant ? "Delete service" : "Delete product"}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1596,7 +1638,7 @@ export function MerchantDashboard() {
           )}
         </section>
           </>
-        ) : activeTab === "products" ? (
+        ) : activeTab === "products" && !isServiceMerchant ? (
           <MerchantProducts merchantId={user?.userId || ""} />
         ) : activeTab === "orders" ? (
           <MerchantOrders onBack={() => setActiveTab("home")} />
@@ -1642,7 +1684,7 @@ export function MerchantDashboard() {
               <h3 className="font-semibold text-foreground mb-4">Performance Metrics</h3>
               <div className="space-y-3">
                 {[
-                  { label: "Products Views", value: "0", change: "+0%" },
+                  { label: isServiceMerchant ? "Services Views" : "Products Views", value: "0", change: "+0%" },
                   { label: "Conversion Rate", value: "0%", change: "+0%" },
                   { label: "Average Order Value", value: formatNaira(0), change: "+0%" },
                   { label: "Customer Retention", value: "0%", change: "+0%" },
@@ -1748,15 +1790,15 @@ export function MerchantDashboard() {
             <span className="text-[10px] font-medium">Orders</span>
           </button>
 
-          {/* Products */}
+          {/* Catalog */}
           <button
-            onClick={() => setActiveTab("products")}
+            onClick={() => setActiveTab(isServiceMerchant ? "services" : "products")}
             className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
-              activeTab === "products" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+              (isServiceMerchant ? activeTab === "services" : activeTab === "products") ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Package className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Products</span>
+            <span className="text-[10px] font-medium">{isServiceMerchant ? 'Services' : 'Products'}</span>
           </button>
 
           {/* Profile */}
@@ -1775,7 +1817,7 @@ export function MerchantDashboard() {
             <button
               onClick={() => setShowNavMenu(!showNavMenu)}
               className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
-                showNavMenu || ["messages", "services", "ai", "settings"].includes(activeTab)
+                showNavMenu || ["messages", "ai", "settings"].includes(activeTab)
                   ? "text-primary bg-primary/10"
                   : "text-muted-foreground hover:text-foreground"
               }`}
@@ -1799,13 +1841,6 @@ export function MerchantDashboard() {
                         {unreadMessages > 99 ? '99+' : unreadMessages}
                       </span>
                     )}
-                  </button>
-                  <button
-                    onClick={() => { setActiveTab("services"); setShowNavMenu(false) }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Services</span>
                   </button>
                   <button
                     onClick={() => { setActiveTab("ai"); setShowNavMenu(false) }}

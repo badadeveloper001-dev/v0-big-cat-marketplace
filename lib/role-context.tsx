@@ -14,6 +14,7 @@ interface User {
   latitude?: number
   longitude?: number
   role: 'buyer' | 'merchant' | 'agent'
+  merchantType?: 'products' | 'services'
   merchantProfile?: any
   region?: string
 }
