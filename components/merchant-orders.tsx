@@ -9,7 +9,6 @@ import {
   markOrderDeliveredAndReleaseEscrow,
   type EscrowRecord,
 } from "@/lib/escrow"
-import { getDemoMerchantOrders, updateDemoOrderStatus } from "@/lib/demo-orders"
 
 interface MerchantOrdersProps {
   onBack: () => void
@@ -101,33 +100,16 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
       try {
         const response = await fetch(`/api/orders/merchant?merchantId=${user.userId}`)
         const result = await response.json()
-        const demoOrders = getDemoMerchantOrders(user.userId)
 
         if (result.success) {
-          const fetched = result.data || []
-          const merged = [
-            ...demoOrders,
-            ...fetched.filter((order: any) => !demoOrders.some((demo) => String(demo.id) === String(order.id))),
-          ]
-
-          setOrders(merged)
-          syncEscrowForOrders(merged)
+          const fetched = Array.isArray(result.data) ? result.data : []
+          setOrders(fetched)
+          syncEscrowForOrders(fetched)
         } else {
-          if (demoOrders.length > 0) {
-            setOrders(demoOrders)
-            syncEscrowForOrders(demoOrders)
-          } else {
-            setError(result.error || 'Failed to fetch orders')
-          }
+          setError(result.error || 'Failed to fetch orders')
         }
       } catch {
-        const demoOrders = getDemoMerchantOrders(user.userId)
-        if (demoOrders.length > 0) {
-          setOrders(demoOrders)
-          syncEscrowForOrders(demoOrders)
-        } else {
-          setError('Failed to fetch orders')
-        }
+        setError('Failed to fetch orders')
       }
       setIsLoading(false)
     }
@@ -137,25 +119,6 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     setUpdatingOrderId(orderId)
-
-    if (String(orderId).startsWith('demo_')) {
-      const updated = updateDemoOrderStatus(orderId, newStatus)
-      if (updated) {
-        setOrders((prev) => prev.map((order) =>
-          String(order.id) === String(orderId) ? { ...order, status: newStatus } : order
-        ))
-      }
-
-      if (newStatus === 'delivered') {
-        const updatedEscrow = markOrderDeliveredAndReleaseEscrow(orderId)
-        if (updatedEscrow) {
-          setEscrowMap((prev) => ({ ...prev, [orderId]: updatedEscrow }))
-        }
-      }
-
-      setUpdatingOrderId(null)
-      return
-    }
 
     try {
       const response = await fetch('/api/orders/update-status', {

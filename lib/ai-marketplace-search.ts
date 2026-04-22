@@ -1699,20 +1699,7 @@ export function buildComparisonReply(products: ProductSearchResult[], query: str
   return lines.join('\n')
 }
 
-// #4: Review Highlights (mock for now - in production, fetch from reviews table)
 export function extractReviewHighlight(product: ProductSearchResult): string | null {
-  // Mock reviews - in production: query reviews table by product_id
-  const mockReviews: Record<string, string> = {
-    'Nike': '⭐ 4.8/5 (342 reviews) - "Comfy & durable, arrived fast"',
-    'Adidas': '⭐ 4.6/5 (215 reviews) - "Quality shoe, true to size"',
-    'Phone': '⭐ 4.7/5 (1.2k reviews) - "Fast performance, battery lasts all day"',
-  }
-  
-  for (const [key, review] of Object.entries(mockReviews)) {
-    if (product.name.toLowerCase().includes(key.toLowerCase())) {
-      return review
-    }
-  }
   return null
 }
 

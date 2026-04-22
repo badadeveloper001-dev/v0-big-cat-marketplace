@@ -11,7 +11,6 @@ import {
   markOrderDeliveredAndReleaseEscrow,
   type EscrowRecord,
 } from "@/lib/escrow"
-import { getDemoBuyerOrders, updateDemoOrderStatus } from "@/lib/demo-orders"
 
 interface BuyerOrdersProps {
   onBack: () => void
@@ -215,38 +214,20 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
     try {
       const response = await fetch(`/api/orders/buyer?buyerId=${user.userId}`)
       const result = await response.json()
-      const demoOrders = getDemoBuyerOrders(user.userId)
 
       if (result.success) {
-        const fetched = result.data || []
-        const merged = [
-          ...demoOrders,
-          ...fetched.filter((order: any) => !demoOrders.some((demo) => String(demo.id) === String(order.id))),
-        ]
-        setOrders(merged)
-        syncEscrowForOrders(merged)
+        const fetched = Array.isArray(result.data) ? result.data : []
+        setOrders(fetched)
+        syncEscrowForOrders(fetched)
         setLastUpdatedAt(Date.now())
         fetchIssues()
         fetchIssues()
         fetchIssues()
       } else {
-        if (demoOrders.length > 0) {
-          setOrders(demoOrders)
-          syncEscrowForOrders(demoOrders)
-          setLastUpdatedAt(Date.now())
-        } else {
-          setError(result.error || 'Failed to fetch orders')
-        }
+        setError(result.error || 'Failed to fetch orders')
       }
     } catch {
-      const demoOrders = getDemoBuyerOrders(user.userId)
-      if (demoOrders.length > 0) {
-        setOrders(demoOrders)
-        syncEscrowForOrders(demoOrders)
-        setLastUpdatedAt(Date.now())
-      } else {
-        setError('Failed to fetch orders')
-      }
+      setError('Failed to fetch orders')
     }
 
     if (showLoader) {
@@ -366,27 +347,6 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
   const handleMarkAsDelivered = async (orderId: string) => {
     setUpdatingOrderId(orderId)
     setError("")
-
-    if (String(orderId).startsWith('demo_')) {
-      const updated = updateDemoOrderStatus(orderId, 'delivered')
-      if (!updated) {
-        setError('Failed to mark order as delivered')
-        setUpdatingOrderId(null)
-        return
-      }
-
-      setOrders((prev) => prev.map((order) =>
-        String(order.id) === String(orderId) ? { ...order, status: 'delivered' } : order
-      ))
-
-      const updatedEscrow = markOrderDeliveredAndReleaseEscrow(orderId)
-      if (updatedEscrow) {
-        setEscrowMap((prev) => ({ ...prev, [orderId]: updatedEscrow }))
-      }
-
-      setUpdatingOrderId(null)
-      return
-    }
 
     try {
       const response = await fetch('/api/orders/update-status', {
