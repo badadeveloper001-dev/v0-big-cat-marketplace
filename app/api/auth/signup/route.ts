@@ -3,9 +3,10 @@ import { signupEnhanced } from '@/lib/auth-actions'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name, phone, city, state, role, smedanId, cacId } = await request.json()
+    const { email, password, name, phone, city, state, role, smedanId, cacId, merchantType } = await request.json()
     const normalizedCity = typeof city === 'string' ? city.trim() : ''
     const normalizedState = typeof state === 'string' ? state.trim() : ''
+    const normalizedMerchantType = merchantType === 'services' ? 'services' : 'products'
 
     if (!email || !password || !name || !phone || !role) {
       return NextResponse.json(
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (role === 'merchant' && !cacId) {
+    if (role === 'merchant' && normalizedMerchantType !== 'services' && !cacId) {
       return NextResponse.json(
         { success: false, error: 'CAC ID is required for merchant accounts' },
         { status: 400 }
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
       role: role as 'buyer' | 'merchant',
       smedanId,
       cacId,
+      merchantType: normalizedMerchantType,
     })
 
     if (result.success) {

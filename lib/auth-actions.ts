@@ -26,7 +26,7 @@ async function insertAuthUserWithFallback(admin: ReturnType<typeof createClient>
     }
 
     const message = String(result.error.message || '').toLowerCase()
-    const removableColumn = ['city', 'state', 'cac_id', 'google_id'].find((column) => message.includes(column))
+    const removableColumn = ['city', 'state', 'cac_id', 'google_id', 'merchant_type'].find((column) => message.includes(column))
 
     if (!removableColumn || !(removableColumn in insertPayload)) {
       return result
@@ -36,6 +36,24 @@ async function insertAuthUserWithFallback(admin: ReturnType<typeof createClient>
   }
 
   return admin.from('auth_users').insert(insertPayload).select().single()
+}
+
+function mapSignupProfileInsertError(error: any) {
+  const message = String(error?.message || '').toLowerCase()
+
+  if (message.includes('duplicate') || message.includes('unique')) {
+    if (message.includes('email')) {
+      return 'An account with this email already exists. Please try logging in instead.'
+    }
+    if (message.includes('smedan_id') || message.includes('smedan')) {
+      return 'This SMEDAN ID is already linked to another merchant account.'
+    }
+    if (message.includes('cac_id') || message.includes('cac')) {
+      return 'This CAC ID is already linked to another merchant account.'
+    }
+  }
+
+  return 'Failed to create account. Please try again.'
 }
 
 /** Anon-key client — only used for signInWithPassword (no service-role needed) */
@@ -75,7 +93,7 @@ export async function signup(email: string, password: string, name: string, phon
     if (error) {
       // Clean up orphaned auth user if profile insert fails
       await admin.auth.admin.deleteUser(supabaseUserId)
-      return { success: false, error: 'Failed to create account. Please try again.' }
+      return { success: false, error: mapSignupProfileInsertError(error) }
     }
 
     return { success: true, data }
@@ -153,7 +171,7 @@ export async function signupEnhanced(params: {
 
     if (error) {
       await admin.auth.admin.deleteUser(supabaseUserId)
-      return { success: false, error: 'Failed to create account. Please try again.' }
+      return { success: false, error: mapSignupProfileInsertError(error) }
     }
 
     return { success: true, data }
