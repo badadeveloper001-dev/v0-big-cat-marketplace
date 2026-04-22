@@ -20,3 +20,7 @@ node_modules/
 
 # Local Netlify folder
 .netlify
+
+# Local workspace/editor and backup exports
+.vscode/
+exports/
