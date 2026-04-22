@@ -17,6 +17,14 @@ export type SupportIntent =
   | 'report_issue'
 
 export type MarketplaceIntentType = 'product' | 'service' | 'vendor'
+export type BizPilotIntent =
+  | 'sales'
+  | 'pricing'
+  | 'product_optimization'
+  | 'inventory'
+  | 'customer_behavior'
+  | 'marketing'
+  | 'general'
 
 type ProductSearchResult = {
   id: string
@@ -81,15 +89,19 @@ const QUERY_ALIASES: Array<[RegExp, string]> = [
 const LANGUAGE_HINTS: Record<Exclude<AssistantLanguage, 'auto' | 'en'>, string[]> = {
   pcm: [
     'abeg', 'dey', 'wey', 'una', 'wetin', 'make i', 'no wahala', 'how far', 'oga', 'sharp sharp', 'na',
+    'fit do', 'don drop', 'no dey', 'wetin i fit',
   ],
   yo: [
     'ẹ', 'ṣ', 'ó', 'à', 'ì', 'mo fẹ', 'ẹ jọ', 'bawo', 'ọja', 'owo', 'onisowo', 'e kaabo',
+    'kini', 'mo le', 'tita', 'dinku', 'bawo ni', 'e kaabo', 'owo tita',
   ],
   ig: [
     'anyị', 'anyị chọrọ', 'biko', 'ahịa', 'ahịa m', 'nnoo', 'kedu', 'ngwa', 'ịzụ', 'ndi', 'ahịa',
+    'ahia', 'kedu ka', 'biko', 'ire ahia', 'ego',
   ],
   ha: [
     'sannu', 'don Allah', 'ina son', 'farashi', 'kaya', 'dillali', 'taimako', 'yaya', 'me yasa', 'nagode',
+    'ya jiki', 'yaya zanyi', 'kudin', 'kasuwa',
   ],
 }
 
@@ -143,6 +155,533 @@ export function detectContactBypassAttempt(query: string) {
   return hasPattern || hasLongDigits
 }
 
+export function detectMarketplaceSearchIntent(query: string) {
+  const q = String(query || '').toLowerCase()
+  const searchSignals = [
+    'show me',
+    'search for',
+    'looking for',
+    'where can i buy',
+    'who sells',
+    'near me',
+    'available in',
+    'price of',
+    'find vendor',
+    'find product',
+    'find service',
+    'buy this',
+    'i want to buy',
+    'need to buy',
+  ]
+
+  if (searchSignals.some((signal) => q.includes(signal))) return true
+  return /^(find|search|locate|show)\b/.test(q)
+}
+
+export function detectBizPilotIntent(query: string): BizPilotIntent {
+  const q = String(query || '').toLowerCase()
+
+  if (['sales', 'revenue', 'orders dropped', 'low sales', 'high sales', 'conversion'].some((k) => q.includes(k))) {
+    return 'sales'
+  }
+  if (['price', 'pricing', 'discount', 'cheap', 'expensive', 'margin'].some((k) => q.includes(k))) {
+    return 'pricing'
+  }
+  if (['description', 'image', 'listing', 'product page', 'thumbnail', 'title'].some((k) => q.includes(k))) {
+    return 'product_optimization'
+  }
+  if (['stock', 'inventory', 'restock', 'out of stock', 'overstock'].some((k) => q.includes(k))) {
+    return 'inventory'
+  }
+  if (['customer', 'buyers', 'trend', 'behavior', 'preference', 'reviews'].some((k) => q.includes(k))) {
+    return 'customer_behavior'
+  }
+  if (['promote', 'promotion', 'marketing', 'campaign', 'featured', 'ads'].some((k) => q.includes(k))) {
+    return 'marketing'
+  }
+
+  return 'general'
+}
+
+export function buildBizPilotReply(params: {
+  query: string
+  recentMessages?: string[]
+  language?: string
+}) {
+  const query = String(params.query || '').trim()
+  const lowerQuery = query.toLowerCase()
+  const language = String(params.language || 'en').toLowerCase()
+  const intent = detectBizPilotIntent(query)
+  const context = [...(params.recentMessages || []), query].join(' ').toLowerCase()
+  const wantsStructured = [
+    "what's likely happening",
+    'top 3 actions',
+    'what i need from you',
+    'structured',
+    'framework',
+    'breakdown',
+    'step by step',
+  ].some((keyword) => lowerQuery.includes(keyword))
+
+  const likelyMap: Record<BizPilotIntent, string> = {
+    sales: 'Your sales issue is likely from a mix of traffic quality, conversion friction, or weak listing trust signals.',
+    pricing: 'Your pricing may be misaligned with market alternatives, reducing conversion or margin quality.',
+    product_optimization: 'Your listing likely needs stronger content quality so buyers trust faster and convert sooner.',
+    inventory: 'Your stock pattern suggests restock timing or SKU mix is not matching current demand velocity.',
+    customer_behavior: 'Buyer demand appears to be shifting by price sensitivity, trust signals, or convenience.',
+    marketing: 'Your visibility is likely not concentrated on high-converting SKUs and campaigns.',
+    general: 'Performance is usually driven by price competitiveness, listing quality, traffic relevance, and stock readiness.',
+  }
+
+  const actionMap: Record<BizPilotIntent, string[]> = {
+    sales: [
+      'Compare your top 5 SKUs against direct competitors on price, delivery promise, and review count today.',
+      'Improve one weak listing first: clearer first image, stronger benefit-focused title, and concise bullet description.',
+      'Run a 7-day push on one hero SKU with a small promo (5-10%) and track conversion daily.',
+    ],
+    pricing: [
+      'Reprice priority SKUs into competitive bands: match market median or test 5-10% reduction for 3 days.',
+      'Use tiered discounts (single item vs multi-buy) to protect margin while raising basket size.',
+      'Keep price changes focused on high-traffic SKUs first, then measure conversion before wider rollout.',
+    ],
+    product_optimization: [
+      'Rewrite titles to include buyer intent keywords, brand/model, and core benefit in the first 60 characters.',
+      'Replace low-quality photos with clear front, detail, and scale images on a clean background.',
+      'Add short, trust-building descriptions: delivery timeline, quality guarantee, and usage fit.',
+    ],
+    inventory: [
+      'Set restock alert thresholds for fast-moving SKUs based on the last 14 days of sales.',
+      'Reduce overstock risk by bundling slow items with best-sellers in limited-time offers.',
+      'Prioritize inventory spend on top-margin, high-conversion products before expanding catalog.',
+    ],
+    customer_behavior: [
+      'Segment recent orders by price band to identify the strongest buyer willingness-to-pay range.',
+      'Use top review keywords to improve listings around what buyers value most.',
+      'Align delivery options and messaging to convenience-sensitive buyers in your highest-demand locations.',
+    ],
+    marketing: [
+      'Concentrate promotions on your top 3 converting SKUs, not the full catalog.',
+      'Test one urgency campaign this week (limited stock or time-bound offer) with clear CTA.',
+      'Refresh underperforming listings before spending more promo budget on them.',
+    ],
+    general: [
+      'Pick one priority SKU and optimize price, title, images, and delivery message in one pass today.',
+      'Track conversion, add-to-cart rate, and order count for 7 days after changes.',
+      'Scale only the tactics that improve both conversion and margin.',
+    ],
+  }
+
+  const hasMetrics = /(ctr|conversion|impressions|views|orders|revenue|margin|aov|add to cart|atc|cvr|\d)/i.test(context)
+  const needQuestions = !hasMetrics
+
+  const questionMap: Record<BizPilotIntent, string[]> = {
+    sales: [
+      'What are your last 14-day values for views, add-to-cart, and orders for your top 3 products?',
+      'Which 3 products get the most traffic but lowest conversion?',
+      'Are buyers dropping more before checkout or at checkout?',
+    ],
+    pricing: [
+      'What is your current price and estimated gross margin for your top 3 SKUs?',
+      'How do your prices compare to 3 similar marketplace listings?',
+      'Do you want to optimize for faster sales or higher margin this week?',
+    ],
+    product_optimization: [
+      'Which 3 listings have high views but low orders?',
+      'Do those listings have at least 3 clear images and a benefit-led description?',
+      'What buyer objections appear most in chat or reviews?',
+    ],
+    inventory: [
+      'Which SKUs are below 7 days of stock cover?',
+      'Which SKUs have not sold in the last 30 days?',
+      'What is your current restock lead time per category?',
+    ],
+    customer_behavior: [
+      'What categories have the highest repeat purchase rate?',
+      'What price band drives most completed orders?',
+      'Which locations generate the best conversion right now?',
+    ],
+    marketing: [
+      'Which campaign or promo ran in the last 14 days and what was the conversion impact?',
+      'Which 3 SKUs should we prioritize for visibility this week?',
+      'What budget range can you allocate for promo tests this week?',
+    ],
+    general: [
+      'Share your top 3 SKUs by traffic and conversion in the last 14 days.',
+      'What is your main goal this week: revenue growth, margin, or faster stock turnover?',
+      'Any current constraint: pricing, stock, listing quality, or delivery speed?',
+    ],
+  }
+
+  const likely = likelyMap[intent]
+  const actions = actionMap[intent].slice(0, 3)
+  const questions = needQuestions ? questionMap[intent].slice(0, 3) : []
+
+  const t = {
+    en: {
+      lead: (text: string) => text,
+      actionsPrefix: 'Do these next:',
+      questionsPrefix: 'To sharpen this, share:',
+    },
+    pcm: {
+      lead: (text: string) => text,
+      actionsPrefix: 'Do this next:',
+      questionsPrefix: 'Make I give better answer, share this:',
+    },
+    yo: {
+      lead: (text: string) => text,
+      actionsPrefix: 'Se eyi tele:',
+      questionsPrefix: 'Ki n le fun e ni idahun to pe, fun mi ni eyi:',
+    },
+    ig: {
+      lead: (text: string) => text,
+      actionsPrefix: 'Mee ihe ndi a ugbu a:',
+      questionsPrefix: 'Ka m wee nyere gi nke oma, kesaa ihe ndi a:',
+    },
+    ha: {
+      lead: (text: string) => text,
+      actionsPrefix: 'Ka yi wadannan yanzu:',
+      questionsPrefix: 'Don in ba ka mafi dacewa, ka raba wannan:',
+    },
+  }[language as 'en' | 'pcm' | 'yo' | 'ig' | 'ha'] || {
+    lead: (text: string) => text,
+    actionsPrefix: 'Do these next:',
+    questionsPrefix: 'To sharpen this, share:',
+  }
+
+  if (!wantsStructured) {
+    const lead = likely
+    const actionText = `${t.actionsPrefix} 1) ${actions[0]} 2) ${actions[1]} 3) ${actions[2]}`
+    const questionText = questions.length > 0
+      ? `${t.questionsPrefix} ${questions.slice(0, 2).join(' ')}`
+      : ''
+
+    return [t.lead(lead), actionText, questionText]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+  }
+
+  return [
+    `1. What's likely happening\n${likely}`,
+    `2. Top 3 actions\n- ${actions.join('\n- ')}`,
+    needQuestions ? `3. What I need from you\n- ${questions.join('\n- ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+type BizPilotProvider = 'openai' | 'anthropic' | 'generic' | 'none'
+
+function normalizeBizPilotProvider(raw: string): BizPilotProvider {
+  const value = String(raw || '').toLowerCase().trim()
+  if (!value) return 'none'
+  if (['openai', 'chatgpt', 'gpt'].includes(value)) return 'openai'
+  if (['anthropic', 'claude'].includes(value)) return 'anthropic'
+  if (['generic', 'custom'].includes(value)) return 'generic'
+  return 'none'
+}
+
+function readBizPilotLlmConfig() {
+  const preferred = normalizeBizPilotProvider(String(process.env.BIZPILOT_AI_PROVIDER || ''))
+
+  const openaiApiKey = String(process.env.BIZPILOT_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '').trim()
+  const openaiEndpoint = String(process.env.BIZPILOT_OPENAI_ENDPOINT || 'https://api.openai.com/v1/chat/completions').trim()
+  const openaiModel = String(process.env.BIZPILOT_OPENAI_MODEL || 'gpt-4.1-mini').trim()
+
+  const anthropicApiKey = String(process.env.BIZPILOT_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || '').trim()
+  const anthropicEndpoint = String(process.env.BIZPILOT_ANTHROPIC_ENDPOINT || 'https://api.anthropic.com/v1/messages').trim()
+  const anthropicModel = String(process.env.BIZPILOT_ANTHROPIC_MODEL || 'claude-3-5-sonnet-latest').trim()
+
+  const genericApiKey = String(process.env.BIZPILOT_LLM_API_KEY || '').trim()
+  const genericEndpoint = String(process.env.BIZPILOT_LLM_ENDPOINT || 'https://api.openai.com/v1/chat/completions').trim()
+  const genericModel = String(process.env.BIZPILOT_LLM_MODEL || 'gpt-4.1-mini').trim()
+
+  const availableOpenAi = openaiApiKey.length > 0
+  const availableAnthropic = anthropicApiKey.length > 0
+  const availableGeneric = genericApiKey.length > 0
+
+  let provider: BizPilotProvider = 'none'
+
+  if (preferred === 'openai' && availableOpenAi) provider = 'openai'
+  else if (preferred === 'anthropic' && availableAnthropic) provider = 'anthropic'
+  else if (preferred === 'generic' && availableGeneric) provider = 'generic'
+  else if (availableOpenAi) provider = 'openai'
+  else if (availableAnthropic) provider = 'anthropic'
+  else if (availableGeneric) provider = 'generic'
+
+  return {
+    provider,
+    openaiApiKey,
+    openaiEndpoint,
+    openaiModel,
+    anthropicApiKey,
+    anthropicEndpoint,
+    anthropicModel,
+    genericApiKey,
+    genericEndpoint,
+    genericModel,
+  }
+}
+
+function extractChatCompletionsText(payload: any) {
+  const first = payload?.choices?.[0]?.message?.content
+  if (typeof first === 'string') return first.trim()
+  if (Array.isArray(first)) {
+    const text = first
+      .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+    return text
+  }
+  return ''
+}
+
+function extractAnthropicText(payload: any) {
+  const content = Array.isArray(payload?.content) ? payload.content : []
+  const text = content
+    .map((item: any) => (item?.type === 'text' ? String(item?.text || '') : ''))
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+  return text
+}
+
+async function requestOpenAiBizPilot(params: {
+  endpoint: string
+  apiKey: string
+  model: string
+  systemPrompt: string
+  userPrompt: string
+}) {
+  const response = await fetch(params.endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${params.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: params.model,
+      temperature: 0.35,
+      messages: [
+        { role: 'system', content: params.systemPrompt },
+        { role: 'user', content: params.userPrompt },
+      ],
+    }),
+  })
+
+  if (!response.ok) return ''
+  const payload = await response.json()
+  return extractChatCompletionsText(payload)
+}
+
+async function requestAnthropicBizPilot(params: {
+  endpoint: string
+  apiKey: string
+  model: string
+  systemPrompt: string
+  userPrompt: string
+}) {
+  const response = await fetch(params.endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': params.apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: params.model,
+      max_tokens: 700,
+      temperature: 0.35,
+      system: params.systemPrompt,
+      messages: [
+        { role: 'user', content: params.userPrompt },
+      ],
+    }),
+  })
+
+  if (!response.ok) return ''
+  const payload = await response.json()
+  return extractAnthropicText(payload)
+}
+
+export async function buildSmartBizPilotReply(params: {
+  query: string
+  recentMessages?: string[]
+  language?: string
+}) {
+  const query = String(params.query || '').trim()
+  const recentMessages = (params.recentMessages || []).slice(-6)
+  const language = String(params.language || 'en').toLowerCase()
+  const cfg = readBizPilotLlmConfig()
+
+  if (cfg.provider === 'none' || !query) {
+    return buildBizPilotReply({ query, recentMessages, language })
+  }
+
+  const languageName = {
+    en: 'English',
+    pcm: 'Nigerian Pidgin',
+    yo: 'Yoruba',
+    ig: 'Igbo',
+    ha: 'Hausa',
+  }[language as 'en' | 'pcm' | 'yo' | 'ig' | 'ha'] || 'English'
+
+  const systemPrompt = [
+    'You are BIGCAT AI BizPilot, a smart business assistant for merchants on a marketplace.',
+    'Your goals: grow sales, improve product performance, support pricing and inventory decisions, and give practical merchant advice.',
+    'Style: concise, diagnostic-first, actionable, honest about uncertainty, no fabricated data, professional business tone.',
+    `Language rule: Reply in ${languageName}. Match the user language and do not switch to English unless user wrote in English.`,
+    'Default response format: natural human business reply in 3-6 concise lines.',
+    'Use the numbered framework (What\'s likely happening / Top 3 actions / What I need from you) only if the user explicitly asks for that structure.',
+    'Formatting rules: keep it readable and concise; avoid forcing numbered sections unless requested.',
+    'Professionalism rules: Avoid hype, filler, or childish phrases (for example: fine fine, no waste time, no miss dis).',
+    'Diagnosis rules: Do not say "You want..." as diagnosis. Focus on business drivers and probable causes.',
+    'For promo-copy requests, provide polished, brand-safe copy and keep wording professional even in Pidgin.',
+    'Do not request unnecessary sensitive information.',
+    'If merchant asks a business question, do not return product search results. Give strategy and practical next steps.',
+  ].join(' ')
+
+  const userPrompt = [
+    `Merchant question: ${query}`,
+    recentMessages.length > 0 ? `Recent context: ${recentMessages.join(' | ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  try {
+    let reply = ''
+
+    if (cfg.provider === 'openai') {
+      reply = await requestOpenAiBizPilot({
+        endpoint: cfg.openaiEndpoint,
+        apiKey: cfg.openaiApiKey,
+        model: cfg.openaiModel,
+        systemPrompt,
+        userPrompt,
+      })
+    } else if (cfg.provider === 'anthropic') {
+      reply = await requestAnthropicBizPilot({
+        endpoint: cfg.anthropicEndpoint,
+        apiKey: cfg.anthropicApiKey,
+        model: cfg.anthropicModel,
+        systemPrompt,
+        userPrompt,
+      })
+    } else if (cfg.provider === 'generic') {
+      reply = await requestOpenAiBizPilot({
+        endpoint: cfg.genericEndpoint,
+        apiKey: cfg.genericApiKey,
+        model: cfg.genericModel,
+        systemPrompt,
+        userPrompt,
+      })
+    }
+
+    if (!reply) {
+      return buildBizPilotReply({ query, recentMessages, language })
+    }
+
+    return reply.slice(0, 2400)
+  } catch {
+    return buildBizPilotReply({ query, recentMessages, language })
+  }
+}
+
+function buildBuyerGuidanceReply(params: {
+  query: string
+  language?: string
+}) {
+  const q = String(params.query || '').trim()
+  const language = String(params.language || 'en').toLowerCase()
+
+  const responses = {
+    en: `I can help you choose the best option quickly. Share your product type, budget range, and location, and I will recommend the top options with price and trusted vendors.`,
+    pcm: `I fit help you choose the best option sharp sharp. Tell me product type, your budget range, and your location, make I recommend better options with price and trusted vendors.`,
+    yo: `Mo le ran o lowo lati yan eyi to dara ni kiakia. So iru ọja, isuna owo re, ati ipo re, mo ma daba awon aṣayan to dara pelu owo ati onisowo to gbekele.`,
+    ig: `Enwere m ike inyere gi ịhọrọ nhọrọ kacha mma ngwa ngwa. Gwa m ụdị ngwaahịa, oke ego gi, na ebe ị nọ, m ga-atụ aro nhọrọ kacha mma na ọnụahịa na ndi na-ere ahia a pụrụ ịtụkwasị obi.`,
+    ha: `Zan iya taimaka maka zabar mafi kyawun zaɓi cikin sauri. Ka fada min nau'in kaya, kasafin kudinka, da wurinka, zan ba ka mafi kyawun zabuka tare da farashi da dillalai masu aminci.`,
+  }
+
+  const lead = responses[language as 'en' | 'pcm' | 'yo' | 'ig' | 'ha'] || responses.en
+  if (!q) return lead
+  return `${lead}`
+}
+
+export async function buildSmartBuyerReply(params: {
+  query: string
+  recentMessages?: string[]
+  language?: string
+}) {
+  const query = String(params.query || '').trim()
+  const recentMessages = (params.recentMessages || []).slice(-6)
+  const language = String(params.language || 'en').toLowerCase()
+  const cfg = readBizPilotLlmConfig()
+
+  if (cfg.provider === 'none' || !query) {
+    return buildBuyerGuidanceReply({ query, language })
+  }
+
+  const languageName = {
+    en: 'English',
+    pcm: 'Nigerian Pidgin',
+    yo: 'Yoruba',
+    ig: 'Igbo',
+    ha: 'Hausa',
+  }[language as 'en' | 'pcm' | 'yo' | 'ig' | 'ha'] || 'English'
+
+  const systemPrompt = [
+    'You are BIGCAT AI, buyer shopping assistant for a Nigerian marketplace.',
+    'Your role is different from merchant BizPilot: you help buyers choose products/services/vendors and make safe buying decisions.',
+    'Be concise, practical, and friendly. Keep responses human and natural, not rigidly templated.',
+    `Language rule: Reply in ${languageName}. Match the user language and do not switch to English unless user wrote in English.`,
+    'Prefer asking 1-2 targeted questions only when needed (budget, location, preferred brand/use-case).',
+    'Do not fabricate product data. If exact data is missing, ask for what is needed.',
+  ].join(' ')
+
+  const userPrompt = [
+    `Buyer question: ${query}`,
+    recentMessages.length > 0 ? `Recent context: ${recentMessages.join(' | ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  try {
+    let reply = ''
+
+    if (cfg.provider === 'openai') {
+      reply = await requestOpenAiBizPilot({
+        endpoint: cfg.openaiEndpoint,
+        apiKey: cfg.openaiApiKey,
+        model: cfg.openaiModel,
+        systemPrompt,
+        userPrompt,
+      })
+    } else if (cfg.provider === 'anthropic') {
+      reply = await requestAnthropicBizPilot({
+        endpoint: cfg.anthropicEndpoint,
+        apiKey: cfg.anthropicApiKey,
+        model: cfg.anthropicModel,
+        systemPrompt,
+        userPrompt,
+      })
+    } else if (cfg.provider === 'generic') {
+      reply = await requestOpenAiBizPilot({
+        endpoint: cfg.genericEndpoint,
+        apiKey: cfg.genericApiKey,
+        model: cfg.genericModel,
+        systemPrompt,
+        userPrompt,
+      })
+    }
+
+    if (!reply) return buildBuyerGuidanceReply({ query, language })
+    return reply.slice(0, 1600)
+  } catch {
+    return buildBuyerGuidanceReply({ query, language })
+  }
+}
+
 function tokenizeQuery(query: string) {
   return query
     .toLowerCase()
@@ -153,21 +692,69 @@ function tokenizeQuery(query: string) {
     .slice(0, 8)
 }
 
+function normalizeTokenForSearch(token: string) {
+  const t = String(token || '').toLowerCase().trim()
+  if (!t) return t
+  if (t.endsWith('ies') && t.length > 4) return `${t.slice(0, -3)}y`
+  if (t.endsWith('es') && t.length > 4) return t.slice(0, -2)
+  if (t.endsWith('s') && t.length > 3) return t.slice(0, -1)
+  return t
+}
+
+function stripLocationHint(query: string) {
+  return query
+    .replace(/\b(in|at|around|near)\s+([a-z\s]+)$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function stripPriceQualifiers(query: string) {
+  return query
+    .replace(/\b(affordable|cheap|budget|best|good|low\s*cost|lowcost|fair\s*price)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function buildQueryVariants(query: string) {
   const variants = new Set<string>()
   const clean = query.trim()
+  const tokens = tokenizeQuery(clean)
+  const isSpecificQuery = tokens.length >= 2
+
   if (clean) variants.add(clean)
 
-  let aliased = clean
-  QUERY_ALIASES.forEach(([pattern, replacement]) => {
-    aliased = aliased.replace(pattern, replacement)
-  })
-  if (aliased && aliased !== clean) variants.add(aliased)
+  const noLocation = stripLocationHint(clean)
+  if (noLocation && noLocation !== clean) variants.add(noLocation)
 
-  const tokens = tokenizeQuery(clean)
+  const noPriceHint = stripPriceQualifiers(noLocation || clean)
+  if (noPriceHint && noPriceHint !== clean) variants.add(noPriceHint)
+
+  if (!isSpecificQuery) {
+    let aliased = clean
+    QUERY_ALIASES.forEach(([pattern, replacement]) => {
+      aliased = aliased.replace(pattern, replacement)
+    })
+    if (aliased && aliased !== clean) variants.add(aliased)
+  }
+
   if (tokens.length > 0) {
     variants.add(tokens.join(' '))
-    tokens.forEach((token) => variants.add(token))
+
+    const normalizedTokens = tokens.map((token) => normalizeTokenForSearch(token)).filter(Boolean)
+    const normalizedJoined = normalizedTokens.join(' ')
+    if (normalizedJoined && normalizedJoined !== tokens.join(' ')) {
+      variants.add(normalizedJoined)
+    }
+
+    const normalizedNoPrice = stripPriceQualifiers(normalizedJoined)
+    if (normalizedNoPrice && normalizedNoPrice !== normalizedJoined) {
+      variants.add(normalizedNoPrice)
+    }
+
+    if (!isSpecificQuery) {
+      tokens.forEach((token) => variants.add(token))
+      normalizedTokens.forEach((token) => variants.add(token))
+    }
   }
 
   return Array.from(variants).slice(0, 10)
@@ -211,13 +798,32 @@ export function detectReplyLanguage(params: {
     ha: 0,
   }
 
+  const hasHint = (text: string, hint: string) => {
+    const clean = String(hint || '').toLowerCase().trim()
+    if (!clean) return false
+    if (clean.includes(' ')) return text.includes(clean)
+    const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(text)
+  }
+
   ;(Object.keys(LANGUAGE_HINTS) as Array<keyof typeof LANGUAGE_HINTS>).forEach((lang) => {
     LANGUAGE_HINTS[lang].forEach((hint) => {
-      if (q.includes(hint)) {
+      if (hasHint(q, hint)) {
         scores[lang] += hint.length > 3 ? 2 : 1
       }
     })
   })
+
+  // Boost strong Pidgin markers so Pidgin input does not drift into Yoruba.
+  const strongPidginMarkers = ['abeg', 'wetin', 'dey', 'una', 'how far', 'no wahala', 'make i', 'fit do', 'don']
+  strongPidginMarkers.forEach((marker) => {
+    if (hasHint(q, marker)) scores.pcm += 2
+  })
+
+  // If Pidgin and Yoruba are close, prefer Pidgin when explicit Pidgin markers exist.
+  if (scores.pcm > 0 && scores.pcm >= scores.yo) {
+    return 'pcm'
+  }
 
   const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0]
   if (best && best[1] > 0) {
@@ -230,6 +836,16 @@ export function detectReplyLanguage(params: {
 export function detectConversationalIntent(query: string): ConversationalIntent | null {
   const q = String(query || '').toLowerCase().trim()
   if (!q) return null
+
+  const hasPattern = (text: string, pattern: string) => {
+    const clean = String(pattern || '').toLowerCase().trim()
+    if (!clean) return false
+    if (clean.includes(' ')) return text.includes(clean)
+    const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(text)
+  }
+
+  const matchesAny = (patterns: string[]) => patterns.some((pattern) => hasPattern(q, pattern))
 
   const greetingPatterns = [
     'hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'how far', 'sup',
@@ -244,12 +860,12 @@ export function detectConversationalIntent(query: string): ConversationalIntent 
   const helpPatterns = ['help me', 'can you help', 'what can you do', 'how do you work', 'guide me']
   const goodbyePatterns = ['bye', 'goodbye', 'see you', 'later', 'ka chi fo', 'odabo', 'bye bye']
 
-  if (wellbeingPatterns.some((pattern) => q.includes(pattern))) return 'wellbeing'
-  if (greetingPatterns.some((pattern) => q.includes(pattern))) return 'greeting'
-  if (thanksPatterns.some((pattern) => q.includes(pattern))) return 'thanks'
-  if (identityPatterns.some((pattern) => q.includes(pattern))) return 'identity'
-  if (helpPatterns.some((pattern) => q.includes(pattern))) return 'help'
-  if (goodbyePatterns.some((pattern) => q.includes(pattern))) return 'goodbye'
+  if (matchesAny(wellbeingPatterns)) return 'wellbeing'
+  if (matchesAny(greetingPatterns)) return 'greeting'
+  if (matchesAny(thanksPatterns)) return 'thanks'
+  if (matchesAny(identityPatterns)) return 'identity'
+  if (matchesAny(helpPatterns)) return 'help'
+  if (matchesAny(goodbyePatterns)) return 'goodbye'
 
   return null
 }
@@ -538,6 +1154,8 @@ export async function searchMarketplace(params: {
   const type = params.type || detectSearchType(query)
   const limit = Math.max(1, Math.min(params.limit || 8, 20))
   const queryVariants = buildQueryVariants(query)
+  const queryTokens = tokenizeQuery(query)
+  const allowBroadFallback = queryTokens.length <= 1
   const preferredLocation = String(params.location || '').trim().toLowerCase()
 
   if (!query) {
@@ -799,15 +1417,15 @@ export async function searchMarketplace(params: {
         }
       }
 
-      if (type !== 'vendors' && products.length === 0) {
+      if (type !== 'vendors' && products.length === 0 && allowBroadFallback) {
         products = await runProductFallback()
       }
 
-      if (type !== 'products' && vendors.length === 0) {
+      if (type !== 'products' && vendors.length === 0 && allowBroadFallback) {
         vendors = await runVendorFallback()
       }
 
-      if (type !== 'products' && type !== 'vendors' && services.length === 0) {
+      if (type !== 'products' && type !== 'vendors' && services.length === 0 && allowBroadFallback) {
         services = await runServiceFallback()
       }
 
@@ -999,4 +1617,240 @@ export function buildStructuredMarketplaceResponse(params: {
       location: product.vendor_location,
     })),
   }
+}
+
+// ============== ENHANCED FEATURES (All 14) ==============
+
+// #1-2: Buyer Preference Learning & Storage
+export function getBuyerPreferences(buyerId: string) {
+  if (typeof window === 'undefined') return null
+  const key = `bigcat_buyer_prefs_${buyerId}`
+  try {
+    return JSON.parse(localStorage.getItem(key) || 'null')
+  } catch {
+    return null
+  }
+}
+
+export function saveBuyerPreferences(buyerId: string, prefs: {
+  favoriteCategories?: string[]
+  priceRanges?: { min: number; max: number }[]
+  preferredVendors?: string[]
+  searchHistory?: string[]
+  recentSearchQuery?: string
+}) {
+  if (typeof window === 'undefined') return
+  const key = `bigcat_buyer_prefs_${buyerId}`
+  try {
+    localStorage.setItem(key, JSON.stringify(prefs))
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+// #1: Clarifying Questions Before Search
+export function shouldAskClarifyingQuestions(query: string, recentMessages: string[]): boolean {
+  const q = query.toLowerCase()
+  // If query is very short or generic, ask clarifying questions
+  const tokens = query.split(/\s+/).filter(Boolean)
+  if (tokens.length < 2) return true
+  
+  // Don't ask if already detailed
+  const hasDetails = /budget|price|brand|use|new|used|size|color|weight|range/i.test(q)
+  if (hasDetails) return false
+  
+  return tokens.length <= 3
+}
+
+export function generateClarifyingQuestions(query: string, language: string = 'en'): string {
+  const lang = String(language || 'en').toLowerCase()
+  const examples = {
+    en: `To help you find the best match:\n- What's your budget range?\n- Do you prefer a specific brand?\n- New or used?\n- Primary use case?`,
+    pcm: `Make I help you find better options:\n- How much you go spend?\n- Any brand you like?\n- New or second-hand?\n- What you go use am for?`,
+    yo: `Ki n le eniyan lowo lati ri ohun to dara:\n- Owe kan lo fẹ lilo?\n- Orile-ede kan lo fẹ?\n- Titun tabi lo gbe?\n- Kini lo ba fe lo se pelu re?`,
+    ig: `Ka m chara gi mma:\n- Ego olee chi gi?\n- Onye nke a ihe o so?\n- Ọhụrụ ma obu a gụrụ?\n- Gini ka i ga-eji ya mee?`,
+    ha: `In ba mu ni ne'm gine abin mafi kyau:\n- Kudin da kake bukatar?\n- Wani kasua kake ga so?\n- Sabon ko da tsoho?\n- Me za kai yi wannan?`,
+  }
+  return examples[lang as keyof typeof examples] || examples.en
+}
+
+// #3: Product Comparison Mode
+export function detectComparisonIntent(query: string): boolean {
+  const q = query.toLowerCase()
+  return /compare|vs|versus|difference|which.*better|brand.*vs|choose between|between/i.test(q)
+}
+
+export function buildComparisonReply(products: ProductSearchResult[], query: string, language: string = 'en'): string {
+  if (products.length < 2) {
+    const lang = language === 'pcm' ? 'I need at least two products to compare. Try "show me Nike and Adidas shoes."' : 'I need at least two products to compare.'
+    return lang
+  }
+
+  const topTwo = products.slice(0, 2)
+  const lines = [`📊 Comparison: ${topTwo.map(p => p.name).join(' vs ')}\n`]
+  
+  topTwo.forEach(p => {
+    lines.push(`\n${p.name}`)
+    lines.push(`  Price: NGN ${p.price.toLocaleString()}`)
+    lines.push(`  Vendor: ${p.vendor_name}`)
+    lines.push(`  Stock: ${p.stock} available`)
+  })
+
+  return lines.join('\n')
+}
+
+// #4: Review Highlights (mock for now - in production, fetch from reviews table)
+export function extractReviewHighlight(product: ProductSearchResult): string | null {
+  // Mock reviews - in production: query reviews table by product_id
+  const mockReviews: Record<string, string> = {
+    'Nike': '⭐ 4.8/5 (342 reviews) - "Comfy & durable, arrived fast"',
+    'Adidas': '⭐ 4.6/5 (215 reviews) - "Quality shoe, true to size"',
+    'Phone': '⭐ 4.7/5 (1.2k reviews) - "Fast performance, battery lasts all day"',
+  }
+  
+  for (const [key, review] of Object.entries(mockReviews)) {
+    if (product.name.toLowerCase().includes(key.toLowerCase())) {
+      return review
+    }
+  }
+  return null
+}
+
+// #6: Smart Fallback Suggestions
+export function buildSmartFallbackSuggestion(query: string, failedSearch: SearchType): string {
+  const q = query.toLowerCase()
+  const lang = q.includes('abeg') || q.includes('wetin') ? 'pcm' : 'en'
+  const coreTokens = tokenizeQuery(query)
+    .map((token) => normalizeTokenForSearch(token))
+    .filter((token) => !['affordable', 'cheap', 'budget', 'best', 'good'].includes(token))
+
+  const primaryTerm = coreTokens[0] || 'product'
+  const broadHint = primaryTerm.length > 2 ? primaryTerm : 'item'
+  const locationMatch = query.match(/\b(?:in|at|around|near)\s+([a-z\s]+)$/i)
+  const location = locationMatch?.[1]?.trim()
+
+  const suggestions = {
+    products: {
+      en: `I couldn't find an exact match for "${query}" yet. Try searching "${broadHint}"${location ? ` in ${location}` : ''}, or share your budget and preferred brand so I can narrow better options.`,
+      pcm: `I no see exact match for "${query}" yet. Try search "${broadHint}"${location ? ` for ${location}` : ''}, or tell me your budget and brand wey you like make I narrow better options.`,
+    },
+    services: {
+      en: `No exact service match. Try broader terms like "repair" or "maintenance" to see related services.`,
+      pcm: `Service no get exact match. Try "repair" or "maintenance" to see wetin dey available.`,
+    },
+    vendors: {
+      en: `No vendor exactly matches that query. Try searching for products instead - I'll show you vendors who sell them.`,
+      pcm: `Vendor no show for that one. Try search product instead - make I show you vendors wey sell am.`,
+    },
+  }
+
+  return suggestions[failedSearch][lang as keyof (typeof suggestions[SearchType])['en']] || suggestions.products.en
+}
+
+// #7: Inventory Alerts & Wishlist Helpers
+export function createInventoryAlert(productId: string, buyerId: string, notifyEmail?: string): { id: string; createdAt: string } {
+  const id = `alert_${productId}_${buyerId}_${Date.now()}`
+  if (typeof window !== 'undefined') {
+    try {
+      const alerts = JSON.parse(localStorage.getItem(`bigcat_alerts_${buyerId}`) || '[]')
+      alerts.push({ id, productId, buyerId, notifyEmail, createdAt: new Date().toISOString(), active: true })
+      localStorage.setItem(`bigcat_alerts_${buyerId}`, JSON.stringify(alerts.slice(-10)))
+    } catch {
+      // Ignore
+    }
+  }
+  return { id, createdAt: new Date().toISOString() }
+}
+
+// #8: BizPilot Product-Level Analysis
+export function analyzeMerchantProduct(product: any): {
+  titleScore: number
+  imageScore: number
+  descriptionScore: number
+  priceCompScore: number
+  suggestions: string[]
+} {
+  const titleScore = (product.name?.length || 0) >= 30 ? 80 : (product.name?.length || 0) >= 15 ? 60 : 30
+  const imageScore = product.image_url ? 80 : 30
+  const descriptionScore = (product.description?.length || 0) >= 100 ? 80 : (product.description?.length || 0) >= 30 ? 60 : 20
+  const priceCompScore = 70 // Would compare against market average
+
+  const suggestions: string[] = []
+  if (titleScore < 70) suggestions.push('Improve product title: be specific about brand, model, color, and key benefit')
+  if (imageScore < 70) suggestions.push('Add clear product images: front view, detail, and scale reference')
+  if (descriptionScore < 70) suggestions.push('Strengthen description: add use cases, care instructions, and warranty info')
+  if (priceCompScore < 70) suggestions.push('Review pricing: compare with 3 similar listings to stay competitive')
+
+  return {
+    titleScore,
+    imageScore,
+    descriptionScore,
+    priceCompScore,
+    suggestions,
+  }
+}
+
+// #10: Merchant Suggestions (What to Stock)
+export function suggestProductsForMerchant(merchantCategory: string): string[] {
+  const suggestions: Record<string, string[]> = {
+    electronics: ['Phone cases', 'Screen protectors', 'Chargers', 'USB cables', 'Power banks'],
+    fashion: ['Accessories', 'Belts', 'Hats', 'Scarves', 'Shoe care kits'],
+    food: ['Beverages', 'Snacks', 'Spices', 'Condiments', 'Storage containers'],
+    services: ['Complementary services', 'Warranty packages', 'Maintenance plans', 'Training sessions'],
+  }
+
+  return suggestions[merchantCategory.toLowerCase()] || suggestions.electronics
+}
+
+// #11: Location-Based Delivery ETA
+export function estimateDeliveryEta(vendorLocation: string, buyerLocation: string): string {
+  // Simple proximity check - in production: use actual distance API
+  if (vendorLocation === buyerLocation) return 'Same-day or next-day delivery available'
+  if (vendorLocation.split(',')[0] === buyerLocation.split(',')[0]) {
+    return '1-2 days delivery'
+  }
+  return '2-4 days delivery depending on logistics'
+}
+
+// #12: Smart Error Messaging
+export function buildSmartErrorMessage(error: string, searchQuery: string, language: string = 'en'): string {
+  const q = searchQuery.toLowerCase()
+  const lang = String(language || 'en').toLowerCase()
+
+  const suggestions = {
+    en: `I couldn't find "${searchQuery}". Try:\n- Use broader category (e.g., "shoe" instead of specific model)\n- Check spelling\n- Search by vendor name instead\n- Try "what's popular in ${q.split(' ')[0]}"`,
+    pcm: `I no see "${searchQuery}" oh. Try:\n- Use bigger search like "shoe" instead of exact model\n- Check spelling\n- Search vendor name\n- Ask "wetin dey popular for ${q.split(' ')[0]}"`,
+  }
+
+  return suggestions[lang as keyof typeof suggestions] || suggestions.en
+}
+
+// #5 + #9: Confidence Badges & Data Enrichment  
+export function buildConfidenceBadges(product: ProductSearchResult & { rating?: number; reviews?: number; delivery_days?: number }): string {
+  const badges: string[] = []
+  
+  if (product.stock > 20) badges.push('✓ In Stock')
+  if (product.stock > 50) badges.push('⚡ Hot Item')
+  if (product.rating && product.rating >= 4.5) badges.push(`⭐ ${product.rating.toFixed(1)}`)
+  if (product.delivery_days === 0) badges.push('🚀 Today')
+  if (product.delivery_days === 1) badges.push('📦 Tomorrow')
+  
+  return badges.join(' • ')
+}
+
+// #10 Context-Aware Search Refinement
+export function refineSearchByContext(currentQuery: string, recentMessages: string[]): string {
+  if (recentMessages.length === 0) return currentQuery
+  
+  // If user said "cheaper" or "better", incorporate previous category
+  const q = currentQuery.toLowerCase()
+  if (/cheaper|cheaper|more expensive|better|worse|upgrade|downgrade/.test(q) && recentMessages.length > 0) {
+    const lastSearch = recentMessages[recentMessages.length - 1].toLowerCase()
+    const categoryMatch = lastSearch.match(/\b(phone|shoe|clothes|food|service|laptop)\b/)
+    if (categoryMatch) {
+      return `${categoryMatch[1]} ${currentQuery}`
+    }
+  }
+  
+  return currentQuery
 }

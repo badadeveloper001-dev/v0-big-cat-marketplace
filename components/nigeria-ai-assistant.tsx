@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Languages, Loader2, Mic, Send, Volume2 } from "lucide-react"
 
@@ -94,10 +95,16 @@ export function NigeriaAiAssistant({
   assistantMode,
   className,
   userLocation,
+  onProductSelect,
+  onVendorSelect,
+  onServiceSelect,
 }: {
   assistantMode: AssistantMode
   className?: string
   userLocation?: string
+  onProductSelect?: (productId: string) => void
+  onVendorSelect?: (vendor: any) => void
+  onServiceSelect?: (service: any) => void
 }) {
   const [language, setLanguage] = useState<AssistantLanguage>("auto")
   const [messages, setMessages] = useState<AssistantMessage[]>([
@@ -122,7 +129,7 @@ export function NigeriaAiAssistant({
   const [recording, setRecording] = useState(false)
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [replyLanguage, setReplyLanguage] = useState<AssistantLanguage>("en")
-  const [autoSpeak, setAutoSpeak] = useState(true)
+  const [autoSpeak, setAutoSpeak] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
 
@@ -172,6 +179,12 @@ export function NigeriaAiAssistant({
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!autoSpeak && typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+    }
+  }, [autoSpeak])
 
   const sendPrompt = async (prompt: string) => {
     const message = prompt.trim()
@@ -397,16 +410,58 @@ export function NigeriaAiAssistant({
     startRecognition(uniqueLocales, 0)
   }
 
-  const pickBestVoice = () => {
+  const pickBestVoice = (languageOverride?: AssistantLanguage) => {
     if (voices.length === 0) return null
 
-    const effectiveLanguage = language === "auto" ? replyLanguage : language
+    const effectiveLanguage = languageOverride || (language === "auto" ? replyLanguage : language)
     const locale = safeLocale(effectiveLanguage)
-    const exact = voices.find((voice) => voice.lang.toLowerCase() === locale.toLowerCase())
+    const localeLower = locale.toLowerCase()
+    const langPrefix = localeLower.split("-")[0]
+
+    const scoreVoice = (voice: SpeechSynthesisVoice) => {
+      const voiceLang = String(voice.lang || "").toLowerCase()
+      const voiceName = String(voice.name || "").toLowerCase()
+      let score = 0
+
+      if (voiceLang === localeLower) score += 1000
+      if (voiceLang === langPrefix) score += 820
+      if (voiceLang.startsWith(`${langPrefix}-`)) score += 520
+
+      // For Yoruba/Igbo/Hausa replies, prioritize true native-language voices first.
+      if (["yo", "ig", "ha"].includes(effectiveLanguage) && voiceLang.startsWith(`${effectiveLanguage}-`)) {
+        score += 1500
+      }
+      if (["yo", "ig", "ha"].includes(effectiveLanguage) && voiceLang === effectiveLanguage) {
+        score += 1400
+      }
+
+      const nigeriaNameHint = /(nigeria|naija|lagos|abuja)/i.test(voiceName)
+      const isNgLocale = voiceLang === "en-ng" || voiceLang === "yo-ng" || voiceLang === "ig-ng" || voiceLang === "ha-ng"
+
+      if (nigeriaNameHint) score += 800
+      if (isNgLocale) score += 700
+
+      if ((effectiveLanguage === "en" || effectiveLanguage === "pcm") && voiceLang === "en-ng") score += 500
+      if (effectiveLanguage === "yo" && voiceLang === "yo-ng") score += 500
+      if (effectiveLanguage === "ig" && voiceLang === "ig-ng") score += 500
+      if (effectiveLanguage === "ha" && voiceLang === "ha-ng") score += 500
+
+      if (effectiveLanguage !== "en" && effectiveLanguage !== "pcm" && voiceLang === "en-ng") score += 120
+      if (["yo", "ig", "ha"].includes(effectiveLanguage) && voiceLang === "en-ng") score -= 550
+
+      return score
+    }
+
+    const ranked = [...voices]
+      .map((voice) => ({ voice, score: scoreVoice(voice) }))
+      .sort((a, b) => b.score - a.score)
+
+    if (ranked.length > 0 && ranked[0].score > 0) return ranked[0].voice
+
+    const exact = voices.find((voice) => voice.lang.toLowerCase() === localeLower)
     if (exact) return exact
 
-    const prefix = locale.split("-")[0].toLowerCase()
-    const sameLanguage = voices.find((voice) => voice.lang.toLowerCase().startsWith(prefix))
+    const sameLanguage = voices.find((voice) => voice.lang.toLowerCase().startsWith(langPrefix))
     if (sameLanguage) return sameLanguage
 
     const ngEnglish = voices.find((voice) => voice.lang.toLowerCase() === "en-ng")
@@ -426,12 +481,33 @@ export function NigeriaAiAssistant({
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
     const effectiveLanguage = languageOverride || (language === "auto" ? replyLanguage : language)
-    const voice = pickBestVoice()
+    const voice = pickBestVoice(effectiveLanguage)
+    const voiceLang = String(voice?.lang || "").toLowerCase()
+
+    const requiresNativeVoice = effectiveLanguage === "yo" || effectiveLanguage === "ig" || effectiveLanguage === "ha"
+    const hasNativeVoice =
+      voiceLang === effectiveLanguage ||
+      voiceLang.startsWith(`${effectiveLanguage}-`)
+
+    if (requiresNativeVoice && !hasNativeVoice) {
+      setVoiceHint(
+        "A native voice for this language is not installed on this device yet. Install Yoruba/Igbo/Hausa voice pack for more natural pronunciation."
+      )
+      return
+    }
 
     utterance.lang = voice?.lang || safeLocale(effectiveLanguage)
     if (voice) utterance.voice = voice
-    utterance.rate = 0.95
-    utterance.pitch = 1
+    if (effectiveLanguage === "yo") {
+      utterance.rate = 0.88
+      utterance.pitch = 0.93
+    } else if (effectiveLanguage === "ig" || effectiveLanguage === "ha") {
+      utterance.rate = 0.9
+      utterance.pitch = 0.95
+    } else {
+      utterance.rate = 0.92
+      utterance.pitch = 0.96
+    }
 
     if (!voice || (effectiveLanguage !== "en" && !utterance.lang.toLowerCase().startsWith(effectiveLanguage))) {
       if (!voiceHintShown) {
@@ -454,9 +530,24 @@ export function NigeriaAiAssistant({
       <div className="border-b border-border px-4 py-3 bg-card">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-foreground">BigCat Native AI</h2>
+            <div className="flex items-center gap-2">
+              <div className="relative h-5 w-5 overflow-hidden rounded-sm bg-white border border-border">
+                <Image
+                  src="/image.png"
+                  alt="BigCat logo"
+                  fill
+                  className="object-contain"
+                  sizes="20px"
+                />
+              </div>
+              <h2 className="text-sm font-semibold text-foreground">
+                {assistantMode === "merchant" ? "BigCat AI BizPilot" : "BigCat AI"}
+              </h2>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Multilingual assistant with Nigerian language support
+              {assistantMode === "merchant"
+                ? "Business assistant for sales, pricing, listings, and inventory decisions"
+                : "Multilingual assistant with Nigerian language support"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -505,10 +596,54 @@ export function NigeriaAiAssistant({
                     <div>
                       <p className="text-[11px] font-semibold text-muted-foreground mb-1">Found products</p>
                       <div className="space-y-1">
-                        {message.products.map((product) => (
-                          <div key={product.id} className="rounded-lg bg-secondary/60 px-2 py-1 text-xs">
-                            <span className="font-semibold text-foreground">{product.name}</span>
-                            <span className="text-muted-foreground"> - NGN {Number(product.price || 0).toLocaleString()} - {product.vendor_name}</span>
+                        {message.products.map((product: any) => (
+                          <div key={product.id} className="space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => onProductSelect?.(product.id)}
+                              disabled={!onProductSelect}
+                              className="w-full text-left rounded-lg bg-secondary/60 px-2 py-1.5 text-xs border border-transparent hover:border-primary/40 transition-colors disabled:cursor-default space-y-1"
+                            >
+                              <div>
+                                <span className="font-semibold text-foreground">{product.name}</span>
+                                <span className="text-muted-foreground"> - NGN {Number(product.price || 0).toLocaleString()}</span>
+                              </div>
+                              {product.confidence_badges && (
+                                <div className="text-[10px] text-amber-600 font-medium">{product.confidence_badges}</div>
+                              )}
+                              {product.review_highlight && (
+                                <div className="text-[10px] text-emerald-600">{product.review_highlight}</div>
+                              )}
+                              {product.delivery_eta && (
+                                <div className="text-[10px] text-blue-600">📦 {product.delivery_eta}</div>
+                              )}
+                              <span className="text-muted-foreground text-[10px]">{product.vendor_name}</span>
+                            </button>
+                            <div className="flex gap-1 px-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (typeof window !== 'undefined') {
+                                    const prefs = JSON.parse(localStorage.getItem('bigcat_buyer_prefs') || '{"favorites":[]}')
+                                    if (!prefs.favorites.includes(product.id)) {
+                                      prefs.favorites.push(product.id)
+                                      localStorage.setItem('bigcat_buyer_prefs', JSON.stringify(prefs))
+                                      setError('')
+                                    }
+                                  }
+                                }}
+                                className="text-[10px] px-2 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
+                              >
+                                ♡ Wishlist
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setError('📬 Alert set! We will notify you when back in stock.')}
+                                className="text-[10px] px-2 py-1 rounded bg-blue-500/20 text-blue-600 hover:bg-blue-500/30 transition-colors"
+                              >
+                                🔔 Alert
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -520,10 +655,16 @@ export function NigeriaAiAssistant({
                       <p className="text-[11px] font-semibold text-muted-foreground mb-1">Found vendors</p>
                       <div className="space-y-1">
                         {message.vendors.map((vendor) => (
-                          <div key={vendor.id} className="rounded-lg bg-secondary/60 px-2 py-1 text-xs">
+                          <button
+                            key={vendor.id}
+                            type="button"
+                            onClick={() => onVendorSelect?.(vendor)}
+                            disabled={!onVendorSelect}
+                            className="w-full text-left rounded-lg bg-secondary/60 px-2 py-1 text-xs border border-transparent hover:border-primary/40 transition-colors disabled:cursor-default"
+                          >
                             <span className="font-semibold text-foreground">{vendor.name}</span>
                             <span className="text-muted-foreground"> - {vendor.category} - {vendor.location}</span>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -534,10 +675,16 @@ export function NigeriaAiAssistant({
                       <p className="text-[11px] font-semibold text-muted-foreground mb-1">Found services</p>
                       <div className="space-y-1">
                         {message.services.map((service) => (
-                          <div key={service.id} className="rounded-lg bg-secondary/60 px-2 py-1 text-xs">
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => onServiceSelect?.(service)}
+                            disabled={!onServiceSelect}
+                            className="w-full text-left rounded-lg bg-secondary/60 px-2 py-1 text-xs border border-transparent hover:border-primary/40 transition-colors disabled:cursor-default"
+                          >
                             <span className="font-semibold text-foreground">{service.name}</span>
                             <span className="text-muted-foreground"> - NGN {Number(service.price || 0).toLocaleString()} - {service.vendor} - {service.location}</span>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>

@@ -35,6 +35,7 @@ import {
   X,
   LogOut,
   Loader2,
+  MoreVertical,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { formatNaira } from "@/lib/currency-utils"
@@ -98,6 +99,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [showChat, setShowChat] = useState(false)
   const [initialConversation, setInitialConversation] = useState<any | null>(null)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [showNavMenu, setShowNavMenu] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showPaymentMethods, setShowPaymentMethods] = useState(false)
@@ -268,28 +270,28 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     }
   }, [])
 
+  const guardSuspendedAction = (): boolean => {
+    if (isSuspended) {
+      return true
+    }
+    return false
+  }
+
   // Show loading spinner while session restores
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     )
-  }
-
-
-  const guardSuspendedAction = () => {
-    if (!isSuspended) return false
-    setPolicyNotice("Your account has been temporarily suspended for violating platform policies.")
-    return true
   }
 
   const syncDetectedLocation = async (payload: {
     latitude: number
     longitude: number
-    city?: string | null
-    state?: string | null
-    displayName?: string | null
+    city?: string
+    state?: string
+    displayName?: string
   }) => {
     const city = String(payload.city || '').trim()
     const state = String(payload.state || '').trim()
@@ -942,7 +944,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
         {policyNotice}
       </div>
     )}
-    <div className="min-h-screen bg-background flex flex-col font-sans">
+    <div className="min-h-screen bg-background flex flex-col font-sans pb-24">
       {/* Compact Header */}
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3">
         <div className="flex items-center justify-between gap-3">
@@ -1462,6 +1464,18 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
                 assistantMode="buyer"
                 className="h-full"
                 userLocation={buyerLocationLabel || user?.location || ""}
+                onProductSelect={(productId) => {
+                  setAiFullscreenOpen(false)
+                  setSelectedProductId(productId)
+                }}
+                onVendorSelect={(vendor) => {
+                  setAiFullscreenOpen(false)
+                  setSelectedVendor(vendor)
+                }}
+                onServiceSelect={() => {
+                  setAiFullscreenOpen(false)
+                  setShowServices(true)
+                }}
               />
             </div>
         </div>
@@ -1503,78 +1517,99 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
 
       {authModal}
 
-        {/* Bottom Navigation */}
-        <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around px-2 py-3 max-w-2xl mx-auto">
+      {/* Bottom Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex items-center justify-around px-2 py-3 max-w-2xl mx-auto z-40">
+        {/* Home */}
+        <button
+          onClick={() => setActiveTab("home")}
+          className={`flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors ${
+            activeTab === "home"
+              ? "text-primary"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Home className="w-6 h-6" />
+          <span className="text-xs font-medium">Home</span>
+        </button>
+
+        {/* Orders */}
+        <button
+          onClick={() => setActiveTab("orders")}
+          className={`flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors ${
+            activeTab === "orders"
+              ? "text-primary"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <ShoppingBag className="w-6 h-6" />
+          <span className="text-xs font-medium">Orders</span>
+        </button>
+
+        {/* Profile */}
+        <button
+          onClick={() => setActiveTab("profile")}
+          className={`flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors ${
+            activeTab === "profile"
+              ? "text-primary"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <User className="w-6 h-6" />
+          <span className="text-xs font-medium">Profile</span>
+        </button>
+
+        {/* More Menu */}
+        <div className="relative">
           <button
-            onClick={() => setActiveTab("home")}
-            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors ${
-              activeTab === "home"
+            onClick={() => setShowNavMenu(!showNavMenu)}
+            className={`flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors ${
+              showNavMenu || activeTab === "wishlist" || activeTab === "chat"
                 ? "text-primary"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Home className="w-6 h-6" />
-            <span className="text-xs font-medium">Home</span>
+            <MoreVertical className="w-6 h-6" />
+            <span className="text-xs font-medium">More</span>
           </button>
-          <button
-            onClick={() => setActiveTab("chat")}
-            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors relative ${
-              activeTab === "chat"
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <div className="relative">
-              <MessageSquare className="w-6 h-6" />
-              {unreadMessages > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center font-bold">
-                  {unreadMessages > 99 ? '99+' : unreadMessages}
-                </span>
-              )}
-            </div>
-            <span className="text-xs font-medium">Messages</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("wishlist")}
-            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors relative ${
-              activeTab === "wishlist"
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <div className="relative">
-              <Heart className="w-6 h-6" />
-              {getWishlistCount() > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-rose-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
-                  {getWishlistCount() > 99 ? '99+' : getWishlistCount()}
-                </span>
-              )}
-            </div>
-            <span className="text-xs font-medium">Wishlist</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("orders")}
-            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors ${
-              activeTab === "orders"
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <ShoppingBag className="w-6 h-6" />
-            <span className="text-xs font-medium">Orders</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={`flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors ${
-              activeTab === "profile"
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <User className="w-6 h-6" />
-            <span className="text-xs font-medium">Profile</span>
-          </button>
+
+          {showNavMenu && (
+            <>
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowNavMenu(false)}
+              />
+              {/* Dropdown */}
+              <div className="absolute bottom-16 right-0 bg-card border border-border rounded-xl shadow-xl p-2 min-w-[160px] z-50">
+                <button
+                  onClick={() => { setActiveTab("wishlist"); setShowNavMenu(false) }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
+                >
+                  <Heart className="w-4 h-4" />
+                  <span>Wishlist</span>
+                  {getWishlistCount() > 0 && (
+                    <span className="ml-auto text-xs bg-rose-500 text-white rounded-full px-1.5 py-0.5 leading-none">
+                      {getWishlistCount() > 99 ? '99+' : getWishlistCount()}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab("chat"); setShowNavMenu(false) }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Messages</span>
+                  {unreadMessages > 0 && (
+                    <span className="ml-auto text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
+                      {unreadMessages > 99 ? '99+' : unreadMessages}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
         </div>
+      </div>
     </div>
     </>
   )

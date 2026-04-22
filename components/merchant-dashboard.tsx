@@ -43,6 +43,7 @@ import {
   Loader2,
   User,
   MessageSquare,
+  MoreVertical,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { NotificationsPanel } from "./notifications-panel"
@@ -107,6 +108,7 @@ export function MerchantDashboard() {
   const [todoError, setTodoError] = useState("")
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default")
   const [unreadMessages, setUnreadMessages] = useState(0)
+  const [showNavMenu, setShowNavMenu] = useState(false)
 
   const getTodoStorageKey = (merchantId: string) => `merchant_todos_${merchantId}`
   const getNotificationStorageKey = (merchantId: string) => `app_notifications_merchant_${merchantId}`
@@ -1722,31 +1724,107 @@ export function MerchantDashboard() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-2 pb-6">
+      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-2 pb-6 z-40">
         <div className="flex items-center justify-around">
-{[
-                  { id: "home", icon: Home, label: "Home", action: () => setActiveTab("home") },
-                  { id: "products", icon: Package, label: "Products", action: () => setActiveTab("products") },
-                  { id: "services", icon: Package, label: "Services", action: () => setActiveTab("services") },
-                  { id: "orders", icon: ShoppingBag, label: "Orders", action: () => setActiveTab("orders") },
-                  { id: "messages", icon: MessageSquare, label: "Messages", action: () => setActiveTab("messages") },
-                  { id: "ai", icon: Sparkles, label: "AI", action: () => setActiveTab("ai") },
-                  { id: "profile", icon: User, label: "Profile", action: () => setShowProfile(true) },
-                  { id: "settings", icon: Settings, label: "Settings", action: () => setActiveTab("settings") },
-                ].map((item) => (
+          {/* Home */}
+          <button
+            onClick={() => setActiveTab("home")}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
+              activeTab === "home" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Home className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Home</span>
+          </button>
+
+          {/* Orders */}
+          <button
+            onClick={() => setActiveTab("orders")}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
+              activeTab === "orders" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ShoppingBag className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Orders</span>
+          </button>
+
+          {/* Products */}
+          <button
+            onClick={() => setActiveTab("products")}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
+              activeTab === "products" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Package className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Products</span>
+          </button>
+
+          {/* Profile */}
+          <button
+            onClick={() => setShowProfile(true)}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
+              showProfile ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <User className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Profile</span>
+          </button>
+
+          {/* More */}
+          <div className="relative">
             <button
-              key={item.id}
-              onClick={item.action}
+              onClick={() => setShowNavMenu(!showNavMenu)}
               className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
-                activeTab === item.id 
-                  ? "text-primary bg-primary/10" 
+                showNavMenu || ["messages", "services", "ai", "settings"].includes(activeTab)
+                  ? "text-primary bg-primary/10"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <item.icon className="w-5 h-5" />
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <MoreVertical className="w-5 h-5" />
+              <span className="text-[10px] font-medium">More</span>
             </button>
-          ))}
+
+            {showNavMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowNavMenu(false)} />
+                <div className="absolute bottom-16 right-0 bg-card border border-border rounded-xl shadow-xl p-2 min-w-[170px] z-50">
+                  <button
+                    onClick={() => { setActiveTab("messages"); setShowNavMenu(false) }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span>Messages</span>
+                    {unreadMessages > 0 && (
+                      <span className="ml-auto text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
+                        {unreadMessages > 99 ? '99+' : unreadMessages}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab("services"); setShowNavMenu(false) }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Services</span>
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab("ai"); setShowNavMenu(false) }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>AI Assistant</span>
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab("settings"); setShowNavMenu(false) }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>Settings</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </nav>
     </div>
