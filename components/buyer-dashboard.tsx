@@ -457,13 +457,15 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           const numericDistance = Number(m.distance_km)
           const hasDistance = Number.isFinite(numericDistance)
           const isNearby = hasDistance && numericDistance <= 50
+          const ratingValue = Number(m.average_rating)
+          const reviewCountValue = Number(m.review_count)
 
           return {
             id: m.id,
             name: m.business_name || m.full_name || "Unknown",
             category: m.business_category || "General",
-            rating: 4.5 + Math.random() * 0.5,
-            reviews: Math.floor(Math.random() * 3000) + 100,
+            rating: Number.isFinite(ratingValue) && ratingValue > 0 ? ratingValue : null,
+            reviews: Number.isFinite(reviewCountValue) && reviewCountValue >= 0 ? reviewCountValue : 0,
             location: m.location || [m.city, m.state].filter(Boolean).join(', ') || "Nigeria",
             badge: isNearby ? "Near you" : "Verified",
             badgeColor: isNearby ? "bg-emerald-100 text-emerald-700" : "bg-primary/15 text-primary",
@@ -612,8 +614,8 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           id: firstVendor.id,
           name: firstVendor.name,
           category: firstVendor.category || 'General',
-          rating: 4.5,
-          reviews: 0,
+          rating: Number.isFinite(Number(firstVendor.average_rating)) ? Number(firstVendor.average_rating) : null,
+          reviews: Number.isFinite(Number(firstVendor.review_count)) ? Number(firstVendor.review_count) : 0,
           location: firstVendor.location || 'Nigeria',
           badge: 'Verified',
           badgeColor: 'bg-primary/15 text-primary',
@@ -1214,11 +1216,13 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
                   </span>
                   <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{vendor.description}</p>
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-1 text-xs">
-                      <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                      <span className="font-medium text-foreground">{vendor.rating.toFixed(1)}</span>
-                      <span className="text-muted-foreground">({vendor.reviews})</span>
-                    </div>
+                    {typeof vendor.rating === 'number' && vendor.rating > 0 && (
+                      <div className="flex items-center gap-1 text-xs">
+                        <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                        <span className="font-medium text-foreground">{vendor.rating.toFixed(1)}</span>
+                        <span className="text-muted-foreground">({vendor.reviews || 0})</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <MapPin className="w-3 h-3" />
                       <span className="truncate">

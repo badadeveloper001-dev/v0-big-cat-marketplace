@@ -36,8 +36,8 @@ interface VendorPageProps {
     id: string | number
     name: string
     category: string
-    rating: number
-    reviews: number
+    rating?: number | null
+    reviews?: number
     location: string
     badge: string
     badgeColor: string
@@ -55,40 +55,6 @@ interface VendorPageProps {
   onOpenCart?: () => void
   onCheckout?: () => void
 }
-
-const portfolioImages = [
-  { id: 1, label: "Formal Wear" },
-  { id: 2, label: "Dresses" },
-  { id: 3, label: "Casual" },
-  { id: 4, label: "Accessories" },
-]
-
-const reviews = [
-  {
-    id: 1,
-    name: "Adaeze O.",
-    date: "2 days ago",
-    rating: 5,
-    comment: "Excellent service and quality products! Will definitely order again.",
-    verified: true,
-  },
-  {
-    id: 2,
-    name: "Chidi M.",
-    date: "1 week ago",
-    rating: 4,
-    comment: "Good quality, fast delivery. The packaging was also very nice.",
-    verified: true,
-  },
-  {
-    id: 3,
-    name: "Funke A.",
-    date: "2 weeks ago",
-    rating: 5,
-    comment: "This vendor is amazing! Very responsive and professional.",
-    verified: false,
-  },
-]
 
 export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewProduct, onOpenCart, onCheckout }: VendorPageProps) {
   const { user } = useRole()
@@ -248,9 +214,9 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   }
 
   const getAiRecommendation = () => {
-    if (vendor.rating >= 4.9) {
+    if (typeof vendor.rating === 'number' && vendor.rating >= 4.9) {
       return { text: "Top Rated This Week", icon: TrendingUp, color: "bg-amber-50 text-amber-700 border-amber-200" }
-    } else if (vendor.reviews > 1000) {
+    } else if (Number(vendor.reviews || 0) > 1000) {
       return { text: "Highly Active Vendor", icon: Sparkles, color: "bg-primary/10 text-primary border-primary/20" }
     } else if (vendor.badge === "Fast Response") {
       return { text: "Quick Responder", icon: Clock, color: "bg-green-50 text-green-700 border-green-200" }
@@ -372,11 +338,13 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
                 
                 {/* Stats Row */}
                 <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                    <span className="font-semibold text-foreground">{vendor.rating}</span>
-                    <span className="text-muted-foreground text-sm">({vendor.reviews} reviews)</span>
-                  </div>
+                  {typeof vendor.rating === 'number' && vendor.rating > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                      <span className="font-semibold text-foreground">{vendor.rating.toFixed(1)}</span>
+                      <span className="text-muted-foreground text-sm">({vendor.reviews || 0} reviews)</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-1.5">
                     <MapPin className="w-4 h-4 text-muted-foreground" />
                     <span className="text-muted-foreground text-sm">{vendor.location}</span>
@@ -428,11 +396,7 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
         <section className="px-4 mb-6">
           <h2 className="font-semibold text-foreground text-lg mb-3">About</h2>
           <div className="bg-card border border-border rounded-2xl p-4">
-            <p className="text-muted-foreground leading-relaxed">
-              {vendor.description}. We specialize in premium quality products and services with over 5 years of experience. 
-              Our commitment to excellence has earned us thousands of satisfied customers. 
-              Every order is handled with care and attention to detail.
-            </p>
+            <p className="text-muted-foreground leading-relaxed">{vendor.description}</p>
           </div>
         </section>
 
@@ -453,36 +417,6 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
             </div>
             <p className="text-sm font-bold text-primary">{formatNaira(cartTotal)}</p>
           </button>
-        </section>
-
-        {/* Portfolio Gallery */}
-        <section className="mb-6">
-          <div className="flex items-center justify-between px-4 mb-3">
-            <h2 className="font-semibold text-foreground text-lg">Portfolio</h2>
-            <button 
-              onClick={onBrowseMore}
-              className="text-sm text-primary font-medium flex items-center gap-0.5"
-            >
-              View all <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-hide">
-            {portfolioImages.map((img) => (
-              <div
-                key={img.id}
-                className="flex-shrink-0 relative group"
-              >
-                <div className="w-32 h-32 rounded-2xl bg-secondary border border-border overflow-hidden shadow-sm">
-                  <div className="w-full h-full bg-gradient-to-br from-secondary to-muted flex items-center justify-center">
-                    <span className="text-4xl opacity-50">
-                      {img.id === 1 ? "👔" : img.id === 2 ? "👗" : img.id === 3 ? "👕" : "👜"}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2 text-center">{img.label}</p>
-              </div>
-            ))}
-          </div>
         </section>
 
         {/* Products/Services */}
@@ -537,10 +471,6 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
                       </div>
                       
                       <div className="flex items-center gap-3 text-sm">
-                        <div className="flex items-center gap-1">
-                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                          <span className="text-muted-foreground">4.8</span>
-                        </div>
                         <span className={`${Number(product.stock || 0) > 0 ? 'text-muted-foreground' : 'text-destructive'}`}>
                           {Number(product.stock || 0) > 0 ? `${Number(product.stock || 0)} in stock` : 'Out of stock'}
                         </span>
@@ -595,55 +525,6 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
           )}
         </section>
 
-        {/* Reviews */}
-        <section className="px-4 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-foreground text-lg">Reviews</h2>
-            <button 
-              onClick={onBrowseMore}
-              className="text-sm text-primary font-medium flex items-center gap-0.5"
-            >
-              See all <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex flex-col gap-3">
-            {reviews.map((review) => (
-              <div
-                key={review.id}
-                className="bg-card border border-border rounded-2xl p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
-                      <span className="font-medium text-foreground text-sm">{review.name.charAt(0)}</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-foreground text-sm">{review.name}</span>
-                        {review.verified && (
-                          <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Verified
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground">{review.date}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-3.5 h-3.5 ${i < review.rating ? "text-amber-500 fill-amber-500" : "text-muted-foreground"}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <p className="text-muted-foreground text-sm leading-relaxed">{review.comment}</p>
-              </div>
-            ))}
-          </div>
-        </section>
       </main>
 
       {popupProduct && (
