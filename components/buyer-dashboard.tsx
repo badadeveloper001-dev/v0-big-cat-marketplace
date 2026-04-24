@@ -1562,19 +1562,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           <span className="text-xs font-medium">Orders</span>
         </button>
 
-        {/* Profile */}
-        <button
-          onClick={() => setActiveTab("profile")}
-          className={`flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors ${
-            activeTab === "profile"
-              ? "text-primary"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <User className="w-6 h-6" />
-          <span className="text-xs font-medium">Profile</span>
-        </button>
-
         {/* Messages */}
         <button
           onClick={() => setActiveTab("chat")}
@@ -1591,6 +1578,19 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
             </span>
           )}
           <span className="text-xs font-medium">Messages</span>
+        </button>
+
+        {/* Profile */}
+        <button
+          onClick={() => setActiveTab("profile")}
+          className={`flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors ${
+            activeTab === "profile"
+              ? "text-primary"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <User className="w-6 h-6" />
+          <span className="text-xs font-medium">Profile</span>
         </button>
       </div>
     </div>
