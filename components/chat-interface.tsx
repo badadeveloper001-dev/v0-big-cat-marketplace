@@ -186,9 +186,13 @@ function ChatListScreen({
 function ChatConversationScreen({
   conversation,
   onBack,
+  onViewStore,
+  onPlaceOrder,
 }: {
   conversation: Conversation
   onBack: () => void
+  onViewStore?: (conversation: Conversation) => void
+  onPlaceOrder?: (conversation: Conversation) => void
 }) {
   const { user } = useRole()
   const [messages, setMessages] = useState<Message[]>([])
@@ -432,7 +436,11 @@ function ChatConversationScreen({
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => {
-                window.location.href = "/"
+                if (onViewStore) {
+                  onViewStore(conversation)
+                } else {
+                  window.location.href = "/"
+                }
               }}
               className="flex items-center justify-center gap-2 p-3 bg-secondary hover:bg-secondary/80 rounded-xl transition-colors text-sm font-medium text-foreground"
             >
@@ -441,7 +449,11 @@ function ChatConversationScreen({
             </button>
             <button
               onClick={() => {
-                window.location.href = "/"
+                if (onPlaceOrder) {
+                  onPlaceOrder(conversation)
+                } else {
+                  window.location.href = "/"
+                }
               }}
               className="flex items-center justify-center gap-2 p-3 bg-primary hover:bg-primary/90 rounded-xl transition-colors text-sm font-medium text-primary-foreground"
             >
@@ -504,9 +516,13 @@ function ChatConversationScreen({
 export function ChatInterface({
   initialConversation = null,
   onUnreadChange,
+  onViewStore,
+  onPlaceOrder,
 }: {
   initialConversation?: Conversation | null
   onUnreadChange?: (count: number) => void
+  onViewStore?: (conversation: Conversation) => void
+  onPlaceOrder?: (conversation: Conversation) => void
 }) {
   const { user } = useRole()
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(initialConversation)
@@ -626,7 +642,7 @@ export function ChatInterface({
   }
 
   if (selectedConversation) {
-    return <ChatConversationScreen conversation={selectedConversation} onBack={() => setSelectedConversation(null)} />
+    return <ChatConversationScreen conversation={selectedConversation} onBack={() => setSelectedConversation(null)} onViewStore={onViewStore} onPlaceOrder={onPlaceOrder} />
   }
 
   return (

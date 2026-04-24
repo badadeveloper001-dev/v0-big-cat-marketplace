@@ -756,7 +756,44 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           </div>
         </header>
         <div className="flex-1">
-          <ChatInterface initialConversation={initialConversation} onUnreadChange={setUnreadMessages} />
+          <ChatInterface
+            initialConversation={initialConversation}
+            onUnreadChange={setUnreadMessages}
+            onViewStore={(conv) => {
+              setShowChat(false)
+              setSelectedVendor({
+                id: conv.vendorId,
+                name: conv.vendorName,
+                category: "General",
+                rating: Number.isFinite(Number(conv.vendorRating)) ? Number(conv.vendorRating) : null,
+                reviews: 0,
+                location: conv.vendorLocation || "Nigeria",
+                badge: "Verified",
+                badgeColor: "bg-primary/15 text-primary",
+                bgColor: "bg-blue-100",
+                initials: (conv.vendorName || "MN").substring(0, 2).toUpperCase(),
+                iconColor: "text-blue-600",
+                description: "Quality products and services",
+              })
+            }}
+            onPlaceOrder={(conv) => {
+              setShowChat(false)
+              setSelectedVendor({
+                id: conv.vendorId,
+                name: conv.vendorName,
+                category: "General",
+                rating: Number.isFinite(Number(conv.vendorRating)) ? Number(conv.vendorRating) : null,
+                reviews: 0,
+                location: conv.vendorLocation || "Nigeria",
+                badge: "Verified",
+                badgeColor: "bg-primary/15 text-primary",
+                bgColor: "bg-blue-100",
+                initials: (conv.vendorName || "MN").substring(0, 2).toUpperCase(),
+                iconColor: "text-blue-600",
+                description: "Quality products and services",
+              })
+            }}
+          />
         </div>
       </div>
     )
