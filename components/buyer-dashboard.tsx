@@ -35,7 +35,6 @@ import {
   X,
   LogOut,
   Loader2,
-  MoreVertical,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { formatNaira } from "@/lib/currency-utils"
@@ -99,7 +98,6 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   const [showChat, setShowChat] = useState(false)
   const [initialConversation, setInitialConversation] = useState<any | null>(null)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
-  const [showNavMenu, setShowNavMenu] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showPaymentMethods, setShowPaymentMethods] = useState(false)
@@ -974,6 +972,21 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
                 Sign In
               </button>
             )}
+            <button
+              onClick={() => setActiveTab("wishlist")}
+              className={`relative p-2 transition-colors ${
+                activeTab === "wishlist" ? "text-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+              aria-label="Wishlist"
+              title="Wishlist"
+            >
+              <Heart className="w-5 h-5" />
+              {getWishlistCount() > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                  {getWishlistCount() > 99 ? '99+' : getWishlistCount()}
+                </span>
+              )}
+            </button>
             <button 
               onClick={() => setShowNotifications(true)}
               className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -1562,57 +1575,23 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
           <span className="text-xs font-medium">Profile</span>
         </button>
 
-        {/* More Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setShowNavMenu(!showNavMenu)}
-            className={`flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors ${
-              showNavMenu || activeTab === "wishlist" || activeTab === "chat"
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <MoreVertical className="w-6 h-6" />
-            <span className="text-xs font-medium">More</span>
-          </button>
-
-          {showNavMenu && (
-            <>
-              {/* Backdrop */}
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setShowNavMenu(false)}
-              />
-              {/* Dropdown */}
-              <div className="absolute bottom-16 right-0 bg-card border border-border rounded-xl shadow-xl p-2 min-w-[160px] z-50">
-                <button
-                  onClick={() => { setActiveTab("wishlist"); setShowNavMenu(false) }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
-                >
-                  <Heart className="w-4 h-4" />
-                  <span>Wishlist</span>
-                  {getWishlistCount() > 0 && (
-                    <span className="ml-auto text-xs bg-rose-500 text-white rounded-full px-1.5 py-0.5 leading-none">
-                      {getWishlistCount() > 99 ? '99+' : getWishlistCount()}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab("chat"); setShowNavMenu(false) }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Messages</span>
-                  {unreadMessages > 0 && (
-                    <span className="ml-auto text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
-                      {unreadMessages > 99 ? '99+' : unreadMessages}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </>
+        {/* Messages */}
+        <button
+          onClick={() => setActiveTab("chat")}
+          className={`relative flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors ${
+            activeTab === "chat"
+              ? "text-primary"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <MessageSquare className="w-6 h-6" />
+          {unreadMessages > 0 && (
+            <span className="absolute top-1 right-2 min-w-[16px] h-4 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+              {unreadMessages > 99 ? '99+' : unreadMessages}
+            </span>
           )}
-        </div>
+          <span className="text-xs font-medium">Messages</span>
+        </button>
       </div>
     </div>
     </>
