@@ -43,7 +43,6 @@ import {
   Loader2,
   User,
   MessageSquare,
-  MoreVertical,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { NotificationsPanel } from "./notifications-panel"
@@ -108,7 +107,6 @@ export function MerchantDashboard() {
   const [todoError, setTodoError] = useState("")
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default")
   const [unreadMessages, setUnreadMessages] = useState(0)
-  const [showNavMenu, setShowNavMenu] = useState(false)
 
   const merchantKind = user?.merchantType || user?.merchantProfile?.merchant_type || 'products'
   const isServiceMerchant = merchantKind === 'services'
@@ -1812,54 +1810,16 @@ export function MerchantDashboard() {
             <span className="text-[10px] font-medium">Profile</span>
           </button>
 
-          {/* More */}
-          <div className="relative">
-            <button
-              onClick={() => setShowNavMenu(!showNavMenu)}
-              className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
-                showNavMenu || ["messages", "ai", "settings"].includes(activeTab)
-                  ? "text-primary bg-primary/10"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <MoreVertical className="w-5 h-5" />
-              <span className="text-[10px] font-medium">More</span>
-            </button>
-
-            {showNavMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowNavMenu(false)} />
-                <div className="absolute bottom-16 right-0 bg-card border border-border rounded-xl shadow-xl p-2 min-w-[170px] z-50">
-                  <button
-                    onClick={() => { setActiveTab("messages"); setShowNavMenu(false) }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Messages</span>
-                    {unreadMessages > 0 && (
-                      <span className="ml-auto text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
-                        {unreadMessages > 99 ? '99+' : unreadMessages}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => { setActiveTab("ai"); setShowNavMenu(false) }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>AI Assistant</span>
-                  </button>
-                  <button
-                    onClick={() => { setActiveTab("settings"); setShowNavMenu(false) }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors text-foreground hover:text-primary text-sm font-medium"
-                  >
-                    <Settings className="w-4 h-4" />
-                    <span>Settings</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          {/* Settings */}
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
+              activeTab === "settings" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Settings className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Settings</span>
+          </button>
         </div>
       </nav>
     </div>
