@@ -20,6 +20,7 @@ import {
   Home,
   Search,
   ShoppingBag,
+  ShoppingCart,
   User,
   Bell,
   MessageSquare,
@@ -1024,7 +1025,20 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
                 </span>
               )}
             </button>
-            <button 
+            <button
+              onClick={() => setShowCart(true)}
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Cart"
+              title="Cart"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              {getCartItemCount() > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                  {getCartItemCount() > 99 ? '99+' : getCartItemCount()}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setShowNotifications(true)}
               className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Notifications"
