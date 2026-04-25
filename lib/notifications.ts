@@ -33,6 +33,15 @@ interface NotificationRow {
 
 let resendClient: Resend | null = null
 
+function isMissingNotificationInfraError(error: any) {
+  const message = String(error?.message || "").toLowerCase()
+  return message.includes("does not exist")
+    || message.includes("relation")
+    || message.includes("schema cache")
+    || message.includes("could not find")
+    || message.includes("column")
+}
+
 function getResendClient() {
   if (resendClient) return resendClient
 
@@ -141,7 +150,7 @@ async function insertNotification(payload: {
   let lastError: any = null
   for (const attempt of attempts) {
     const { error } = await (supabase.from("user_notifications") as any).insert(attempt)
-    if (!error) return
+    if (!error) return { inserted: true }
 
     const message = String(error.message || "").toLowerCase()
     if (message.includes("column") || message.includes("schema cache") || message.includes("does not exist")) {
@@ -152,7 +161,14 @@ async function insertNotification(payload: {
     throw error
   }
 
-  if (lastError) throw lastError
+  if (lastError) {
+    if (isMissingNotificationInfraError(lastError)) {
+      return { inserted: false, skipped: true, reason: "Notification tables are not available yet" }
+    }
+    throw lastError
+  }
+
+  return { inserted: false, skipped: true, reason: "Notification insert was skipped" }
 }
 
 async function maybeSendEmail(userId: string, input: DispatchNotificationInput) {
@@ -212,13 +228,19 @@ export async function dispatchNotification(input: DispatchNotificationInput) {
   const eventKey = input.eventKey?.trim() || ""
 
   if (eventKey) {
-    const alreadyProcessed = await hasProcessedEvent(eventKey)
-    if (alreadyProcessed) {
-      return { success: true, skipped: true, reason: "Duplicate event blocked" }
+    try {
+      const alreadyProcessed = await hasProcessedEvent(eventKey)
+      if (alreadyProcessed) {
+        return { success: true, skipped: true, reason: "Duplicate event blocked" }
+      }
+    } catch (error: any) {
+      if (!isMissingNotificationInfraError(error)) {
+        throw error
+      }
     }
   }
 
-  await insertNotification({
+  const notificationInsert = await insertNotification({
     user_id: userId,
     title: input.title,
     message: input.message,
@@ -230,15 +252,22 @@ export async function dispatchNotification(input: DispatchNotificationInput) {
   const emailResult = await maybeSendEmail(userId, input)
 
   if (eventKey) {
-    await recordProcessedEvent(eventKey, userId, input.type, {
-      ...(input.metadata || {}),
-      email_sent: Boolean(emailResult.sent),
-      email_reason: emailResult.sent ? null : emailResult.reason,
-    })
+    try {
+      await recordProcessedEvent(eventKey, userId, input.type, {
+        ...(input.metadata || {}),
+        email_sent: Boolean(emailResult.sent),
+        email_reason: emailResult.sent ? null : emailResult.reason,
+      })
+    } catch (error: any) {
+      if (!isMissingNotificationInfraError(error)) {
+        throw error
+      }
+    }
   }
 
   return {
     success: true,
+    notification: notificationInsert,
     email: emailResult,
   }
 }
