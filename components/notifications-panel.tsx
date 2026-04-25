@@ -8,16 +8,13 @@ import {
   X,
   Package,
   ShoppingBag,
-  CheckCircle,
-  AlertTriangle,
   MessageSquare,
-  Truck,
   Clock,
 } from "lucide-react"
 
 interface Notification {
   id: string
-  type: "order" | "delivery" | "message" | "system" | "warning"
+  type: "order" | "system" | "alert" | "report"
   title: string
   message: string
   time: string
@@ -34,80 +31,57 @@ interface NotificationsPanelProps {
 }
 
 export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrders, onOpenMessages }: NotificationsPanelProps) {
-  const { role, user } = useRole()
+  const { user } = useRole()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [activeFilter, setActiveFilter] = useState<'all' | Notification['type']>('all')
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
 
-  const getNotificationStorageKey = (currentRole: string, userId: string) => `app_notifications_${currentRole}_${userId}`
+  const hydrateNotifications = async () => {
+    if (!user?.userId) {
+      setNotifications([])
+      return
+    }
 
-  const syncStoredNotifications = (nextNotifications: Notification[]) => {
-    setNotifications(nextNotifications)
+    try {
+      const response = await fetch('/api/notifications?limit=100', { cache: 'no-store' })
+      const result = await response.json()
+      if (!result?.success) return
 
-    if (typeof window === "undefined" || !role || !user?.userId) return
+      const mapped = (result.data || []).map((item: any) => ({
+        id: String(item.id),
+        type: (['order', 'system', 'alert', 'report'].includes(String(item.type)) ? item.type : 'system') as Notification['type'],
+        title: String(item.title || 'Notification'),
+        message: String(item.message || ''),
+        read: Boolean(item.read_at),
+        createdAt: item.created_at || new Date().toISOString(),
+        time: item.created_at
+          ? new Date(item.created_at).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })
+          : 'Just now',
+      }))
 
-    const storedNotifications = nextNotifications.filter((notification) => notification.id !== "welcome")
-    localStorage.setItem(getNotificationStorageKey(role, user.userId), JSON.stringify(storedNotifications))
-    window.dispatchEvent(new Event("bigcat-notifications-updated"))
+      setNotifications(mapped)
+    } catch {
+      // Keep previous notifications on fetch failure.
+    }
   }
 
   useEffect(() => {
-    if (typeof window === "undefined" || !role) return
+    hydrateNotifications()
+  }, [user?.userId])
 
-    const loadNotifications = () => {
-      const stored = user?.userId
-        ? JSON.parse(localStorage.getItem(getNotificationStorageKey(role, user.userId)) || "[]") as Notification[]
-        : []
-
-      const nextNotifications = [...stored]
-
-      if (role === "buyer" || role === "merchant") {
-        const hasSeenWelcome = localStorage.getItem(`welcome_notification_${role}`)
-        if (!hasSeenWelcome) {
-          nextNotifications.unshift({
-            id: "welcome",
-            type: "system",
-            title: "Welcome to BigCat!",
-            message: role === "buyer"
-              ? "Start exploring our marketplace for amazing deals."
-              : "Set up your store and start selling today.",
-            time: "Just now",
-            read: false,
-            createdAt: new Date().toISOString(),
-          })
-          localStorage.setItem(`welcome_notification_${role}`, "true")
-        }
-      }
-
-      setNotifications(
-        nextNotifications.sort((a, b) => {
-          const left = new Date(b.createdAt || 0).getTime()
-          const right = new Date(a.createdAt || 0).getTime()
-          return left - right
-        }),
-      )
-    }
-
-    loadNotifications()
-    window.addEventListener("storage", loadNotifications)
-    window.addEventListener("bigcat-notifications-updated", loadNotifications)
-
-    return () => {
-      window.removeEventListener("storage", loadNotifications)
-      window.removeEventListener("bigcat-notifications-updated", loadNotifications)
-    }
-  }, [role, user?.userId])
+  useEffect(() => {
+    if (!isOpen || !user?.userId) return
+    hydrateNotifications()
+  }, [isOpen, user?.userId])
 
   const getIcon = (type: Notification["type"]) => {
     switch (type) {
       case "order":
         return <ShoppingBag className="w-5 h-5" />
-      case "delivery":
-        return <Truck className="w-5 h-5" />
-      case "message":
+      case "report":
+        return <Package className="w-5 h-5" />
+      case "alert":
         return <MessageSquare className="w-5 h-5" />
-      case "warning":
-        return <AlertTriangle className="w-5 h-5" />
       case "system":
       default:
         return <Bell className="w-5 h-5" />
@@ -118,11 +92,9 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
     switch (type) {
       case "order":
         return "bg-primary/10 text-primary"
-      case "delivery":
+      case "report":
         return "bg-chart-3/10 text-chart-3"
-      case "message":
-        return "bg-chart-4/10 text-chart-4"
-      case "warning":
+      case "alert":
         return "bg-destructive/10 text-destructive"
       case "system":
       default:
@@ -131,11 +103,17 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
   }
 
   const markAsRead = (id: string) => {
-    syncStoredNotifications(
-      notifications.map((notification) =>
+    setNotifications((current) =>
+      current.map((notification) =>
         notification.id === id ? { ...notification, read: true } : notification,
       ),
     )
+
+    fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notificationId: id }),
+    }).catch(() => null)
   }
 
   const openNotificationDetail = (notification: Notification) => {
@@ -146,7 +124,13 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
   }
 
   const markAllAsRead = () => {
-    syncStoredNotifications(notifications.map((notification) => ({ ...notification, read: true })))
+    setNotifications((current) => current.map((notification) => ({ ...notification, read: true })))
+
+    fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markAll: true }),
+    }).catch(() => null)
   }
 
   const unreadCount = notifications.filter(n => !n.read).length
@@ -159,7 +143,7 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
     : null
 
   const getPrimaryAction = (notification: Notification) => {
-    if (notification.type === 'order' || notification.type === 'delivery') {
+    if (notification.type === 'order' || notification.type === 'report') {
       return {
         label: 'View Orders',
         onClick: () => {
@@ -169,7 +153,7 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
       }
     }
 
-    if (notification.type === 'message') {
+    if (notification.type === 'alert') {
       return {
         label: 'Open Messages',
         onClick: () => {
@@ -289,7 +273,7 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
           ) : (
             <>
               <div className="mb-3 flex flex-wrap gap-2">
-                {(['all', 'order', 'delivery', 'message', 'warning', 'system'] as const).map((filter) => (
+                {(['all', 'order', 'system', 'alert', 'report'] as const).map((filter) => (
                   <button
                     key={filter}
                     onClick={() => setActiveFilter(filter)}

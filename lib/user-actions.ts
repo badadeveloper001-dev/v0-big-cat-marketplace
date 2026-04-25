@@ -70,7 +70,27 @@ export async function updateEmail(userId: string, newEmail: string) {
 }
 
 export async function updateNotificationPreferences(userId: string, preferences: any) {
-  return { success: true }
+  try {
+    const supabase = await createClient()
+    const payload = {
+      email_notifications: Boolean(preferences?.email_notifications),
+      push_notifications: Boolean(preferences?.push_notifications),
+      sms_notifications: Boolean(preferences?.sms_notifications),
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase
+      .from('auth_users')
+      .update(payload)
+      .eq('id', userId)
+      .select('id, email_notifications, push_notifications, sms_notifications')
+      .single()
+
+    if (error) throw error
+    return { success: true, data }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
 }
 
 export async function deleteAccount(userId: string) {

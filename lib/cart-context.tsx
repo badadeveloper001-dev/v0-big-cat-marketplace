@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { useRole } from '@/lib/role-context'
 
 export interface CartItem {
   id: string
@@ -25,6 +26,7 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useRole()
   const [items, setItems] = useState<CartItem[]>([])
 
   const addItem = useCallback((newItem: CartItem) => {
@@ -62,7 +64,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = useCallback(() => {
     setItems([])
-  }, [])
+
+    if (!user?.userId) return
+
+    fetch('/api/automation/cart-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user.userId,
+        action: 'checked_out',
+        itemCount: 0,
+        cartValue: 0,
+      }),
+    }).catch(() => null)
+  }, [user?.userId])
 
   const getTotal = useCallback(() => {
     return items.reduce((total, item) => total + item.price * item.quantity, 0)
@@ -71,6 +86,33 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const getItemCount = useCallback(() => {
     return items.reduce((count, item) => count + item.quantity, 0)
   }, [items])
+
+  useEffect(() => {
+    if (!user?.userId) return
+
+    if (items.length === 0) return
+
+    const timeout = setTimeout(() => {
+      const itemCount = items.reduce((count, item) => count + item.quantity, 0)
+      const cartValue = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+
+      fetch('/api/automation/cart-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.userId,
+          action: 'active',
+          itemCount,
+          cartValue,
+          metadata: {
+            productIds: items.map((item) => item.productId),
+          },
+        }),
+      }).catch(() => null)
+    }, 700)
+
+    return () => clearTimeout(timeout)
+  }, [items, user?.userId])
 
   return (
     <CartContext.Provider

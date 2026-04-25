@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
+import { dispatchNotification } from '@/lib/notifications'
 
 function generateId(prefix: string) {
   return `${prefix}_${randomUUID()}`
@@ -149,6 +150,28 @@ export async function sendMessage(conversationId: string, senderId: string, cont
       .from('conversations')
       .update({ last_message_at: new Date().toISOString() } as any)
       .eq('id', conversationId)
+
+    const recipientId = String(conversation?.buyer_id) === String(senderId)
+      ? String(conversation?.merchant_id || '')
+      : String(conversation?.buyer_id || '')
+
+    if (recipientId) {
+      const senderProfile = await (supabase.from('auth_users') as any)
+        .select('name, business_name')
+        .eq('id', senderId)
+        .maybeSingle()
+
+      const senderName = String(senderProfile.data?.business_name || senderProfile.data?.name || 'A user')
+      const preview = String(content || '').slice(0, 120)
+
+      await dispatchNotification({
+        userId: recipientId,
+        type: 'system',
+        title: 'New chat message',
+        message: `${senderName}: ${preview}`,
+        emailSubject: 'You have a new message on BigCat Marketplace',
+      })
+    }
 
     return { success: true, data: result.data }
   } catch (error: any) {

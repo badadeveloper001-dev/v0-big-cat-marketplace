@@ -43,6 +43,31 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
     sms_notifications: false,
   })
 
+  useEffect(() => {
+    if (!user?.userId) return
+
+    const loadPreferences = async () => {
+      try {
+        const response = await fetch(`/api/user/profile?userId=${encodeURIComponent(user.userId)}`, {
+          cache: 'no-store',
+        })
+        const result = await response.json()
+
+        if (!result?.success || !result?.data) return
+
+        setNotifications({
+          email_notifications: result.data.email_notifications !== false,
+          push_notifications: result.data.push_notifications !== false,
+          sms_notifications: Boolean(result.data.sms_notifications),
+        })
+      } catch {
+        // Ignore profile fetch failures and keep defaults.
+      }
+    }
+
+    loadPreferences()
+  }, [user?.userId])
+
   // Handle password change
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()

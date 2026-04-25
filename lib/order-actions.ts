@@ -3,6 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { holdFundsInEscrow, releaseFundsFromEscrow } from '@/lib/escrow-actions'
 import { getUserSafetyStatus } from '@/lib/server-trust-safety'
+import { registerOrderForLogistics } from '@/lib/logistics-actions'
+import { dispatchNotification } from '@/lib/notifications'
 
 function isMissingColumnError(error: any) {
   const message = String(error?.message || '').toLowerCase()
@@ -11,6 +13,15 @@ function isMissingColumnError(error: any) {
     || message.includes('schema cache')
     || message.includes('could not find')
   )
+}
+
+function isMissingResourceError(error: any) {
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes('does not exist')
+    || message.includes('schema cache')
+    || message.includes('could not find')
+    || message.includes('relation')
+    || message.includes('column')
 }
 
 export async function getBuyerOrders(buyerId: string) {
@@ -96,6 +107,12 @@ export async function createOrder(
       acc[key].push(item)
       return acc
     }, {})
+
+    const buyerProfileResult = await (supabase.from('auth_users') as any)
+      .select('name, email, phone, city, state')
+      .eq('id', payload.buyerId)
+      .maybeSingle()
+    const buyerProfile = buyerProfileResult.data || null
 
     const createdOrders: any[] = []
 
@@ -235,6 +252,74 @@ export async function createOrder(
         resolvedPaymentMethod,
       )
 
+      const orderIdRef = String(orderResult.data?.id || orderId)
+
+      await dispatchNotification({
+        userId: normalizedMerchantId,
+        type: 'order',
+        title: 'You have a new order',
+        message: `Order ${orderIdRef} was placed and is awaiting processing.`,
+        eventKey: `order:new:merchant:${orderIdRef}`,
+        emailSubject: 'New order received',
+      })
+
+      await dispatchNotification({
+        userId: payload.buyerId,
+        type: 'order',
+        title: 'Your order has been received',
+        message: `Order ${orderIdRef} has been received by the merchant.`,
+        eventKey: `order:new:buyer:${orderIdRef}`,
+        emailSubject: 'Order received',
+      })
+
+      await dispatchNotification({
+        userId: payload.buyerId,
+        type: 'order',
+        title: 'Payment confirmation',
+        message: `Payment for order ${orderIdRef} has been confirmed.`,
+        eventKey: `order:payment-confirmed:${orderIdRef}`,
+        emailSubject: 'Payment confirmation',
+      })
+
+      let logisticsRegisteredAt: string | null = null
+      if (String(payload.deliveryType || '').toLowerCase() !== 'pickup') {
+        const logisticsResult = await registerOrderForLogistics({
+          order_id: orderIdRef,
+          customer_name: String(buyerProfile?.name || buyerProfile?.email || 'Customer'),
+          customer_phone: String(buyerProfile?.phone || ''),
+          customer_city: String(buyerProfile?.city || ''),
+          customer_state: String(buyerProfile?.state || ''),
+          delivery_address: payload.deliveryAddress,
+          items: merchantItems.map((item) => ({
+            product_name: item.productName || 'Product',
+            quantity: Number(item.quantity || 0),
+          })),
+          total_amount: grandTotal,
+          delivery_fee: allocatedDeliveryFee,
+          status: 'pending',
+        })
+
+        if (logisticsResult.success) {
+          logisticsRegisteredAt = new Date().toISOString()
+        }
+      }
+
+      try {
+        await (supabase.from('order_automation_state') as any).upsert({
+          order_id: orderIdRef,
+          merchant_id: normalizedMerchantId,
+          buyer_id: payload.buyerId,
+          buyer_notified_at: new Date().toISOString(),
+          merchant_notified_at: new Date().toISOString(),
+          payment_notified_at: new Date().toISOString(),
+          logistics_registered_at: logisticsRegisteredAt,
+        }, { onConflict: 'order_id' })
+      } catch (stateError: any) {
+        if (!isMissingResourceError(stateError)) {
+          throw stateError
+        }
+      }
+
       createdOrders.push(orderResult.data)
     }
 
@@ -294,7 +379,67 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
 
     if (!data && lastError) throw lastError
 
+    const buyerId = String(data?.buyer_id || '')
+    const merchantId = String(data?.merchant_id || '')
+
+    if (normalizedStatus === 'in_transit' || normalizedStatus === 'shipped') {
+      if (buyerId) {
+        await dispatchNotification({
+          userId: buyerId,
+          type: 'order',
+          title: 'Delivery update',
+          message: `Order ${orderId} is now in transit.`,
+          eventKey: `order:delivery-update:${orderId}:${normalizedStatus}`,
+          emailSubject: 'Your order is in transit',
+        })
+      }
+    }
+
+    if (normalizedStatus === 'cancelled') {
+      if (buyerId) {
+        await dispatchNotification({
+          userId: buyerId,
+          type: 'order',
+          title: 'Order cancelled',
+          message: `Order ${orderId} has been cancelled.`,
+          eventKey: `order:cancelled:buyer:${orderId}`,
+          emailSubject: 'Order cancelled',
+        })
+      }
+      if (merchantId) {
+        await dispatchNotification({
+          userId: merchantId,
+          type: 'order',
+          title: 'Order cancelled',
+          message: `Order ${orderId} has been cancelled.`,
+          eventKey: `order:cancelled:merchant:${orderId}`,
+          emailSubject: 'Order cancelled',
+        })
+      }
+    }
+
     if (normalizedStatus === 'delivered') {
+      if (buyerId) {
+        await dispatchNotification({
+          userId: buyerId,
+          type: 'order',
+          title: 'Order delivered',
+          message: `Order ${orderId} has been delivered successfully.`,
+          eventKey: `order:delivered:buyer:${orderId}`,
+          emailSubject: 'Order delivered',
+        })
+      }
+      if (merchantId) {
+        await dispatchNotification({
+          userId: merchantId,
+          type: 'order',
+          title: 'Order marked delivered',
+          message: `Order ${orderId} was marked as delivered and settled.`,
+          eventKey: `order:delivered:merchant:${orderId}`,
+          emailSubject: 'Order delivered',
+        })
+      }
+
       const released = await releaseFundsFromEscrow(supabase, orderId, data)
       return {
         success: true,
