@@ -56,6 +56,33 @@ function mapSignupProfileInsertError(error: any) {
   return 'Failed to create account. Please try again.'
 }
 
+function mapAuthCreateUserError(error: any) {
+  const raw = String(error?.message || '').trim()
+  const message = raw.toLowerCase()
+
+  if (message.includes('already registered') || message.includes('already exists') || message.includes('duplicate')) {
+    return 'An account with this email already exists. Please try logging in instead.'
+  }
+
+  if (message.includes('password')) {
+    return 'Password is invalid. Use at least 6 characters and try again.'
+  }
+
+  if (message.includes('email')) {
+    return 'Email is invalid. Please enter a valid email address.'
+  }
+
+  if (message.includes('permission') || message.includes('not allowed') || message.includes('service_role')) {
+    return 'Server auth configuration error. Please contact support.'
+  }
+
+  if (message.includes('database error saving new user')) {
+    return 'Account could not be created due to a backend constraint. Please try again or contact support.'
+  }
+
+  return raw || 'Failed to create account. Please try again.'
+}
+
 /** Anon-key client — only used for signInWithPassword (no service-role needed) */
 function getAnonClient() {
   return createAnonClient(
@@ -77,10 +104,8 @@ export async function signup(email: string, password: string, name: string, phon
     })
 
     if (authError) {
-      if (authError.message?.toLowerCase().includes('already registered') || authError.message?.toLowerCase().includes('already exists')) {
-        return { success: false, error: 'An account with this email already exists. Please try logging in instead.' }
-      }
-      return { success: false, error: 'Failed to create account. Please try again.' }
+      console.error('Supabase createUser failed (signup):', authError)
+      return { success: false, error: mapAuthCreateUserError(authError) }
     }
 
     const supabaseUserId = authData.user.id
@@ -130,10 +155,8 @@ export async function signupEnhanced(params: {
     })
 
     if (authError) {
-      if (authError.message?.toLowerCase().includes('already registered') || authError.message?.toLowerCase().includes('already exists')) {
-        return { success: false, error: 'An account with this email already exists. Please try logging in instead.' }
-      }
-      return { success: false, error: 'Failed to create account. Please try again.' }
+      console.error('Supabase createUser failed (signupEnhanced):', authError)
+      return { success: false, error: mapAuthCreateUserError(authError) }
     }
 
     const supabaseUserId = authData.user.id
