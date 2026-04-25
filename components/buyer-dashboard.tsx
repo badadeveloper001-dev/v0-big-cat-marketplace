@@ -681,7 +681,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
   }
 
   const authModal = showAuthPrompt ? (
-    <div className="fixed inset-0 z-[85] bg-black/50 p-4 py-6 flex items-center justify-center">
+    <div className="fixed inset-0 z-[85] bg-black/50 p-4 py-6 flex items-start sm:items-center justify-center overflow-y-auto">
       <BuyerAuth
         mode="modal"
         onBack={() => {

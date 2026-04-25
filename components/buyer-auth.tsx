@@ -279,7 +279,7 @@ export function BuyerAuth({
   const isModal = mode === "modal"
 
   return (
-    <div className={isModal ? "w-full max-w-sm" : "min-h-screen bg-gradient-to-br from-background via-background to-secondary/30 flex flex-col font-sans"}>
+    <div className={isModal ? "w-full max-w-sm max-h-[calc(100vh-3rem)] overflow-y-auto" : "min-h-screen bg-gradient-to-br from-background via-background to-secondary/30 flex flex-col font-sans"}>
       {!isModal && (
         <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
@@ -294,7 +294,7 @@ export function BuyerAuth({
         </header>
       )}
 
-      <main className={isModal ? "" : "flex-1 flex flex-col items-center justify-center p-4"}>
+      <main className={isModal ? "pb-1" : "flex-1 flex flex-col items-center justify-center p-4"}>
         <div className="w-full max-w-sm">
           <div className={`bg-card rounded-3xl shadow-2xl border border-border/50 ${isModal ? "p-6" : "p-8 my-1"}`}>
             {isModal && (
