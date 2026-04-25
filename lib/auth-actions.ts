@@ -68,7 +68,11 @@ function mapAuthCreateUserError(error: any) {
     return 'Password is invalid. Use at least 6 characters and try again.'
   }
 
-  if (message.includes('email')) {
+  // Only report email-format error when Supabase explicitly says the format/address is invalid
+  if (
+    (message.includes('email') && (message.includes('invalid') || message.includes('format') || message.includes('validate'))) ||
+    message === 'invalid email'
+  ) {
     return 'Email is invalid. Please enter a valid email address.'
   }
 
