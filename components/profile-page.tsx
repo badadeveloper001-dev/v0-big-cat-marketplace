@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRole } from '@/lib/role-context'
 import { ArrowLeft, Camera, Loader2, Check, AlertCircle } from 'lucide-react'
 import Image from 'next/image'
@@ -18,7 +18,9 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -86,6 +88,63 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
       setMessage({ type: 'error', text: 'An error occurred' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user?.userId) return
+
+    setUploadingAvatar(true)
+    setMessage(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const uploadResult = await uploadResponse.json()
+      if (!uploadResponse.ok) {
+        throw new Error(uploadResult.error || 'Failed to upload image')
+      }
+
+      const avatarUrl = uploadResult.url
+      if (!avatarUrl) {
+        throw new Error('Upload completed but image URL is missing')
+      }
+
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.userId,
+          updates: {
+            avatar_url: avatarUrl,
+          },
+        }),
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update profile photo')
+      }
+
+      setProfile(result.data)
+      setMessage({ type: 'success', text: 'Profile photo updated successfully' })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to upload profile photo' })
+    } finally {
+      setUploadingAvatar(false)
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = ''
+      }
     }
   }
 
@@ -163,12 +222,25 @@ export function ProfilePage({ onBack }: { onBack: () => void }) {
               </span>
             )}
             <button
-              onClick={() => setMessage({ type: 'success', text: 'Profile photo upload will be available soon.' })}
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
               className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
             >
-              <Camera className="w-6 h-6 text-white" />
+              {uploadingAvatar ? (
+                <Loader2 className="w-6 h-6 text-white animate-spin" />
+              ) : (
+                <Camera className="w-6 h-6 text-white" />
+              )}
             </button>
           </div>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleAvatarUpload}
+            className="hidden"
+          />
           <p className="text-sm text-muted-foreground">Click to change photo</p>
         </div>
 
