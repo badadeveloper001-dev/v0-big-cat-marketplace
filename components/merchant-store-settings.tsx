@@ -17,20 +17,35 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const settingsInitializedRef = useRef(false)
-  const [storeSettings, setStoreSettings] = useState({
-    storeName: user?.merchantProfile?.business_name || '',
-    storeDescription: user?.merchantProfile?.business_description || '',
-    storeEmail: user?.email || '',
-    storePhone: user?.phone || '',
-    storeLocation: user?.merchantProfile?.location || '',
-    storeWebsite: '',
-    websiteTheme: 'emerald' as WebsiteTheme,
-    websiteLayout: 'classic' as WebsiteLayout,
-    bankAccountName: '',
-    bankAccountNumber: '',
-    bankCode: '',
-    minimumOrder: 1000,
-    commissionRate: 5,
+  const [storeSettings, setStoreSettings] = useState(() => {
+    // Try to restore saved theme from localStorage immediately (no flash)
+    let cachedTheme: WebsiteTheme = 'emerald'
+    let cachedLayout: WebsiteLayout = 'classic'
+    if (typeof window !== 'undefined' && user?.userId) {
+      try {
+        const raw = localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId))
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (parsed.theme) cachedTheme = parsed.theme as WebsiteTheme
+          if (parsed.layout) cachedLayout = parsed.layout as WebsiteLayout
+        }
+      } catch {}
+    }
+    return {
+      storeName: user?.merchantProfile?.business_name || '',
+      storeDescription: user?.merchantProfile?.business_description || '',
+      storeEmail: user?.email || '',
+      storePhone: user?.phone || '',
+      storeLocation: user?.merchantProfile?.location || '',
+      storeWebsite: '',
+      websiteTheme: cachedTheme,
+      websiteLayout: cachedLayout,
+      bankAccountName: '',
+      bankAccountNumber: '',
+      bankCode: '',
+      minimumOrder: 1000,
+      commissionRate: 5,
+    }
   })
 
   useEffect(() => {

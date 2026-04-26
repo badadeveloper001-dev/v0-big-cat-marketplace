@@ -48,18 +48,33 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
   const [activeTab, setActiveTab] = useState<'personal' | 'store'>('personal')
   const profileLoadedRef = useRef(false)
   
-  const [formData, setFormData] = useState({
-    // Personal info
-    full_name: '',
-    phone: '',
-    address: '',
-    // Store info
-    business_name: '',
-    business_description: '',
-    business_category: 'General Merchandise',
-    location: '',
-    website_theme: 'emerald' as WebsiteTheme,
-    website_layout: 'classic' as WebsiteLayout,
+  const [formData, setFormData] = useState(() => {
+    // Restore saved theme from localStorage immediately to avoid flash
+    let cachedTheme: WebsiteTheme = 'emerald'
+    let cachedLayout: WebsiteLayout = 'classic'
+    if (typeof window !== 'undefined' && user?.userId) {
+      try {
+        const raw = localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId))
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (parsed.theme) cachedTheme = parsed.theme as WebsiteTheme
+          if (parsed.layout) cachedLayout = parsed.layout as WebsiteLayout
+        }
+      } catch {}
+    }
+    return {
+      // Personal info
+      full_name: '',
+      phone: '',
+      address: '',
+      // Store info
+      business_name: '',
+      business_description: '',
+      business_category: 'General Merchandise',
+      location: '',
+      website_theme: cachedTheme,
+      website_layout: cachedLayout,
+    }
   })
 
   useEffect(() => {
