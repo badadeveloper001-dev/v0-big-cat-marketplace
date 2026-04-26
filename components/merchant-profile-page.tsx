@@ -78,6 +78,24 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
   })
 
   useEffect(() => {
+    if (!user?.userId || typeof window === 'undefined') return
+
+    try {
+      const raw = localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId))
+      if (!raw) return
+
+      const parsed = JSON.parse(raw)
+      setFormData((prev) => ({
+        ...prev,
+        website_theme: parsed.theme || prev.website_theme,
+        website_layout: parsed.layout || prev.website_layout,
+      }))
+    } catch {
+      // ignore invalid cached preferences
+    }
+  }, [user?.userId])
+
+  useEffect(() => {
     if (user?.userId && !profileLoadedRef.current) {
       loadProfile()
     }
@@ -164,11 +182,24 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
           setMessage({ type: 'error', text: themeResult.error || 'Failed to save mini website theme' })
           return
         }
+
+        const confirmedThemeResponse = await fetch(`/api/user/theme?userId=${encodeURIComponent(user?.userId || '')}`, {
+          cache: 'no-store',
+        })
+        const confirmedThemeResult = await confirmedThemeResponse.json()
+        const savedTheme = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_theme : undefined
+        const savedLayout = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_layout : undefined
+
+        if (savedTheme !== formData.website_theme || savedLayout !== formData.website_layout) {
+          setMessage({ type: 'error', text: 'Saved mini website preferences could not be confirmed' })
+          return
+        }
+
         // Also save to localStorage as a fast local cache
         if (user && typeof window !== 'undefined') {
           localStorage.setItem(
             getMerchantMiniWebsiteStorageKey(user.userId),
-            JSON.stringify({ theme: formData.website_theme, layout: formData.website_layout })
+            JSON.stringify({ theme: savedTheme, layout: savedLayout })
           )
         }
 
@@ -180,8 +211,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
               ...user,
               merchantProfile: {
                 ...user.merchantProfile,
-                website_theme: formData.website_theme,
-                website_layout: formData.website_layout,
+                website_theme: savedTheme,
+                website_layout: savedLayout,
               },
             })
           }
@@ -214,8 +245,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
       if (result.success) {
         setProfile({
           ...result.data,
-          website_theme: formData.website_theme,
-          website_layout: formData.website_layout,
+          website_theme: activeTab === 'store' ? formData.website_theme : result.data.website_theme,
+          website_layout: activeTab === 'store' ? formData.website_layout : result.data.website_layout,
         })
         setMessage({ type: 'success', text: activeTab === 'personal' ? 'Profile updated successfully' : 'Store and mini website updated successfully' })
 

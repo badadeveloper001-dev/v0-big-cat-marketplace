@@ -86,6 +86,8 @@ export function MerchantAuth({
       business_name: user.business_name || user.name,
       business_description: user.business_description || "",
       business_category: user.business_category || "",
+      website_theme: user.website_theme || undefined,
+      website_layout: user.website_layout || undefined,
       smedan_id: user.smedan_id || "",
       cac_id: user.cac_id || "",
       setup_completed: Boolean(user.setup_completed),

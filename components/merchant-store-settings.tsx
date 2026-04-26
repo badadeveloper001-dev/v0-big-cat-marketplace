@@ -49,6 +49,24 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
   })
 
   useEffect(() => {
+    if (!user?.userId || typeof window === 'undefined') return
+
+    try {
+      const raw = localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId))
+      if (!raw) return
+
+      const parsed = JSON.parse(raw)
+      setStoreSettings((prev) => ({
+        ...prev,
+        websiteTheme: parsed.theme || prev.websiteTheme,
+        websiteLayout: parsed.layout || prev.websiteLayout,
+      }))
+    } catch {
+      // ignore invalid cached preferences
+    }
+  }, [user?.userId])
+
+  useEffect(() => {
     if (!user?.userId || settingsInitializedRef.current) return
     settingsInitializedRef.current = true
 
@@ -138,10 +156,21 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
         throw new Error(themeResult.error || 'Failed to save mini website theme')
       }
 
+      const confirmedThemeResponse = await fetch(`/api/user/theme?userId=${encodeURIComponent(user.userId)}`, {
+        cache: 'no-store',
+      })
+      const confirmedThemeResult = await confirmedThemeResponse.json()
+      const savedTheme = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_theme : undefined
+      const savedLayout = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_layout : undefined
+
+      if (savedTheme !== storeSettings.websiteTheme || savedLayout !== storeSettings.websiteLayout) {
+        throw new Error('Saved mini website preferences could not be confirmed')
+      }
+
       if (typeof window !== 'undefined') {
         localStorage.setItem(
           getMerchantMiniWebsiteStorageKey(user.userId),
-          JSON.stringify({ theme: storeSettings.websiteTheme, layout: storeSettings.websiteLayout })
+          JSON.stringify({ theme: savedTheme, layout: savedLayout })
         )
       }
 
