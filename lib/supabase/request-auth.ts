@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { createClient as createBrowserlessClient } from '@supabase/supabase-js'
 
 export async function getRequestAuthUser(request?: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -11,6 +10,28 @@ export async function getRequestAuthUser(request?: Request) {
     return { user: null, error: 'Missing Supabase public environment variables' }
   }
 
+  // Path 1: bearer token in Authorization header (sent by browser fetch calls)
+  const authHeader = request?.headers.get('authorization') || ''
+  const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/i)
+  const accessToken = tokenMatch?.[1]
+
+  if (accessToken) {
+    try {
+      const res = await fetch(`${url}/auth/v1/user`, {
+        headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}` },
+      })
+      if (res.ok) {
+        const userData = await res.json()
+        if (userData?.id) {
+          return { user: userData, error: null }
+        }
+      }
+    } catch {
+      // fall through to cookie auth
+    }
+  }
+
+  // Path 2: session cookie (set by @supabase/ssr browser client after signInWithPassword)
   const cookieStore = await cookies()
 
   const supabase = createServerClient(url, anonKey, {
@@ -37,23 +58,6 @@ export async function getRequestAuthUser(request?: Request) {
 
   if (user && !error) {
     return { user, error: null }
-  }
-
-  // Fallback: accept bearer token from clients that keep Supabase session in local storage.
-  const authHeader = request?.headers.get('authorization') || ''
-  const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/i)
-  const accessToken = tokenMatch?.[1]
-
-  if (accessToken && url && anonKey) {
-    const tokenClient = createBrowserlessClient(url, anonKey)
-    const {
-      data: { user: tokenUser },
-      error: tokenError,
-    } = await tokenClient.auth.getUser(accessToken)
-
-    if (tokenUser && !tokenError) {
-      return { user: tokenUser, error: null }
-    }
   }
 
   return { user: null, error: error?.message || null }
