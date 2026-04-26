@@ -18,39 +18,60 @@ function isWebsiteLayout(value: unknown): value is WebsiteLayout {
   return value === 'classic' || value === 'minimal' || value === 'bold'
 }
 
-async function getWebsitePreferencesFromAuthMetadata(supabase: ReturnType<typeof createClient>, userId: string) {
-  const { data, error } = await supabase.auth.admin.getUserById(userId)
+async function getWebsitePreferencesFromAuthMetadata(userId: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceKey) return { website_theme: undefined, website_layout: undefined }
 
-  if (error) {
+  try {
+    const res = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    })
+    if (!res.ok) return { website_theme: undefined, website_layout: undefined }
+    const user = await res.json()
+    const metadata = user.user_metadata || {}
+    return {
+      website_theme: isWebsiteTheme(metadata.website_theme) ? metadata.website_theme : undefined,
+      website_layout: isWebsiteLayout(metadata.website_layout) ? metadata.website_layout : undefined,
+    }
+  } catch {
     return { website_theme: undefined, website_layout: undefined }
-  }
-
-  const metadata = data.user?.user_metadata || {}
-  return {
-    website_theme: isWebsiteTheme(metadata.website_theme) ? metadata.website_theme : undefined,
-    website_layout: isWebsiteLayout(metadata.website_layout) ? metadata.website_layout : undefined,
   }
 }
 
 async function saveWebsitePreferencesToAuthMetadata(
-  supabase: ReturnType<typeof createClient>,
   userId: string,
   websiteTheme?: WebsiteTheme,
   websiteLayout?: WebsiteLayout,
 ) {
-  if (websiteTheme === undefined && websiteLayout === undefined) {
-    return
-  }
+  if (websiteTheme === undefined && websiteLayout === undefined) return
 
-  const { data } = await supabase.auth.admin.getUserById(userId)
-  const currentMetadata = data.user?.user_metadata || {}
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceKey) return
 
-  await supabase.auth.admin.updateUserById(userId, {
-    user_metadata: {
-      ...currentMetadata,
-      ...(websiteTheme !== undefined ? { website_theme: websiteTheme } : {}),
-      ...(websiteLayout !== undefined ? { website_layout: websiteLayout } : {}),
+  // Read current metadata first so we don't overwrite unrelated fields
+  const getRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+  })
+  if (!getRes.ok) return
+  const existingUser = await getRes.json()
+  const currentMetadata = existingUser.user_metadata || {}
+
+  await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+    method: 'PUT',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({
+      user_metadata: {
+        ...currentMetadata,
+        ...(websiteTheme !== undefined ? { website_theme: websiteTheme } : {}),
+        ...(websiteLayout !== undefined ? { website_layout: websiteLayout } : {}),
+      },
+    }),
   })
 }
 
@@ -60,7 +81,7 @@ export async function getUserProfile(userId: string) {
     const { data, error } = await supabase.from('auth_users').select('*').eq('id', userId).single()
     if (error) throw error
 
-    const metadataPrefs = await getWebsitePreferencesFromAuthMetadata(supabase, userId)
+    const metadataPrefs = await getWebsitePreferencesFromAuthMetadata(userId)
 
     return {
       success: true,
@@ -111,7 +132,7 @@ export async function updateUserProfile(
 
     if (error) throw error
 
-    await saveWebsitePreferencesToAuthMetadata(supabase, userId, websiteTheme, websiteLayout)
+    await saveWebsitePreferencesToAuthMetadata(userId, websiteTheme, websiteLayout)
 
     return {
       success: true,
