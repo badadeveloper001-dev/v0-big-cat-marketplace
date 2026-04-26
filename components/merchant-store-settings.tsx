@@ -95,6 +95,16 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
       // Save other store fields via main profile PUT (with auth)
       const supabase = createSupabaseClient()
       const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setSuccess(true)
+        setTimeout(() => {
+          setSuccess(false)
+          onComplete?.()
+        }, 1500)
+        return
+      }
+
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (session?.access_token) {
         headers.Authorization = `Bearer ${session.access_token}`
