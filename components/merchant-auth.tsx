@@ -115,6 +115,22 @@ export function MerchantAuth({
     cacId: "",
   })
 
+  const loadMerchantProfile = async (userId: string, accessToken: string) => {
+    const response = await fetch(`/api/user/profile?userId=${encodeURIComponent(userId)}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      cache: 'no-store',
+    })
+
+    const result = await response.json()
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Failed to load merchant profile.')
+    }
+
+    return result.data
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -122,9 +138,15 @@ export function MerchantAuth({
     setLoading(true)
 
     try {
-      const endpoint = isSignUp ? '/api/auth/signup' : '/api/auth/login'
-      const body = isSignUp
-        ? {
+      const supabase = createClient()
+
+      if (isSignUp) {
+        const response = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
             email: formData.email,
             password: formData.password,
             name: formData.businessName,
@@ -135,57 +157,61 @@ export function MerchantAuth({
             smedanId: formData.smedanId,
             cacId: formData.cacId,
             merchantType: merchantType,
-          }
-        : {
-            email: formData.email,
-            password: formData.password
-          }
+          }),
+        })
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-
-      const result = await response.json()
-
-      if (result.success && result.data) {
-        const user = isSignUp ? result.data : result.data.user
-
-        if (!isSignUp && user.role !== "merchant") {
-          setError("This account is not a merchant account. Please use the buyer login.")
+        const result = await response.json()
+        if (!result.success) {
+          setError(result.error || 'An error occurred')
           return
         }
 
-        const supabase = createClient()
-
-        const { error: sessionError } = await supabase.auth.signInWithPassword({
+        const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
         })
 
-        if (sessionError) {
-          setError(sessionError.message || "Failed to establish your session. Please try again.")
+        if (sessionError || !sessionData.session || !sessionData.user) {
+          setError(sessionError?.message || 'Failed to establish your session. Please try again.')
           return
         }
 
-        if (isSignUp) {
-          setSuccessMessage("Account created successfully! Redirecting...")
-          setTimeout(() => {
-            setUser(normalizeMerchantUser(user))
-            setRole("merchant")
-          }, 1500)
-        } else {
-          setUser(normalizeMerchantUser(user))
-          setRole("merchant")
+        const profile = await loadMerchantProfile(sessionData.user.id, sessionData.session.access_token)
+        if (profile.role !== 'merchant') {
+          setError('This account is not a merchant account. Please use the buyer login.')
+          await supabase.auth.signOut()
+          return
         }
-      } else {
-        setError(result.error || "An error occurred")
+
+        setSuccessMessage('Account created successfully! Redirecting...')
+        setTimeout(() => {
+          setUser(normalizeMerchantUser(profile))
+          setRole('merchant')
+        }, 1500)
+        return
       }
+
+      const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      })
+
+      if (sessionError || !sessionData.session || !sessionData.user) {
+        setError(sessionError?.message || 'Invalid email or password.')
+        return
+      }
+
+      const profile = await loadMerchantProfile(sessionData.user.id, sessionData.session.access_token)
+      if (profile.role !== 'merchant') {
+        await supabase.auth.signOut()
+        setError('This account is not a merchant account. Please use the buyer login.')
+        return
+      }
+
+      setUser(normalizeMerchantUser(profile))
+      setRole('merchant')
     } catch (err) {
-      setError("An unexpected error occurred")
+      setError(err instanceof Error ? err.message : "An unexpected error occurred")
       console.error("[v0] Auth error:", err)
     } finally {
       setLoading(false)
