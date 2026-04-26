@@ -36,7 +36,8 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { userId, updates } = await request.json()
+    const body = await request.json()
+    const { userId, updates } = body
 
     if (!userId || !updates) {
       return NextResponse.json(
@@ -46,10 +47,29 @@ export async function PUT(request: NextRequest) {
     }
 
     const auth = await requireAuthenticatedUser(userId, request)
-    if (auth.response) return auth.response
+
+    // DEBUG: expose auth result so we can diagnose resets — remove after confirmed working
+    const hasAuthHeader = !!request.headers.get('authorization')
+    if (auth.response) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication failed', _debug: { userId, hasAuthHeader, authUserId: auth.user?.id ?? null } },
+        { status: auth.response.status }
+      )
+    }
 
     const result = await updateUserProfile(userId, updates)
-    return NextResponse.json(result)
+
+    // DEBUG: include metadata write result — remove after confirmed working
+    return NextResponse.json({
+      ...result,
+      _debug: {
+        authUserId: auth.user?.id,
+        hasAuthHeader,
+        updatesReceived: Object.keys(updates),
+        websiteTheme: updates.website_theme,
+        websiteLayout: updates.website_layout,
+      },
+    })
   } catch (error) {
     console.error('Update user profile API error:', error)
     return NextResponse.json(

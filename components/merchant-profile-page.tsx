@@ -156,6 +156,10 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
       })
       const result = await response.json()
 
+      // DEBUG — remove after confirmed working
+      console.log('[profile-save] HTTP status:', response.status)
+      console.log('[profile-save] result:', JSON.stringify(result, null, 2))
+
       if (result.success) {
         setProfile(result.data)
         setMessage({ type: 'success', text: activeTab === 'personal' ? 'Profile updated successfully' : 'Store and mini website updated successfully' })
