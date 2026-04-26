@@ -40,10 +40,19 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
     const initializeFromServer = async () => {
       setLoading(true)
       try {
-        const response = await fetch(`/api/user/profile?userId=${encodeURIComponent(user.userId)}`, {
-          cache: 'no-store',
-        })
+        const [response, themeResponse] = await Promise.all([
+          fetch(`/api/user/profile?userId=${encodeURIComponent(user.userId)}`, {
+            cache: 'no-store',
+          }),
+          fetch(`/api/user/theme?userId=${encodeURIComponent(user.userId)}`, {
+            cache: 'no-store',
+          }),
+        ])
+
         const result = await response.json()
+        const themeResult = await themeResponse.json()
+        const resolvedTheme = themeResult?.success ? themeResult?.data?.website_theme : undefined
+        const resolvedLayout = themeResult?.success ? themeResult?.data?.website_layout : undefined
 
         if (result?.success && result?.data) {
           const data = result.data
@@ -54,8 +63,8 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
             storeEmail: data.email || user?.email || prev.storeEmail,
             storePhone: data.phone || user?.phone || prev.storePhone,
             storeLocation: data.location || user?.merchantProfile?.location || prev.storeLocation,
-            websiteTheme: data.website_theme || user?.merchantProfile?.website_theme || prev.websiteTheme,
-            websiteLayout: data.website_layout || user?.merchantProfile?.website_layout || prev.websiteLayout,
+            websiteTheme: resolvedTheme || data.website_theme || user?.merchantProfile?.website_theme || prev.websiteTheme,
+            websiteLayout: resolvedLayout || data.website_layout || user?.merchantProfile?.website_layout || prev.websiteLayout,
           }))
           return
         }

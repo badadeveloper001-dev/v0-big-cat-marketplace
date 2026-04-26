@@ -72,8 +72,16 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
     profileLoadedRef.current = true
     setLoading(true)
     try {
-      const response = await fetch(`/api/user/profile?userId=${user?.userId || ''}`)
-      const result = await response.json()
+      const userId = user?.userId || ''
+      const [profileResponse, themeResponse] = await Promise.all([
+        fetch(`/api/user/profile?userId=${userId}`, { cache: 'no-store' }),
+        fetch(`/api/user/theme?userId=${userId}`, { cache: 'no-store' }),
+      ])
+
+      const result = await profileResponse.json()
+      const themeResult = await themeResponse.json()
+      const resolvedTheme = themeResult?.success ? themeResult?.data?.website_theme : undefined
+      const resolvedLayout = themeResult?.success ? themeResult?.data?.website_layout : undefined
 
       if (result.success && result.data) {
         setProfile(result.data)
@@ -86,8 +94,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
           business_description: result.data.business_description || user?.merchantProfile?.business_description || '',
           business_category: result.data.business_category || user?.merchantProfile?.business_category || 'General Merchandise',
           location: result.data.location || user?.merchantProfile?.location || '',
-          website_theme: result.data.website_theme || user?.merchantProfile?.website_theme || 'emerald',
-          website_layout: result.data.website_layout || user?.merchantProfile?.website_layout || 'classic',
+          website_theme: resolvedTheme || result.data.website_theme || user?.merchantProfile?.website_theme || 'emerald',
+          website_layout: resolvedLayout || result.data.website_layout || user?.merchantProfile?.website_layout || 'classic',
         })
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to load profile' })

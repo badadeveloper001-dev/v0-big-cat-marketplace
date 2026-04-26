@@ -80,11 +80,19 @@ export default function MerchantMiniWebsitePage() {
       }
 
       try {
-         const profileResponse = await fetch(`/api/user/profile?userId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' })
+         const [profileResponse, themeResponse] = await Promise.all([
+           fetch(`/api/user/profile?userId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' }),
+           fetch(`/api/user/theme?userId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' }),
+         ])
          const profileResult = await profileResponse.json()
+         const themeResult = await themeResponse.json()
 
          if (profileResult.success) {
-           setProfile(profileResult.data)
+           setProfile({
+             ...profileResult.data,
+             website_theme: themeResult?.success ? (themeResult?.data?.website_theme || profileResult?.data?.website_theme) : profileResult?.data?.website_theme,
+             website_layout: themeResult?.success ? (themeResult?.data?.website_layout || profileResult?.data?.website_layout) : profileResult?.data?.website_layout,
+           })
 
            // Load products or services based on merchant_type
            const merchantType = profileResult.data.merchant_type || 'products'
