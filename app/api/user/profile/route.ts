@@ -70,6 +70,15 @@ export async function PUT(request: NextRequest) {
         websiteLayout: updates.website_layout,
       },
     })
+    if (auth.response) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication failed' },
+        { status: auth.response.status }
+      )
+    }
+
+    const result = await updateUserProfile(userId, updates)
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Update user profile API error:', error)
     return NextResponse.json(

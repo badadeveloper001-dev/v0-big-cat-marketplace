@@ -149,30 +149,54 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
         headers.Authorization = `Bearer ${session.access_token}`
       }
 
+      // For the store tab, always save theme via the dedicated endpoint (no auth required)
+      if (activeTab === 'store') {
+        await fetch('/api/user/theme', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user?.userId || '',
+            website_theme: formData.website_theme,
+            website_layout: formData.website_layout,
+          }),
+        })
+        // Also save to localStorage as a fast local cache
+        if (user && typeof window !== 'undefined') {
+          localStorage.setItem(
+            getMerchantMiniWebsiteStorageKey(user.userId),
+            JSON.stringify({ theme: formData.website_theme, layout: formData.website_layout })
+          )
+        }
+      }
+
+      // For all other fields, use the main profile PUT (with auth)
+      const nonThemeUpdateData = activeTab === 'personal'
+        ? {
+            full_name: formData.full_name,
+            phone: formData.phone,
+            address: formData.address,
+          }
+        : {
+            business_name: formData.business_name,
+            business_description: formData.business_description,
+            business_category: formData.business_category,
+            location: formData.location,
+          }
+
       const response = await fetch('/api/user/profile', {
         method: 'PUT',
         headers,
-        body: JSON.stringify({ userId: user?.userId || '', updates: updateData }),
+        body: JSON.stringify({ userId: user?.userId || '', updates: nonThemeUpdateData }),
       })
       const result = await response.json()
 
-      // DEBUG — remove after confirmed working
-      console.log('[profile-save] HTTP status:', response.status)
-      console.log('[profile-save] result:', JSON.stringify(result, null, 2))
-
       if (result.success) {
-        setProfile(result.data)
+        setProfile({
+          ...result.data,
+          website_theme: formData.website_theme,
+          website_layout: formData.website_layout,
+        })
         setMessage({ type: 'success', text: activeTab === 'personal' ? 'Profile updated successfully' : 'Store and mini website updated successfully' })
-
-        if (user && activeTab === 'store' && typeof window !== 'undefined') {
-          localStorage.setItem(
-            getMerchantMiniWebsiteStorageKey(user.userId),
-            JSON.stringify({
-              theme: formData.website_theme,
-              layout: formData.website_layout,
-            })
-          )
-        }
 
         if (user) {
           setUser({
@@ -189,12 +213,12 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
               location: result.data.location || user.merchantProfile?.location,
               smedan_id: result.data.smedan_id || user.merchantProfile?.smedan_id,
               logo_url: result.data.logo_url || result.data.avatar_url || user.merchantProfile?.logo_url,
-              website_theme: result.data.website_theme || user.merchantProfile?.website_theme,
-              website_layout: result.data.website_layout || user.merchantProfile?.website_layout,
+              website_theme: formData.website_theme,
+              website_layout: formData.website_layout,
             },
           })
         }
-        
+
         setTimeout(() => setMessage(null), 3000)
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to update' })
