@@ -166,59 +166,59 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
         headers.Authorization = `Bearer ${session.access_token}`
       }
 
-      // For the store tab, always save theme via the dedicated endpoint (no auth required)
-      if (activeTab === 'store') {
-        const themeResponse = await fetch('/api/user/theme', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user?.userId || '',
-            website_theme: formData.website_theme,
-            website_layout: formData.website_layout,
-          }),
-        })
-        const themeResult = await themeResponse.json()
-        if (!themeResult.success) {
-          setMessage({ type: 'error', text: themeResult.error || 'Failed to save mini website theme' })
-          return
-        }
+      let savedTheme = formData.website_theme
+      let savedLayout = formData.website_layout
 
-        const confirmedThemeResponse = await fetch(`/api/user/theme?userId=${encodeURIComponent(user?.userId || '')}`, {
-          cache: 'no-store',
-        })
-        const confirmedThemeResult = await confirmedThemeResponse.json()
-        const savedTheme = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_theme : undefined
-        const savedLayout = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_layout : undefined
+      // Save mini website preferences on every profile save so personal-details edits stay in sync.
+      const themeResponse = await fetch('/api/user/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user?.userId || '',
+          website_theme: formData.website_theme,
+          website_layout: formData.website_layout,
+        }),
+      })
+      const themeResult = await themeResponse.json()
+      if (!themeResult.success) {
+        setMessage({ type: 'error', text: themeResult.error || 'Failed to save mini website theme' })
+        return
+      }
 
-        if (savedTheme !== formData.website_theme || savedLayout !== formData.website_layout) {
-          setMessage({ type: 'error', text: 'Saved mini website preferences could not be confirmed' })
-          return
-        }
+      const confirmedThemeResponse = await fetch(`/api/user/theme?userId=${encodeURIComponent(user?.userId || '')}`, {
+        cache: 'no-store',
+      })
+      const confirmedThemeResult = await confirmedThemeResponse.json()
+      savedTheme = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_theme : undefined
+      savedLayout = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_layout : undefined
 
-        // Also save to localStorage as a fast local cache
-        if (user && typeof window !== 'undefined') {
-          localStorage.setItem(
-            getMerchantMiniWebsiteStorageKey(user.userId),
-            JSON.stringify({ theme: savedTheme, layout: savedLayout })
-          )
-        }
+      if (savedTheme !== formData.website_theme || savedLayout !== formData.website_layout) {
+        setMessage({ type: 'error', text: 'Saved mini website preferences could not be confirmed' })
+        return
+      }
 
-        // If auth session is missing, finish with theme success instead of showing auth failure
-        if (!session?.access_token) {
-          setMessage({ type: 'success', text: 'Mini website theme updated successfully' })
-          if (user) {
-            setUser({
-              ...user,
-              merchantProfile: {
-                ...user.merchantProfile,
-                website_theme: savedTheme,
-                website_layout: savedLayout,
-              },
-            })
-          }
-          setTimeout(() => setMessage(null), 3000)
-          return
+      if (user && typeof window !== 'undefined') {
+        localStorage.setItem(
+          getMerchantMiniWebsiteStorageKey(user.userId),
+          JSON.stringify({ theme: savedTheme, layout: savedLayout })
+        )
+      }
+
+      // If auth session is missing, at least persist the website preferences and sync the local merchant state.
+      if (!session?.access_token) {
+        setMessage({ type: 'success', text: 'Mini website preferences updated successfully' })
+        if (user) {
+          setUser({
+            ...user,
+            merchantProfile: {
+              ...user.merchantProfile,
+              website_theme: savedTheme,
+              website_layout: savedLayout,
+            },
+          })
         }
+        setTimeout(() => setMessage(null), 3000)
+        return
       }
 
       // For all other fields, use the main profile PUT (with auth)
@@ -245,10 +245,15 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
       if (result.success) {
         setProfile({
           ...result.data,
-          website_theme: activeTab === 'store' ? formData.website_theme : result.data.website_theme,
-          website_layout: activeTab === 'store' ? formData.website_layout : result.data.website_layout,
+          website_theme: savedTheme,
+          website_layout: savedLayout,
         })
-        setMessage({ type: 'success', text: activeTab === 'personal' ? 'Profile updated successfully' : 'Store and mini website updated successfully' })
+        setMessage({
+          type: 'success',
+          text: activeTab === 'personal'
+            ? 'Profile and mini website preferences updated successfully'
+            : 'Store and mini website updated successfully',
+        })
 
         if (user) {
           setUser({
@@ -265,8 +270,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
               location: result.data.location || user.merchantProfile?.location,
               smedan_id: result.data.smedan_id || user.merchantProfile?.smedan_id,
               logo_url: result.data.logo_url || result.data.avatar_url || user.merchantProfile?.logo_url,
-              website_theme: formData.website_theme,
-              website_layout: formData.website_layout,
+              website_theme: savedTheme,
+              website_layout: savedLayout,
             },
           })
         }
