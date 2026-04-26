@@ -47,29 +47,6 @@ export async function PUT(request: NextRequest) {
     }
 
     const auth = await requireAuthenticatedUser(userId, request)
-
-    // DEBUG: expose auth result so we can diagnose resets — remove after confirmed working
-    const hasAuthHeader = !!request.headers.get('authorization')
-    if (auth.response) {
-      return NextResponse.json(
-        { success: false, error: 'Authentication failed', _debug: { userId, hasAuthHeader, authUserId: auth.user?.id ?? null } },
-        { status: auth.response.status }
-      )
-    }
-
-    const result = await updateUserProfile(userId, updates)
-
-    // DEBUG: include metadata write result — remove after confirmed working
-    return NextResponse.json({
-      ...result,
-      _debug: {
-        authUserId: auth.user?.id,
-        hasAuthHeader,
-        updatesReceived: Object.keys(updates),
-        websiteTheme: updates.website_theme,
-        websiteLayout: updates.website_layout,
-      },
-    })
     if (auth.response) {
       return NextResponse.json(
         { success: false, error: 'Authentication failed' },

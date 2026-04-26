@@ -74,51 +74,6 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
     setSuccess(false)
 
     try {
-      const supabase = createSupabaseClient()
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      }
-
-      if (session?.access_token) {
-        headers.Authorization = `Bearer ${session.access_token}`
-      }
-
-      const response = await fetch('/api/user/profile', {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({
-          userId: user.userId,
-          updates: {
-            business_name: storeSettings.storeName,
-            business_description: storeSettings.storeDescription,
-            phone: storeSettings.storePhone,
-            location: storeSettings.storeLocation,
-            email: storeSettings.storeEmail,
-            website_theme: storeSettings.websiteTheme,
-            website_layout: storeSettings.websiteLayout,
-          },
-        }),
-      })
-
-      const result = await response.json()
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to save store settings')
-      }
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          getMerchantMiniWebsiteStorageKey(user.userId),
-          JSON.stringify({
-            theme: storeSettings.websiteTheme,
-            layout: storeSettings.websiteLayout,
-          })
-        )
-      }
-
       // Save theme via dedicated endpoint (no auth required — always works)
       await fetch('/api/user/theme', {
         method: 'POST',
