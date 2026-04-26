@@ -29,8 +29,8 @@ export function extractMerchantIdFromSlug(slug: string) {
 export function getMerchantMiniWebsitePath({
   merchantId,
   businessName,
-  theme = 'emerald',
-  layout = 'classic',
+  theme,
+  layout,
 }: {
   merchantId: string
   businessName?: string
@@ -38,8 +38,18 @@ export function getMerchantMiniWebsitePath({
   layout?: WebsiteLayout
 }) {
   const slug = `${slugifyStoreName(businessName || 'store')}-${merchantId}`
-  const params = new URLSearchParams({ theme, layout })
-  return `/store/${slug}?${params.toString()}`
+  const params = new URLSearchParams()
+
+  if (theme) {
+    params.set('theme', theme)
+  }
+
+  if (layout) {
+    params.set('layout', layout)
+  }
+
+  const queryString = params.toString()
+  return queryString ? `/store/${slug}?${queryString}` : `/store/${slug}`
 }
 
 export function getMerchantMiniWebsiteStorageKey(merchantId: string) {

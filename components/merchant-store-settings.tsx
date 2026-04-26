@@ -47,8 +47,8 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
       storeEmail: user?.email || prev.storeEmail,
       storePhone: user?.phone || prev.storePhone,
       storeLocation: user?.merchantProfile?.location || prev.storeLocation,
-      websiteTheme: parsed?.theme || prev.websiteTheme,
-      websiteLayout: parsed?.layout || prev.websiteLayout,
+      websiteTheme: user?.merchantProfile?.website_theme || parsed?.theme || prev.websiteTheme,
+      websiteLayout: user?.merchantProfile?.website_layout || parsed?.layout || prev.websiteLayout,
     }))
   }, [user])
 
@@ -84,6 +84,8 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
             phone: storeSettings.storePhone,
             location: storeSettings.storeLocation,
             email: storeSettings.storeEmail,
+            website_theme: storeSettings.websiteTheme,
+            website_layout: storeSettings.websiteLayout,
           },
         }),
       })

@@ -19,6 +19,8 @@ interface MerchantProfile {
   location?: string
   smedan_id?: string
   merchant_type?: 'products' | 'services'
+  website_theme?: WebsiteTheme
+  website_layout?: WebsiteLayout
 }
 
 const CATEGORIES = [
@@ -90,8 +92,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
           business_description: result.data.business_description || user?.merchantProfile?.business_description || '',
           business_category: result.data.business_category || user?.merchantProfile?.business_category || 'General Merchandise',
           location: result.data.location || user?.merchantProfile?.location || '',
-          website_theme: savedWebsiteSettings.theme || 'emerald',
-          website_layout: savedWebsiteSettings.layout || 'classic',
+          website_theme: result.data.website_theme || savedWebsiteSettings.theme || 'emerald',
+          website_layout: result.data.website_layout || savedWebsiteSettings.layout || 'classic',
         })
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to load profile' })
@@ -127,6 +129,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
             business_description: formData.business_description,
             business_category: formData.business_category,
             location: formData.location,
+            website_theme: formData.website_theme,
+            website_layout: formData.website_layout,
           }
 
       const response = await fetch('/api/user/profile', {
@@ -167,6 +171,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
               location: result.data.location || user.merchantProfile?.location,
               smedan_id: result.data.smedan_id || user.merchantProfile?.smedan_id,
               logo_url: result.data.logo_url || result.data.avatar_url || user.merchantProfile?.logo_url,
+              website_theme: result.data.website_theme || user.merchantProfile?.website_theme,
+              website_layout: result.data.website_layout || user.merchantProfile?.website_layout,
             },
           })
         }

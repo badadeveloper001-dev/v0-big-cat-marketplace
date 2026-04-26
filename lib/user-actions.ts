@@ -32,6 +32,8 @@ export async function updateUserProfile(
     state?: string
     location?: string
     email?: string
+    website_theme?: 'emerald' | 'midnight' | 'sunset'
+    website_layout?: 'classic' | 'minimal' | 'bold'
   }
 ) {
   try {

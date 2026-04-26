@@ -30,6 +30,17 @@ const themeMap: Record<WebsiteTheme, { hero: string; button: string; badge: stri
   },
 }
 
+const THEME_IDS: WebsiteTheme[] = ['emerald', 'midnight', 'sunset']
+const LAYOUT_IDS: WebsiteLayout[] = ['classic', 'minimal', 'bold']
+
+function isWebsiteTheme(value: string | null | undefined): value is WebsiteTheme {
+  return THEME_IDS.includes(value as WebsiteTheme)
+}
+
+function isWebsiteLayout(value: string | null | undefined): value is WebsiteLayout {
+  return LAYOUT_IDS.includes(value as WebsiteLayout)
+}
+
 export default function MerchantMiniWebsitePage() {
   const params = useParams<{ slug: string }>()
   const searchParams = useSearchParams()
@@ -41,8 +52,21 @@ export default function MerchantMiniWebsitePage() {
   const { toggleItem, isInWishlist } = useWishlist()
 
   const merchantId = useMemo(() => extractMerchantIdFromSlug(params?.slug || ''), [params])
-  const theme = (searchParams.get('theme') || 'emerald') as WebsiteTheme
-  const layout = (searchParams.get('layout') || 'classic') as WebsiteLayout
+  const requestedTheme = searchParams.get('theme')
+  const requestedLayout = searchParams.get('layout')
+
+  const theme = isWebsiteTheme(requestedTheme)
+    ? requestedTheme
+    : isWebsiteTheme(profile?.website_theme)
+      ? profile.website_theme
+      : 'emerald'
+
+  const layout = isWebsiteLayout(requestedLayout)
+    ? requestedLayout
+    : isWebsiteLayout(profile?.website_layout)
+      ? profile.website_layout
+      : 'classic'
+
   const themeStyle = themeMap[theme] || themeMap.emerald
   const cartCount = getItemCount()
   const cartTotal = getTotal()
