@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser(userId)
+    const auth = await requireAuthenticatedUser(userId, request)
     if (auth.response) return auth.response
 
     switch (action) {

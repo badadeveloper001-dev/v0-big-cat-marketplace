@@ -55,16 +55,16 @@ export default function MerchantMiniWebsitePage() {
   const requestedTheme = searchParams.get('theme')
   const requestedLayout = searchParams.get('layout')
 
-  const theme = isWebsiteTheme(requestedTheme)
-    ? requestedTheme
-    : isWebsiteTheme(profile?.website_theme)
-      ? profile.website_theme
+  const theme: WebsiteTheme = isWebsiteTheme(profile?.website_theme)
+    ? profile.website_theme
+    : isWebsiteTheme(requestedTheme)
+      ? requestedTheme
       : 'emerald'
 
-  const layout = isWebsiteLayout(requestedLayout)
-    ? requestedLayout
-    : isWebsiteLayout(profile?.website_layout)
-      ? profile.website_layout
+  const layout: WebsiteLayout = isWebsiteLayout(profile?.website_layout)
+    ? profile.website_layout
+    : isWebsiteLayout(requestedLayout)
+      ? requestedLayout
       : 'classic'
 
   const themeStyle = themeMap[theme] || themeMap.emerald

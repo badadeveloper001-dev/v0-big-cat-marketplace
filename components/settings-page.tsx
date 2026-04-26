@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRole } from '@/lib/role-context'
+import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 import { ArrowLeft, Lock, Mail, Bell, Loader2, Check, AlertCircle, Eye, EyeOff, Trash2 } from 'lucide-react'
 
 interface SettingsMessage {
@@ -89,11 +90,22 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
 
     setLoading(true)
     try {
+      const supabase = createSupabaseClient()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`
+      }
+
       const response = await fetch('/api/user/settings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           action: 'change-password',
           userId: user?.userId || '',

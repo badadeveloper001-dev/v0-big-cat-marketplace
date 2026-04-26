@@ -150,10 +150,67 @@ export async function updateUserProfile(
 export async function changePassword(userId: string, currentPassword: string, newPassword: string) {
   try {
     const supabase = await createClient()
-    const { data: user } = await supabase.from('auth_users').select('password_hash').eq('id', userId).single()
-    if (!user || user.password_hash !== hashPassword(currentPassword)) return { success: false, error: 'Invalid current password' }
-    
-    const { error } = await supabase.from('auth_users').update({ password_hash: hashPassword(newPassword) }).eq('id', userId)
+    const { data: user } = await supabase
+      .from('auth_users')
+      .select('email, password_hash')
+      .eq('id', userId)
+      .single()
+
+    if (!user?.email) {
+      return { success: false, error: 'User not found' }
+    }
+
+    let currentPasswordValid = false
+
+    if (user.password_hash) {
+      currentPasswordValid = user.password_hash === hashPassword(currentPassword)
+    } else {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+      if (!supabaseUrl || !anonKey) {
+        return { success: false, error: 'Missing Supabase public environment variables' }
+      }
+
+      const verifyRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: {
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: user.email, password: currentPassword }),
+      })
+
+      currentPasswordValid = verifyRes.ok
+    }
+
+    if (!currentPasswordValid) {
+      return { success: false, error: 'Invalid current password' }
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !serviceKey) {
+      return { success: false, error: 'Missing Supabase server environment variables' }
+    }
+
+    const passwordUpdateRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+      method: 'PUT',
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password: newPassword }),
+    })
+
+    if (!passwordUpdateRes.ok) {
+      const message = await passwordUpdateRes.text()
+      throw new Error(message || 'Failed to update password')
+    }
+
+    const { error } = await supabase.from('auth_users').update({ password_hash: '' }).eq('id', userId)
     if (error) throw error
     return { success: true }
   } catch (error: any) {
