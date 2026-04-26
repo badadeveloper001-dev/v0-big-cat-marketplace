@@ -96,54 +96,27 @@ export async function updateUserProfile(
   try {
     const supabase = await createClient()
 
+    // website_theme and website_layout columns do not exist in auth_users.
+    // Always save them via Supabase Auth user_metadata and keep them out of the DB update.
     const websiteTheme = updates.website_theme
     const websiteLayout = updates.website_layout
-    const hasWebsiteOverrides = websiteTheme !== undefined || websiteLayout !== undefined
+    const { website_theme: _t, website_layout: _l, ...dbUpdates } = updates
 
-    const { data, error } = await supabase.from('auth_users').update(updates).eq('id', userId).select().single()
-
-    if (!error) {
-      await saveWebsitePreferencesToAuthMetadata(supabase, userId, websiteTheme, websiteLayout)
-
-      return {
-        success: true,
-        data: {
-          ...data,
-          website_theme: data.website_theme || websiteTheme,
-          website_layout: data.website_layout || websiteLayout,
-        },
-      }
-    }
-
-    const errorText = String(error.message || '').toLowerCase()
-    const websiteColumnMissing =
-      hasWebsiteOverrides
-      && (errorText.includes('website_theme') || errorText.includes('website_layout'))
-      && (errorText.includes('column') || errorText.includes('schema cache'))
-
-    if (!websiteColumnMissing) {
-      throw error
-    }
-
-    // Backward compatibility: allow profile save even when the DB has not yet added website preference columns.
-    const { website_theme: _theme, website_layout: _layout, ...safeUpdates } = updates
-    const { data: fallbackData, error: fallbackError } = await supabase
+    const { data, error } = await supabase
       .from('auth_users')
-      .update(safeUpdates)
+      .update(dbUpdates)
       .eq('id', userId)
       .select()
       .single()
 
-    if (fallbackError) {
-      throw fallbackError
-    }
+    if (error) throw error
 
     await saveWebsitePreferencesToAuthMetadata(supabase, userId, websiteTheme, websiteLayout)
 
     return {
       success: true,
       data: {
-        ...fallbackData,
+        ...data,
         website_theme: websiteTheme,
         website_layout: websiteLayout,
       },
