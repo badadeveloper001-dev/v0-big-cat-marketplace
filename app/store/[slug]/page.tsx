@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { Loader2, MapPin, Share2, Store, Tag, ShoppingBag, ExternalLink, ShoppingCart, CheckCircle2, Heart } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
 import { extractMerchantIdFromSlug, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
@@ -43,7 +43,6 @@ function isWebsiteLayout(value: string | null | undefined): value is WebsiteLayo
 
 export default function MerchantMiniWebsitePage() {
   const params = useParams<{ slug: string }>()
-  const searchParams = useSearchParams()
   const [profile, setProfile] = useState<any | null>(null)
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,20 +51,14 @@ export default function MerchantMiniWebsitePage() {
   const { toggleItem, isInWishlist } = useWishlist()
 
   const merchantId = useMemo(() => extractMerchantIdFromSlug(params?.slug || ''), [params])
-  const requestedTheme = searchParams.get('theme')
-  const requestedLayout = searchParams.get('layout')
 
   const theme: WebsiteTheme = isWebsiteTheme(profile?.website_theme)
     ? profile.website_theme
-    : isWebsiteTheme(requestedTheme)
-      ? requestedTheme
-      : 'emerald'
+    : 'emerald'
 
   const layout: WebsiteLayout = isWebsiteLayout(profile?.website_layout)
     ? profile.website_layout
-    : isWebsiteLayout(requestedLayout)
-      ? requestedLayout
-      : 'classic'
+    : 'classic'
 
   const themeStyle = themeMap[theme] || themeMap.emerald
   const cartCount = getItemCount()
