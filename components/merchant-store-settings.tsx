@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Store, Phone, Mail, MapPin, Globe, Save, Loader2, CheckCircle2, AlertCircle, Copy, ExternalLink, Palette } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
 import { getMerchantMiniWebsitePath, getMerchantMiniWebsiteStorageKey, WEBSITE_LAYOUTS, WEBSITE_THEMES, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
+import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
 interface MerchantStoreSettingsProps {
   onComplete?: () => void
@@ -73,11 +74,22 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
     setSuccess(false)
 
     try {
+      const supabase = createSupabaseClient()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`
+      }
+
       const response = await fetch('/api/user/profile', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           userId: user.userId,
           updates: {

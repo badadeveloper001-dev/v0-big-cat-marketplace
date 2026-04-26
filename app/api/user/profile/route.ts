@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(result, { status: 404 })
     }
 
-    const { user } = await getRequestAuthUser()
+    const { user } = await getRequestAuthUser(request)
     if (user?.id === userId) {
       return NextResponse.json(result)
     }
@@ -45,7 +45,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser(userId)
+    const auth = await requireAuthenticatedUser(userId, request)
     if (auth.response) return auth.response
 
     const result = await updateUserProfile(userId, updates)

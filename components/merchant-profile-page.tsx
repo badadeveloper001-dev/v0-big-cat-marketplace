@@ -5,6 +5,7 @@ import { useRole } from '@/lib/role-context'
 import { ArrowLeft, Camera, Loader2, Check, AlertCircle, Store, MapPin, FileText, User, Phone, Mail, Globe, Copy, ExternalLink, Palette } from 'lucide-react'
 import Image from 'next/image'
 import { getMerchantMiniWebsitePath, getMerchantMiniWebsiteStorageKey, WEBSITE_LAYOUTS, WEBSITE_THEMES, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
+import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
 interface MerchantProfile {
   id: string
@@ -135,11 +136,22 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
             website_layout: formData.website_layout,
           }
 
+      const supabase = createSupabaseClient()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`
+      }
+
       const response = await fetch('/api/user/profile', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ userId: user?.userId || '', updates: updateData }),
       })
       const result = await response.json()

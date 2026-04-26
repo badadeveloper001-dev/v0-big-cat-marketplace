@@ -1,8 +1,9 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createBrowserlessClient } from '@supabase/supabase-js'
 
-export async function getRequestAuthUser() {
+export async function getRequestAuthUser(request?: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -34,11 +35,32 @@ export async function getRequestAuthUser() {
     error,
   } = await supabase.auth.getUser()
 
-  return { user, error: error?.message || null }
+  if (user && !error) {
+    return { user, error: null }
+  }
+
+  // Fallback: accept bearer token from clients that keep Supabase session in local storage.
+  const authHeader = request?.headers.get('authorization') || ''
+  const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/i)
+  const accessToken = tokenMatch?.[1]
+
+  if (accessToken && url && anonKey) {
+    const tokenClient = createBrowserlessClient(url, anonKey)
+    const {
+      data: { user: tokenUser },
+      error: tokenError,
+    } = await tokenClient.auth.getUser(accessToken)
+
+    if (tokenUser && !tokenError) {
+      return { user: tokenUser, error: null }
+    }
+  }
+
+  return { user: null, error: error?.message || null }
 }
 
-export async function requireAuthenticatedUser(expectedUserId?: string) {
-  const { user, error } = await getRequestAuthUser()
+export async function requireAuthenticatedUser(expectedUserId?: string, request?: Request) {
+  const { user, error } = await getRequestAuthUser(request)
 
   if (error || !user) {
     return {
