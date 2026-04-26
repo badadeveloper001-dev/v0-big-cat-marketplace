@@ -37,22 +37,47 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
     if (!user?.userId || settingsInitializedRef.current) return
     settingsInitializedRef.current = true
 
-    const savedSettings = typeof window !== 'undefined'
-      ? localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId))
-      : null
+    const initializeFromServer = async () => {
+      setLoading(true)
+      try {
+        const response = await fetch(`/api/user/profile?userId=${encodeURIComponent(user.userId)}`, {
+          cache: 'no-store',
+        })
+        const result = await response.json()
 
-    const parsed = savedSettings ? JSON.parse(savedSettings) : null
+        if (result?.success && result?.data) {
+          const data = result.data
+          setStoreSettings((prev) => ({
+            ...prev,
+            storeName: data.business_name || user?.merchantProfile?.business_name || user?.name || prev.storeName,
+            storeDescription: data.business_description || user?.merchantProfile?.business_description || prev.storeDescription,
+            storeEmail: data.email || user?.email || prev.storeEmail,
+            storePhone: data.phone || user?.phone || prev.storePhone,
+            storeLocation: data.location || user?.merchantProfile?.location || prev.storeLocation,
+            websiteTheme: data.website_theme || user?.merchantProfile?.website_theme || prev.websiteTheme,
+            websiteLayout: data.website_layout || user?.merchantProfile?.website_layout || prev.websiteLayout,
+          }))
+          return
+        }
+      } catch {
+        // fall back to local user context if server read fails
+      } finally {
+        setLoading(false)
+      }
 
-    setStoreSettings((prev) => ({
-      ...prev,
-      storeName: user?.merchantProfile?.business_name || user?.name || prev.storeName,
-      storeDescription: user?.merchantProfile?.business_description || prev.storeDescription,
-      storeEmail: user?.email || prev.storeEmail,
-      storePhone: user?.phone || prev.storePhone,
-      storeLocation: user?.merchantProfile?.location || prev.storeLocation,
-      websiteTheme: user?.merchantProfile?.website_theme || parsed?.theme || prev.websiteTheme,
-      websiteLayout: user?.merchantProfile?.website_layout || parsed?.layout || prev.websiteLayout,
-    }))
+      setStoreSettings((prev) => ({
+        ...prev,
+        storeName: user?.merchantProfile?.business_name || user?.name || prev.storeName,
+        storeDescription: user?.merchantProfile?.business_description || prev.storeDescription,
+        storeEmail: user?.email || prev.storeEmail,
+        storePhone: user?.phone || prev.storePhone,
+        storeLocation: user?.merchantProfile?.location || prev.storeLocation,
+        websiteTheme: user?.merchantProfile?.website_theme || prev.websiteTheme,
+        websiteLayout: user?.merchantProfile?.website_layout || prev.websiteLayout,
+      }))
+    }
+
+    initializeFromServer()
   }, [user?.userId])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -75,7 +100,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
 
     try {
       // Save theme via dedicated endpoint (no auth required — always works)
-      await fetch('/api/user/theme', {
+      const themeResponse = await fetch('/api/user/theme', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,6 +109,10 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
           website_layout: storeSettings.websiteLayout,
         }),
       })
+      const themeResult = await themeResponse.json()
+      if (!themeResult.success) {
+        throw new Error(themeResult.error || 'Failed to save mini website theme')
+      }
 
       if (typeof window !== 'undefined') {
         localStorage.setItem(

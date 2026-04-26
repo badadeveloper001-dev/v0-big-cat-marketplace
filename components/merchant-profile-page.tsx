@@ -78,15 +78,6 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
       if (result.success && result.data) {
         setProfile(result.data)
 
-        let savedWebsiteSettings: { theme?: WebsiteTheme; layout?: WebsiteLayout } = {}
-        if (typeof window !== 'undefined' && user?.userId) {
-          try {
-            savedWebsiteSettings = JSON.parse(localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId)) || '{}')
-          } catch {
-            savedWebsiteSettings = {}
-          }
-        }
-
         setFormData({
           full_name: result.data.full_name || result.data.name || user?.name || '',
           phone: result.data.phone || user?.phone || '',
@@ -95,8 +86,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
           business_description: result.data.business_description || user?.merchantProfile?.business_description || '',
           business_category: result.data.business_category || user?.merchantProfile?.business_category || 'General Merchandise',
           location: result.data.location || user?.merchantProfile?.location || '',
-          website_theme: result.data.website_theme || savedWebsiteSettings.theme || user?.merchantProfile?.website_theme || 'emerald',
-          website_layout: result.data.website_layout || savedWebsiteSettings.layout || user?.merchantProfile?.website_layout || 'classic',
+          website_theme: result.data.website_theme || user?.merchantProfile?.website_theme || 'emerald',
+          website_layout: result.data.website_layout || user?.merchantProfile?.website_layout || 'classic',
         })
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to load profile' })
@@ -136,7 +127,7 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
 
       // For the store tab, always save theme via the dedicated endpoint (no auth required)
       if (activeTab === 'store') {
-        await fetch('/api/user/theme', {
+        const themeResponse = await fetch('/api/user/theme', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -145,6 +136,11 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
             website_layout: formData.website_layout,
           }),
         })
+        const themeResult = await themeResponse.json()
+        if (!themeResult.success) {
+          setMessage({ type: 'error', text: themeResult.error || 'Failed to save mini website theme' })
+          return
+        }
         // Also save to localStorage as a fast local cache
         if (user && typeof window !== 'undefined') {
           localStorage.setItem(
