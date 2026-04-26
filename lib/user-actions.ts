@@ -7,12 +7,69 @@ function hashPassword(password: string): string {
   return createHash('sha256').update(password).digest('hex')
 }
 
+type WebsiteTheme = 'emerald' | 'midnight' | 'sunset'
+type WebsiteLayout = 'classic' | 'minimal' | 'bold'
+
+function isWebsiteTheme(value: unknown): value is WebsiteTheme {
+  return value === 'emerald' || value === 'midnight' || value === 'sunset'
+}
+
+function isWebsiteLayout(value: unknown): value is WebsiteLayout {
+  return value === 'classic' || value === 'minimal' || value === 'bold'
+}
+
+async function getWebsitePreferencesFromAuthMetadata(supabase: ReturnType<typeof createClient>, userId: string) {
+  const { data, error } = await supabase.auth.admin.getUserById(userId)
+
+  if (error) {
+    return { website_theme: undefined, website_layout: undefined }
+  }
+
+  const metadata = data.user?.user_metadata || {}
+  return {
+    website_theme: isWebsiteTheme(metadata.website_theme) ? metadata.website_theme : undefined,
+    website_layout: isWebsiteLayout(metadata.website_layout) ? metadata.website_layout : undefined,
+  }
+}
+
+async function saveWebsitePreferencesToAuthMetadata(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  websiteTheme?: WebsiteTheme,
+  websiteLayout?: WebsiteLayout,
+) {
+  if (websiteTheme === undefined && websiteLayout === undefined) {
+    return
+  }
+
+  const { data } = await supabase.auth.admin.getUserById(userId)
+  const currentMetadata = data.user?.user_metadata || {}
+
+  await supabase.auth.admin.updateUserById(userId, {
+    user_metadata: {
+      ...currentMetadata,
+      ...(websiteTheme !== undefined ? { website_theme: websiteTheme } : {}),
+      ...(websiteLayout !== undefined ? { website_layout: websiteLayout } : {}),
+    },
+  })
+}
+
 export async function getUserProfile(userId: string) {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase.from('auth_users').select('*').eq('id', userId).single()
     if (error) throw error
-    return { success: true, data }
+
+    const metadataPrefs = await getWebsitePreferencesFromAuthMetadata(supabase, userId)
+
+    return {
+      success: true,
+      data: {
+        ...data,
+        website_theme: data.website_theme || metadataPrefs.website_theme,
+        website_layout: data.website_layout || metadataPrefs.website_layout,
+      },
+    }
   } catch (error: any) {
     return { success: false, error: error.message }
   }
@@ -32,8 +89,8 @@ export async function updateUserProfile(
     state?: string
     location?: string
     email?: string
-    website_theme?: 'emerald' | 'midnight' | 'sunset'
-    website_layout?: 'classic' | 'minimal' | 'bold'
+    website_theme?: WebsiteTheme
+    website_layout?: WebsiteLayout
   }
 ) {
   try {
@@ -46,7 +103,16 @@ export async function updateUserProfile(
     const { data, error } = await supabase.from('auth_users').update(updates).eq('id', userId).select().single()
 
     if (!error) {
-      return { success: true, data }
+      await saveWebsitePreferencesToAuthMetadata(supabase, userId, websiteTheme, websiteLayout)
+
+      return {
+        success: true,
+        data: {
+          ...data,
+          website_theme: data.website_theme || websiteTheme,
+          website_layout: data.website_layout || websiteLayout,
+        },
+      }
     }
 
     const errorText = String(error.message || '').toLowerCase()
@@ -71,6 +137,8 @@ export async function updateUserProfile(
     if (fallbackError) {
       throw fallbackError
     }
+
+    await saveWebsitePreferencesToAuthMetadata(supabase, userId, websiteTheme, websiteLayout)
 
     return {
       success: true,
