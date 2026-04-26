@@ -73,9 +73,9 @@ export async function getMerchants(options: { buyerLat?: number | null; buyerLng
 
     if (error) throw error
 
-    let productsResult = await supabase.from('products').select('id, merchant_id, cost_price, stock, images')
+    let productsResult = await supabase.from('products').select('id, merchant_id, cost_price, stock')
     if (productsResult.error && String(productsResult.error.message || '').toLowerCase().includes('cost_price')) {
-      productsResult = await supabase.from('products').select('id, merchant_id, stock, images')
+      productsResult = await supabase.from('products').select('id, merchant_id, stock')
     }
     if (productsResult.error) throw productsResult.error
 
