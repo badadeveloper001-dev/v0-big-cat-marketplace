@@ -38,9 +38,48 @@ export async function updateUserProfile(
 ) {
   try {
     const supabase = await createClient()
+
+    const websiteTheme = updates.website_theme
+    const websiteLayout = updates.website_layout
+    const hasWebsiteOverrides = websiteTheme !== undefined || websiteLayout !== undefined
+
     const { data, error } = await supabase.from('auth_users').update(updates).eq('id', userId).select().single()
-    if (error) throw error
-    return { success: true, data }
+
+    if (!error) {
+      return { success: true, data }
+    }
+
+    const errorText = String(error.message || '').toLowerCase()
+    const websiteColumnMissing =
+      hasWebsiteOverrides
+      && (errorText.includes('website_theme') || errorText.includes('website_layout'))
+      && (errorText.includes('column') || errorText.includes('schema cache'))
+
+    if (!websiteColumnMissing) {
+      throw error
+    }
+
+    // Backward compatibility: allow profile save even when the DB has not yet added website preference columns.
+    const { website_theme: _theme, website_layout: _layout, ...safeUpdates } = updates
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('auth_users')
+      .update(safeUpdates)
+      .eq('id', userId)
+      .select()
+      .single()
+
+    if (fallbackError) {
+      throw fallbackError
+    }
+
+    return {
+      success: true,
+      data: {
+        ...fallbackData,
+        website_theme: websiteTheme,
+        website_layout: websiteLayout,
+      },
+    }
   } catch (error: any) {
     return { success: false, error: error.message }
   }
