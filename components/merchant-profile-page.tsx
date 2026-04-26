@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRole } from '@/lib/role-context'
 import { ArrowLeft, Camera, Loader2, Check, AlertCircle, Store, MapPin, FileText, User, Phone, Mail, Globe, Copy, ExternalLink, Palette } from 'lucide-react'
 import Image from 'next/image'
@@ -45,6 +45,7 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [activeTab, setActiveTab] = useState<'personal' | 'store'>('personal')
+  const profileLoadedRef = useRef(false)
   
   const [formData, setFormData] = useState({
     // Personal info
@@ -61,12 +62,13 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
   })
 
   useEffect(() => {
-    if (user?.userId) {
+    if (user?.userId && !profileLoadedRef.current) {
       loadProfile()
     }
-  }, [user])
+  }, [user?.userId])
 
   const loadProfile = async () => {
+    profileLoadedRef.current = true
     setLoading(true)
     try {
       const response = await fetch(`/api/user/profile?userId=${user?.userId || ''}`)
@@ -92,8 +94,8 @@ export function MerchantProfilePage({ onBack }: { onBack: () => void }) {
           business_description: result.data.business_description || user?.merchantProfile?.business_description || '',
           business_category: result.data.business_category || user?.merchantProfile?.business_category || 'General Merchandise',
           location: result.data.location || user?.merchantProfile?.location || '',
-          website_theme: result.data.website_theme || savedWebsiteSettings.theme || 'emerald',
-          website_layout: result.data.website_layout || savedWebsiteSettings.layout || 'classic',
+          website_theme: result.data.website_theme || savedWebsiteSettings.theme || user?.merchantProfile?.website_theme || 'emerald',
+          website_layout: result.data.website_layout || savedWebsiteSettings.layout || user?.merchantProfile?.website_layout || 'classic',
         })
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to load profile' })

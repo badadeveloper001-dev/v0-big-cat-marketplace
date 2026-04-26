@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Store, Phone, Mail, MapPin, Globe, Save, Loader2, CheckCircle2, AlertCircle, Copy, ExternalLink, Palette } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
 import { getMerchantMiniWebsitePath, getMerchantMiniWebsiteStorageKey, WEBSITE_LAYOUTS, WEBSITE_THEMES, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
@@ -15,6 +15,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const settingsInitializedRef = useRef(false)
   const [storeSettings, setStoreSettings] = useState({
     storeName: user?.merchantProfile?.business_name || '',
     storeDescription: user?.merchantProfile?.business_description || '',
@@ -32,7 +33,8 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
   })
 
   useEffect(() => {
-    if (!user?.userId) return
+    if (!user?.userId || settingsInitializedRef.current) return
+    settingsInitializedRef.current = true
 
     const savedSettings = typeof window !== 'undefined'
       ? localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId))
@@ -50,7 +52,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
       websiteTheme: user?.merchantProfile?.website_theme || parsed?.theme || prev.websiteTheme,
       websiteLayout: user?.merchantProfile?.website_layout || parsed?.layout || prev.websiteLayout,
     }))
-  }, [user])
+  }, [user?.userId])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
