@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser(userId)
+    const auth = await requireAuthenticatedUser(userId, request)
     if (auth.response) return auth.response
 
     const result = await getPaymentMethods(userId)
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser(userId)
+    const auth = await requireAuthenticatedUser(userId, request)
     if (auth.response) return auth.response
 
     const result = await addPaymentMethod(userId, method)
@@ -69,7 +69,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser(userId)
+    const auth = await requireAuthenticatedUser(userId, request)
     if (auth.response) return auth.response
 
     const result = await setDefaultPaymentMethod(userId, methodId)
@@ -94,7 +94,7 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser()
+    const auth = await requireAuthenticatedUser(undefined, request)
     if (auth.response) return auth.response
 
     const result = await removePaymentMethod(auth.user.id, methodId)

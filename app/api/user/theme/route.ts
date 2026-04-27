@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 type WebsiteTheme = 'emerald' | 'midnight' | 'sunset'
 type WebsiteLayout = 'classic' | 'minimal' | 'bold'
@@ -48,6 +49,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'userId is required' }, { status: 400 })
     }
 
+    const auth = await requireAuthenticatedUser(userId, request)
+    if (auth.response) return auth.response
+
     const result = await readThemeFromMetadata(userId)
     if ('error' in result) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status })
@@ -68,6 +72,9 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ success: false, error: 'userId is required' }, { status: 400 })
     }
+
+    const auth = await requireAuthenticatedUser(userId, request)
+    if (auth.response) return auth.response
 
     const theme = isWebsiteTheme(website_theme) ? website_theme : undefined
     const layout = isWebsiteLayout(website_layout) ? website_layout : undefined

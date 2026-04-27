@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser(buyerId)
+    const auth = await requireAuthenticatedUser(buyerId, request)
     if (auth.response) return auth.response
 
     const result = await getBuyerOrders(buyerId)

@@ -13,7 +13,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser()
+    const auth = await requireAuthenticatedUser(undefined, request)
     if (auth.response) return auth.response
 
     const result = await updateOrderStatus(orderId, status, auth.user.id)

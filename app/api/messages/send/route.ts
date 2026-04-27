@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser(senderId)
+    const auth = await requireAuthenticatedUser(senderId, request)
     if (auth.response) return auth.response
 
     const safetyStatus = await getUserSafetyStatus(senderId)

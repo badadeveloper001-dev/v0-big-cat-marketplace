@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser(userId)
+    const auth = await requireAuthenticatedUser(userId, request)
     if (auth.response) return auth.response
 
     const result = await getUserConversations(userId)

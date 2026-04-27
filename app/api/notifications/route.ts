@@ -9,7 +9,7 @@ import { requireAuthenticatedUser } from "@/lib/supabase/request-auth"
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuthenticatedUser()
+    const auth = await requireAuthenticatedUser(undefined, request)
     if (auth.response) return auth.response
 
     const { searchParams } = new URL(request.url)
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const auth = await requireAuthenticatedUser()
+    const auth = await requireAuthenticatedUser(undefined, request)
     if (auth.response) return auth.response
 
     const body = await request.json().catch(() => ({}))
