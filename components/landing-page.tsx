@@ -7,21 +7,19 @@ import Image from "next/image"
 export function LandingPage() {
   const router = useRouter()
   const [isOnline, setIsOnline] = useState(true)
-  const [shouldRedirect, setShouldRedirect] = useState(false)
+  const [showSplash, setShowSplash] = useState(true)
 
   useEffect(() => {
-    // Check initial connectivity
-    setIsOnline(navigator.onLine)
+    const online = navigator.onLine
+    setIsOnline(online)
 
     // Listen for online/offline events
     const handleOnline = () => {
       setIsOnline(true)
-      setShouldRedirect(true)
     }
 
     const handleOffline = () => {
       setIsOnline(false)
-      setShouldRedirect(false)
     }
 
     window.addEventListener("online", handleOnline)
@@ -33,16 +31,19 @@ export function LandingPage() {
     }
   }, [])
 
-  // Auto-redirect to marketplace when online
+  // Always show animation briefly, then redirect if online.
   useEffect(() => {
-    if (shouldRedirect && isOnline) {
-      const timer = setTimeout(() => {
-        router.push("/marketplace")
-      }, 2000) // Wait 2 seconds for animation to complete
+    const splashTimer = setTimeout(() => {
+      setShowSplash(false)
+    }, 1800)
+    return () => clearTimeout(splashTimer)
+  }, [])
 
-      return () => clearTimeout(timer)
+  useEffect(() => {
+    if (!showSplash && isOnline) {
+      router.push("/marketplace")
     }
-  }, [shouldRedirect, isOnline, router])
+  }, [showSplash, isOnline, router])
 
   return (
     <div className="w-full h-screen flex flex-col items-center justify-center bg-gradient-to-b from-white to-gray-50 overflow-hidden relative">
@@ -60,7 +61,7 @@ export function LandingPage() {
           }}
         >
           <Image
-            src="/favicon.png"
+            src="/image.png"
             alt="BigCat Marketplace"
             width={120}
             height={120}
