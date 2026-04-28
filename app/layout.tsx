@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   title: 'BigCat Marketplace',
   description: 'Your modern marketplace platform',
   generator: 'v0.app',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover',
   icons: {
     icon: [
       {
