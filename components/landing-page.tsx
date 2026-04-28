@@ -31,11 +31,11 @@ export function LandingPage() {
     }
   }, [])
 
-  // Always show animation briefly, then redirect if online.
+  // Always show animation for 5 seconds, then redirect if online.
   useEffect(() => {
     const splashTimer = setTimeout(() => {
       setShowSplash(false)
-    }, 1800)
+    }, 5000)
     return () => clearTimeout(splashTimer)
   }, [])
 
