@@ -243,11 +243,11 @@ export function LandingPage() {
             <div className="relative rounded-[32px] border border-white/10 bg-white/5 p-2 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
               <div className="relative aspect-[4/5] overflow-hidden rounded-[26px] bg-[#0a1b0f]">
                 <Image
-                  src="/Picture1.jpg"
-                  alt="A buyer shopping confidently in a vibrant local market"
+                  src="/hero-marketplace.png"
+                  alt="BigCat Marketplace — Your Market. Your Culture. One Click."
                   fill
                   priority
-                  className="object-cover"
+                  className="object-cover object-top"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#03160a]/85 via-[#032c0e]/15 to-transparent" />
 
