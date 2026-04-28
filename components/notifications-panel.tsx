@@ -5,7 +5,6 @@ import { useRole } from "@/lib/role-context"
 import {
   ArrowLeft,
   Bell,
-  X,
   Package,
   ShoppingBag,
   MessageSquare,
@@ -184,6 +183,13 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
         {/* Header */}
         <header className="flex items-center justify-between px-4 py-4 border-b border-border">
           <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
               <Bell className="w-5 h-5 text-primary-foreground" />
             </div>
@@ -203,12 +209,6 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
                 Mark all read
               </button>
             )}
-            <button
-              onClick={onClose}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
         </header>
 

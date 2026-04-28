@@ -61,7 +61,6 @@ type CreateOrderInput = {
   deliveryAddress: string
   paymentMethod?: string
   deliveryFee?: number
-  couponCode?: string
 }
 
 export async function createOrder(
@@ -338,21 +337,6 @@ export async function createOrder(
 
       createdOrders.push(orderResult.data)
 
-      // Increment coupon usage if coupon was applied
-      if (payload.couponCode) {
-        // Increment coupon usage with a read-then-update fallback for broad schema compatibility.
-        const couponLookup = await (supabase.from('coupons') as any)
-          .select('id, current_uses')
-          .eq('code', String(payload.couponCode).toUpperCase().trim())
-          .maybeSingle()
-
-        if (!couponLookup.error && couponLookup.data?.id) {
-          await (supabase.from('coupons') as any)
-            .update({ current_uses: Number(couponLookup.data.current_uses || 0) + 1 })
-            .eq('id', couponLookup.data.id)
-        }
-      }
-    }
 
     return {
       success: true,

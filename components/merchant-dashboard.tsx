@@ -43,7 +43,6 @@ import {
   Loader2,
   User,
   MessageSquare,
-  Ticket,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { NotificationsPanel } from "./notifications-panel"
@@ -108,18 +107,6 @@ export function MerchantDashboard() {
   const [todoError, setTodoError] = useState("")
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default")
   const [unreadMessages, setUnreadMessages] = useState(0)
-  const [coupons, setCoupons] = useState<any[]>([])
-  const [loadingCoupons, setLoadingCoupons] = useState(false)
-  const [couponForm, setCouponForm] = useState({
-    code: '',
-    discountType: 'percentage',
-    discountValue: '',
-    minOrderAmount: '',
-    maxUses: '',
-    expiresAt: '',
-  })
-  const [couponFeedback, setCouponFeedback] = useState('')
-
   const merchantKind = user?.merchantType || user?.merchantProfile?.merchant_type || 'products'
   const isServiceMerchant = merchantKind === 'services'
 
@@ -369,7 +356,6 @@ export function MerchantDashboard() {
       loadProducts()
       loadOrders()
       loadUnreadMessages()
-      loadCoupons()
     }
   }, [user])
 
@@ -698,75 +684,6 @@ export function MerchantDashboard() {
     } catch {
       setUnreadMessages(0)
       trackMerchantUnreadMessageNotifications(0)
-    }
-  }
-
-  const loadCoupons = async () => {
-    if (!user?.userId) return
-    setLoadingCoupons(true)
-    try {
-      const response = await fetch(`/api/coupons?merchantId=${encodeURIComponent(user.userId)}`, { cache: 'no-store' })
-      const result = await response.json()
-      if (result.success) {
-        setCoupons(Array.isArray(result.data) ? result.data : [])
-      } else {
-        setCouponFeedback(result.error || 'Unable to load coupons.')
-      }
-    } catch {
-      setCouponFeedback('Unable to load coupons.')
-    } finally {
-      setLoadingCoupons(false)
-    }
-  }
-
-  const createCoupon = async () => {
-    if (!user?.userId) return
-    if (!couponForm.code.trim() || !couponForm.discountValue.trim()) {
-      setCouponFeedback('Coupon code and discount value are required.')
-      return
-    }
-
-    setCouponFeedback('')
-    try {
-      const response = await fetch('/api/coupons', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: couponForm.code.trim().toUpperCase(),
-          discountType: couponForm.discountType,
-          discountValue: Number(couponForm.discountValue),
-          merchantId: user.userId,
-          minOrderAmount: Number(couponForm.minOrderAmount || 0),
-          maxUses: couponForm.maxUses ? Number(couponForm.maxUses) : null,
-          expiresAt: couponForm.expiresAt || null,
-        }),
-      })
-      const result = await response.json()
-      if (!result.success) {
-        setCouponFeedback(result.error || 'Failed to create coupon.')
-        return
-      }
-
-      setCouponFeedback('Coupon created successfully.')
-      setCouponForm({ code: '', discountType: 'percentage', discountValue: '', minOrderAmount: '', maxUses: '', expiresAt: '' })
-      loadCoupons()
-    } catch {
-      setCouponFeedback('Failed to create coupon.')
-    }
-  }
-
-  const deleteCoupon = async (couponId: string) => {
-    try {
-      const response = await fetch(`/api/coupons?id=${encodeURIComponent(couponId)}`, { method: 'DELETE' })
-      const result = await response.json()
-      if (!result.success) {
-        setCouponFeedback(result.error || 'Failed to delete coupon.')
-        return
-      }
-      setCouponFeedback('Coupon deleted.')
-      loadCoupons()
-    } catch {
-      setCouponFeedback('Failed to delete coupon.')
     }
   }
 
@@ -1315,100 +1232,6 @@ export function MerchantDashboard() {
                 <span className="text-[10px] font-medium leading-tight text-center">{action.label}</span>
               </button>
             ))}
-          </div>
-        </section>
-
-        <section className="px-4 mb-6">
-          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Ticket className="w-4 h-4 text-primary" />
-                <h3 className="text-sm font-semibold text-foreground">Discount Coupons</h3>
-              </div>
-              <span className="text-xs text-muted-foreground">Boost conversions</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-              <input
-                value={couponForm.code}
-                onChange={(e) => setCouponForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                placeholder="Code (e.g. BIGCAT10)"
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-              />
-              <div className="flex gap-2">
-                <select
-                  value={couponForm.discountType}
-                  onChange={(e) => setCouponForm((prev) => ({ ...prev, discountType: e.target.value }))}
-                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                >
-                  <option value="percentage">% Off</option>
-                  <option value="fixed">₦ Off</option>
-                </select>
-                <input
-                  value={couponForm.discountValue}
-                  onChange={(e) => setCouponForm((prev) => ({ ...prev, discountValue: e.target.value.replace(/[^0-9.]/g, '') }))}
-                  placeholder="Value"
-                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                />
-              </div>
-              <input
-                value={couponForm.minOrderAmount}
-                onChange={(e) => setCouponForm((prev) => ({ ...prev, minOrderAmount: e.target.value.replace(/[^0-9.]/g, '') }))}
-                placeholder="Min order (optional)"
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-              />
-              <div className="flex gap-2">
-                <input
-                  value={couponForm.maxUses}
-                  onChange={(e) => setCouponForm((prev) => ({ ...prev, maxUses: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="Max uses"
-                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                />
-                <input
-                  type="date"
-                  value={couponForm.expiresAt}
-                  onChange={(e) => setCouponForm((prev) => ({ ...prev, expiresAt: e.target.value }))}
-                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={createCoupon}
-              className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
-            >
-              Create Coupon
-            </button>
-
-            {couponFeedback && (
-              <p className="mt-2 text-xs text-muted-foreground">{couponFeedback}</p>
-            )}
-
-            <div className="mt-3 space-y-2 max-h-44 overflow-y-auto">
-              {loadingCoupons ? (
-                <p className="text-xs text-muted-foreground">Loading coupons...</p>
-              ) : coupons.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No coupons yet.</p>
-              ) : (
-                coupons.map((coupon) => (
-                  <div key={coupon.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{coupon.code}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% off` : `${formatNaira(Number(coupon.discount_value || 0))} off`}
-                        {coupon.min_order_amount ? ` · Min ${formatNaira(Number(coupon.min_order_amount))}` : ''}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => deleteCoupon(String(coupon.id))}
-                      className="text-xs text-destructive hover:underline"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         </section>
 
