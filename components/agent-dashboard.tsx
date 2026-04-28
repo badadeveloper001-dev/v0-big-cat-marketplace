@@ -47,8 +47,27 @@ export function AgentDashboard() {
   const [emailBody, setEmailBody] = useState("")
   const [emailAttachments, setEmailAttachments] = useState<File[]>([])
   const [emailHint, setEmailHint] = useState("")
+  const [reminderAt, setReminderAt] = useState("")
 
   const currentAgentId = String(user?.userId || (user as any)?.id || "").trim()
+
+  const TEMPLATE_LIBRARY: Record<string, { subject: string; body: (request: OnboardingRequest, agentName: string) => string }> = {
+    certificate_ready: {
+      subject: 'Your SMEDAN ID and CAC certificate are ready - {{business}}',
+      body: (request, agentName) =>
+        `Hello ${request.owner_name},\n\nThis is ${agentName}, your onboarding agent for ${request.business_name} on BigCat Marketplace.\n\nWe are pleased to let you know that your SMEDAN ID and CAC ID/certificate are now available. Please find the certificate image attachments attached for your records.\n\nIf you need any clarification or support with the next onboarding step, kindly reply to this email and I will assist you.\n\nBest regards,\n${agentName}\nBigCat Onboarding Agent`,
+    },
+    pending_documents: {
+      subject: 'Action Required: Complete your onboarding documents - {{business}}',
+      body: (request, agentName) =>
+        `Hello ${request.owner_name},\n\nThis is ${agentName} from BigCat Marketplace onboarding.\n\nYour onboarding for ${request.business_name} is in progress, but we still need the remaining documents to complete verification.\n\nPlease reply with the pending documents so we can finalize your onboarding quickly.\n\nThank you,\n${agentName}\nBigCat Onboarding Agent`,
+    },
+    onboarding_completed: {
+      subject: 'Welcome to BigCat Marketplace - Onboarding Completed for {{business}}',
+      body: (request, agentName) =>
+        `Hello ${request.owner_name},\n\nGreat news! Your onboarding for ${request.business_name} is now complete.\n\nYou can now log in and start listing your products/services on BigCat Marketplace.\n\nIf you need help setting up your first listing, reply to this email and I will assist.\n\nWelcome aboard!\n${agentName}\nBigCat Onboarding Agent`,
+    },
+  }
 
   const selectedRequest = useMemo(
     () => requests.find((request) => request.id === selectedRequestId) || null,
@@ -149,6 +168,68 @@ export function AgentDashboard() {
     )
     setShowEmailComposer(true)
   }
+
+  const applyTemplate = (request: OnboardingRequest, key: string) => {
+    const agentName = user?.name || 'Assigned Agent'
+    const template = TEMPLATE_LIBRARY[key] || TEMPLATE_LIBRARY.certificate_ready
+    setEmailSubject(template.subject.replace('{{business}}', request.business_name))
+    setEmailBody(template.body(request, agentName))
+  }
+
+  const scheduleReminder = () => {
+    if (!selectedRequest || !reminderAt) {
+      setEmailHint('Select a request and reminder time first.')
+      return
+    }
+
+    const when = new Date(reminderAt)
+    if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+      setEmailHint('Reminder time must be in the future.')
+      return
+    }
+
+    const key = `agent_reminders_${currentAgentId || 'default'}`
+    const existing = JSON.parse(localStorage.getItem(key) || '[]') as any[]
+    existing.push({
+      id: `${selectedRequest.id}_${Date.now()}`,
+      requestId: selectedRequest.id,
+      businessName: selectedRequest.business_name,
+      ownerName: selectedRequest.owner_name,
+      dueAt: when.toISOString(),
+      done: false,
+    })
+    localStorage.setItem(key, JSON.stringify(existing))
+    setEmailHint(`Reminder set for ${when.toLocaleString('en-NG')}.`)
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !currentAgentId) return
+    const key = `agent_reminders_${currentAgentId}`
+
+    const tick = () => {
+      const reminders = JSON.parse(localStorage.getItem(key) || '[]') as any[]
+      let changed = false
+      const next = reminders.map((item) => {
+        if (!item.done && new Date(item.dueAt).getTime() <= Date.now()) {
+          changed = true
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('BigCat Onboarding Reminder', {
+              body: `Follow up with ${item.businessName} (${item.ownerName}).`,
+            })
+          }
+          return { ...item, done: true }
+        }
+        return item
+      })
+      if (changed) {
+        localStorage.setItem(key, JSON.stringify(next))
+      }
+    }
+
+    tick()
+    const id = window.setInterval(tick, 30000)
+    return () => window.clearInterval(id)
+  }, [currentAgentId])
 
   const sendEmailTemplate = async () => {
     if (!selectedRequest) return
@@ -386,6 +467,23 @@ export function AgentDashboard() {
                       {actionLoading === `complete:${selectedRequest.id}` ? "Updating..." : "Mark as Completed"}
                     </button>
                   </div>
+                  <div className="pt-2 space-y-2">
+                    <p className="text-xs font-semibold text-foreground">Follow-up Reminders</p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="datetime-local"
+                        value={reminderAt}
+                        onChange={(event) => setReminderAt(event.target.value)}
+                        className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                      />
+                      <button
+                        onClick={scheduleReminder}
+                        className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary"
+                      >
+                        Set Reminder
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </section>
@@ -426,6 +524,30 @@ export function AgentDashboard() {
                     onChange={(event) => setEmailSubject(event.target.value)}
                     className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
                   />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground">Onboarding Template</label>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => applyTemplate(selectedRequest, 'certificate_ready')}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-secondary"
+                    >
+                      Certificate Ready
+                    </button>
+                    <button
+                      onClick={() => applyTemplate(selectedRequest, 'pending_documents')}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-secondary"
+                    >
+                      Pending Documents
+                    </button>
+                    <button
+                      onClick={() => applyTemplate(selectedRequest, 'onboarding_completed')}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-secondary"
+                    >
+                      Onboarding Completed
+                    </button>
+                  </div>
                 </div>
 
                 <div>

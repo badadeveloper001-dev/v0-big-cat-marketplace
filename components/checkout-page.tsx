@@ -31,6 +31,12 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const [walletBalance, setWalletBalance] = useState(0)
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
+    const [couponCode, setCouponCode] = useState('')
+    const [couponMessage, setCouponMessage] = useState('')
+    const [couponDiscount, setCouponDiscount] = useState(0)
+    const [applyingCoupon, setApplyingCoupon] = useState(false)
+    const [appliedCouponId, setAppliedCouponId] = useState<string | null>(null)
+    const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null)
   const [savedAddresses, setSavedAddresses] = useState<Array<{ id: string; label: string; address: string }>>([])
   const [serviceBooking, setServiceBooking] = useState<any>(null)
   const savedLocation = [user?.city, user?.state].filter(Boolean).join(', ')
@@ -72,7 +78,8 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
 
   const productTotal = getTotal()
   const serviceTotal = Number(serviceBooking?.basePrice || 0)
-  const grandTotal = serviceBooking ? serviceTotal : (productTotal + deliveryFee)
+  const preDiscountTotal = serviceBooking ? serviceTotal : (productTotal + deliveryFee)
+  const grandTotal = Math.max(0, preDiscountTotal - couponDiscount)
   const isWalletPayment = paymentMethod === 'palmpay'
   const isWalletInsufficient = isWalletPayment && (serviceBooking || deliveryAddress.trim()) && walletBalance < grandTotal
   const walletShortfall = isWalletInsufficient ? grandTotal - walletBalance : 0
@@ -142,6 +149,53 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
 
     setSavedAddresses(next)
     localStorage.setItem(getSavedAddressesKey(), JSON.stringify(next))
+  }
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponMessage('Enter a coupon code first.')
+      return
+    }
+
+    if (serviceBooking) {
+      setCouponMessage('Coupons currently apply to product orders only.')
+      return
+    }
+
+    setApplyingCoupon(true)
+    setCouponMessage('')
+
+    try {
+      // If cart has multiple merchants, validate against first merchant for now.
+      const merchantId = items[0]?.merchantId || null
+      const response = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          merchantId,
+          orderTotal: preDiscountTotal,
+        }),
+      })
+
+      const result = await response.json()
+      if (!result.success || !result.valid) {
+        setCouponDiscount(0)
+        setAppliedCouponId(null)
+        setAppliedCouponCode(null)
+        setCouponMessage(result.message || 'Invalid coupon code.')
+        return
+      }
+
+      setCouponDiscount(Number(result.discount || 0))
+      setAppliedCouponId(String(result.couponId || ''))
+      setAppliedCouponCode(String(result.code || couponCode.trim().toUpperCase()))
+      setCouponMessage(result.message || 'Coupon applied successfully.')
+    } catch {
+      setCouponMessage('Unable to validate coupon right now.')
+    } finally {
+      setApplyingCoupon(false)
+    }
   }
 
   const handleServiceBookingCheckout = async () => {
@@ -269,6 +323,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       deliveryAddress: deliveryAddress.trim(),
       paymentMethod,
       deliveryFee,
+      ...(appliedCouponCode ? { couponCode: appliedCouponCode } as any : {}),
     })
 
     setIsSubmitting(false)
@@ -563,6 +618,31 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         <section className="p-4 border-b border-border space-y-4">
           <PaymentMethodSelector selectedMethod={paymentMethod} onSelect={setPaymentMethod} />
 
+          {/* Coupon */}
+          {!serviceBooking && (
+            <div className="rounded-xl border border-border bg-secondary/20 p-3 space-y-2">
+              <p className="text-sm font-semibold text-foreground">Discount Coupon</p>
+              <div className="flex items-center gap-2">
+                <input
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="Enter coupon code"
+                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                />
+                <button
+                  onClick={applyCoupon}
+                  disabled={applyingCoupon || !couponCode.trim()}
+                  className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                >
+                  {applyingCoupon ? 'Applying...' : 'Apply'}
+                </button>
+              </div>
+              {couponMessage && (
+                <p className={`text-xs ${couponDiscount > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>{couponMessage}</p>
+              )}
+            </div>
+          )}
+
           {isWalletPayment && (
             <div className="rounded-xl border border-[#E8D7FF] bg-[#F9F5FF] p-3">
               <div className="flex items-center justify-between text-sm">
@@ -635,6 +715,12 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
                   <span className="font-medium text-foreground">
                     {deliveryAddress.trim() ? formatNaira(deliveryFee) : '--'}
                   </span>
+                                {couponDiscount > 0 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-green-700">Coupon Discount {appliedCouponCode ? `(${appliedCouponCode})` : ''}</span>
+                                    <span className="font-medium text-green-700">-{formatNaira(couponDiscount)}</span>
+                                  </div>
+                                )}
                 </div>
                 <div className="h-px bg-border my-2" />
                 <div className="flex justify-between">

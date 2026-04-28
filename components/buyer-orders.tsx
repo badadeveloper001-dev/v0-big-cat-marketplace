@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw, Loader2 } from "lucide-react"
+import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw, Loader2, Download, Timer, Banknote } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 import { useRole } from "@/lib/role-context"
 import { useCart } from "@/lib/cart-context"
@@ -58,6 +58,9 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
   const [reportingOrderId, setReportingOrderId] = useState<string | null>(null)
   const [reportIssueType, setReportIssueType] = useState('not_delivered')
   const [reportDescription, setReportDescription] = useState('')
+  const [refundBankName, setRefundBankName] = useState('')
+  const [refundAccountNumber, setRefundAccountNumber] = useState('')
+  const [refundAccountName, setRefundAccountName] = useState('')
   const [submittingReportFor, setSubmittingReportFor] = useState<string | null>(null)
   const [reportFeedback, setReportFeedback] = useState('')
   const [issuesByOrder, setIssuesByOrder] = useState<Record<string, any>>({})
@@ -282,6 +285,46 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
     onOpenCart?.()
   }
 
+  const getDeliveryETA = (order: any) => {
+    if (order.status === 'delivered') return { label: 'Delivered', daysLeft: null as number | null }
+    if (!order.created_at) return { label: 'ETA unavailable', daysLeft: null as number | null }
+
+    const created = new Date(order.created_at)
+    const etaDays = order.delivery_type === 'express' ? 1 : order.delivery_type === 'pickup' ? 0 : 3
+    const eta = new Date(created)
+    eta.setDate(eta.getDate() + etaDays)
+    const diffMs = eta.getTime() - Date.now()
+    const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+
+    if (daysLeft <= 0) {
+      return { label: order.status === 'shipped' ? 'Arriving today' : 'Expected today', daysLeft: 0 }
+    }
+
+    return {
+      label: `ETA: ${eta.toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })}`,
+      daysLeft,
+    }
+  }
+
+  const downloadInvoice = (order: any) => {
+    const items = order.order_items || order.items || []
+    const rows = items.map((item: any) => {
+      const unit = Number(item.unit_price || item.price || 0)
+      const qty = Number(item.quantity || 1)
+      const total = Number(item.total_price || unit * qty)
+      return `<tr><td style="padding:8px;border-bottom:1px solid #eee">${item.product_name || item.name || 'Product'}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${qty}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">₦${unit.toLocaleString()}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">₦${total.toLocaleString()}</td></tr>`
+    }).join('')
+
+    const html = `<!doctype html><html><head><meta charset="utf-8" /><title>Invoice</title><style>body{font-family:Arial,sans-serif;padding:28px;max-width:760px;margin:auto;color:#111}table{width:100%;border-collapse:collapse}th{padding:8px;background:#f5f5f5;text-align:left}.muted{color:#666}</style></head><body><h2>BigCat Marketplace</h2><p class="muted">Tax Invoice / Receipt</p><p><strong>Order:</strong> ${String(order.id).slice(0, 8).toUpperCase()}</p><p><strong>Date:</strong> ${new Date(order.created_at).toLocaleDateString('en-NG')}</p><p><strong>Delivery:</strong> ${order.delivery_address || 'N/A'}</p><table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th></tr></thead><tbody>${rows}</tbody></table><table style="margin-top:12px;max-width:300px;margin-left:auto"><tr><td style="padding:4px 8px">Subtotal</td><td style="padding:4px 8px;text-align:right">₦${Number(order.product_total || 0).toLocaleString()}</td></tr><tr><td style="padding:4px 8px">Delivery</td><td style="padding:4px 8px;text-align:right">₦${Number(order.delivery_fee || 0).toLocaleString()}</td></tr><tr><td style="padding:8px 8px"><strong>Grand Total</strong></td><td style="padding:8px 8px;text-align:right"><strong>₦${Number(order.grand_total || 0).toLocaleString()}</strong></td></tr></table><p class="muted" style="margin-top:20px">Thank you for shopping on BigCat.</p></body></html>`
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 350)
+  }
+
   const submitIssueReport = async (orderId: string) => {
     if (!user?.userId) {
       setReportFeedback('Please sign in to report an issue.')
@@ -298,6 +341,10 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
     setReportFeedback('')
 
     try {
+      const refundMeta = (reportIssueType === 'refund_request' || reportIssueType === 'return_item')
+        ? `\n\n--- Refund Details ---\nBank: ${refundBankName}\nAccount Number: ${refundAccountNumber}\nAccount Name: ${refundAccountName}`
+        : ''
+
       const response = await fetch('/api/issues/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,7 +352,7 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
           orderId,
           buyerId: user.userId,
           issueType: reportIssueType,
-          description,
+          description: description + refundMeta,
         }),
       })
       const result = await response.json()
@@ -337,6 +384,9 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
       setReportingOrderId(null)
       setReportDescription('')
       setReportIssueType('not_delivered')
+      setRefundBankName('')
+      setRefundAccountNumber('')
+      setRefundAccountName('')
     } catch {
       setReportFeedback('Unable to submit your report right now.')
     } finally {
@@ -537,6 +587,15 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                           ? 'Express Delivery'
                           : 'Normal Delivery'}
                     </p>
+                    {order.status !== 'delivered' && (
+                      <div className={`mt-2 flex items-center gap-1.5 text-xs ${getDeliveryETA(order).daysLeft === 0 ? 'text-green-700' : 'text-primary'}`}>
+                        <Timer className="w-3.5 h-3.5" />
+                        <span>{getDeliveryETA(order).label}</span>
+                        {typeof getDeliveryETA(order).daysLeft === 'number' && getDeliveryETA(order).daysLeft! > 0 && (
+                          <span className="text-muted-foreground">({getDeliveryETA(order).daysLeft}d left)</span>
+                        )}
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground mt-2">
                       Use Report issue from order details when you need BigCat admin support.
                     </p>
@@ -604,13 +663,23 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
 
                   <div className="mt-2">
                     <button
+                      onClick={() => downloadInvoice(order)}
+                      className="w-full rounded-lg border border-border bg-secondary/60 py-2.5 text-sm font-medium text-foreground hover:bg-secondary flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download Receipt / Invoice
+                    </button>
+                  </div>
+
+                  <div className="mt-2">
+                    <button
                       onClick={() => {
                         setReportingOrderId((prev) => prev === String(order.id) ? null : String(order.id))
                         setReportFeedback('')
                       }}
                       className="w-full rounded-lg border border-primary/30 bg-primary/5 py-2.5 text-sm font-medium text-primary hover:bg-primary/10"
                     >
-                      Report issue
+                      Report Issue / Request Return or Refund
                     </button>
                     {orderIssue && (
                       <p className="mt-1 text-[11px] text-muted-foreground">
@@ -621,7 +690,7 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
 
                   {reportingOrderId === String(order.id) && (
                     <div className="mt-3 rounded-lg border border-border bg-secondary/40 p-3 space-y-2">
-                      <p className="text-xs font-semibold text-foreground">Report issue to BigCat admin</p>
+                      <p className="text-xs font-semibold text-foreground">Report Issue / Request Return or Refund</p>
                       <select
                         value={reportIssueType}
                         onChange={(e) => setReportIssueType(e.target.value)}
@@ -630,6 +699,7 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                         <option value="not_delivered">Order not delivered</option>
                         <option value="wrong_item">Wrong item received</option>
                         <option value="damaged_item">Damaged item</option>
+                        <option value="return_item">Return item (change of mind)</option>
                         <option value="refund_request">Refund request</option>
                         <option value="other">Other</option>
                       </select>
@@ -639,6 +709,34 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                         placeholder="Tell BigCat admin what happened..."
                         className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground min-h-[88px]"
                       />
+                      {(reportIssueType === 'refund_request' || reportIssueType === 'return_item') && (
+                        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+                            <Banknote className="w-3.5 h-3.5" />
+                            Refund Bank Details (optional)
+                          </div>
+                          <input
+                            value={refundBankName}
+                            onChange={(e) => setRefundBankName(e.target.value)}
+                            placeholder="Bank name"
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                          />
+                          <input
+                            value={refundAccountNumber}
+                            onChange={(e) => setRefundAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            placeholder="Account number (10 digits)"
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                            maxLength={10}
+                            inputMode="numeric"
+                          />
+                          <input
+                            value={refundAccountName}
+                            onChange={(e) => setRefundAccountName(e.target.value)}
+                            placeholder="Account name"
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                          />
+                        </div>
+                      )}
                       <button
                         onClick={() => submitIssueReport(String(order.id))}
                         disabled={submittingReportFor === String(order.id)}

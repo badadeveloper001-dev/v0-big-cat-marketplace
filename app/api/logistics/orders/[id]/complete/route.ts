@@ -18,7 +18,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Order id is required.' }, { status: 400 })
     }
 
-    const result = await completeLogisticsOrder(id)
+    const body = await request.json().catch(() => ({}))
+    const result = await completeLogisticsOrder(id, body?.proofOfDeliveryUrl || null)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Complete logistics order API error:', error)

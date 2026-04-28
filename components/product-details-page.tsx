@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { formatNaira } from '@/lib/currency-utils'
 import { useCart } from '@/lib/cart-context'
 import { useWishlist } from '@/lib/wishlist-context'
-import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2, ChevronLeft, ChevronRight, ImageIcon, Store, Heart } from 'lucide-react'
+import { ArrowLeft, ShoppingCart, MapPin, Package, Loader2, AlertCircle, Truck, CheckCircle2, ChevronLeft, ChevronRight, ImageIcon, Store, Heart, Bell, BellOff } from 'lucide-react'
 import { ProductReviews, StarRating } from './product-reviews'
 import { BrandWordmark } from './brand-wordmark'
 import Image from 'next/image'
@@ -30,6 +30,8 @@ export function ProductDetailsPage({ productId, onBack, onViewProduct, onViewMer
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const { addItem, getItemCount, getTotal } = useCart()
   const { toggleItem, isInWishlist } = useWishlist()
+  const [priceAlertActive, setPriceAlertActive] = useState(false)
+  const [priceAlertFeedback, setPriceAlertFeedback] = useState('')
 
   useEffect(() => {
     loadProduct()
@@ -140,6 +142,37 @@ export function ProductDetailsPage({ productId, onBack, onViewProduct, onViewMer
   const savedToWishlist = isInWishlist(String(product.id))
   const availableStock = Math.max(0, Number(product.stock || 0))
   const isOutOfStock = availableStock <= 0
+
+  // Check if price alert is active for this product
+  useEffect(() => {
+    if (!product) return
+    try {
+      const alerts = JSON.parse(localStorage.getItem('bigcat_price_alerts') || '[]') as any[]
+      setPriceAlertActive(alerts.some((a: any) => a.productId === String(product.id)))
+    } catch { /* ignore */ }
+  }, [product?.id])
+
+  const togglePriceAlert = useCallback(() => {
+    if (!product) return
+    try {
+      const key = 'bigcat_price_alerts'
+      const alerts = JSON.parse(localStorage.getItem(key) || '[]') as any[]
+      const productId = String(product.id)
+      const existing = alerts.findIndex((a: any) => a.productId === productId)
+      if (existing >= 0) {
+        alerts.splice(existing, 1)
+        localStorage.setItem(key, JSON.stringify(alerts))
+        setPriceAlertActive(false)
+        setPriceAlertFeedback('Price alert removed.')
+      } else {
+        alerts.push({ productId, name: product.name, price: Number(product.price), setAt: Date.now() })
+        localStorage.setItem(key, JSON.stringify(alerts))
+        setPriceAlertActive(true)
+        setPriceAlertFeedback("You'll be notified if this item's price drops!")
+      }
+      setTimeout(() => setPriceAlertFeedback(''), 3000)
+    } catch { /* ignore */ }
+  }, [product])
 
   const wishlistItem = {
     id: String(product.id),
@@ -262,6 +295,24 @@ export function ProductDetailsPage({ productId, onBack, onViewProduct, onViewMer
               <StarRating rating={product.average_rating} reviews={product.review_count} />
             )}
           </div>
+        </div>
+
+        {/* Price Drop Alert */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={togglePriceAlert}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors ${
+              priceAlertActive
+                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                : 'border-border bg-card text-muted-foreground hover:text-amber-600'
+            }`}
+          >
+            {priceAlertActive ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+            {priceAlertActive ? 'Alert On' : 'Price Drop Alert'}
+          </button>
+          {priceAlertFeedback && (
+            <span className="text-xs text-amber-700">{priceAlertFeedback}</span>
+          )}
         </div>
 
         {/* Description */}

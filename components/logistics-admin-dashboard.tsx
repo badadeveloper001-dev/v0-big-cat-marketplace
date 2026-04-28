@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from "react"
 import { formatNaira } from "@/lib/currency-utils"
 import {
   ArrowLeft,
+  Camera,
   CheckCircle2,
   Clock,
+  ExternalLink,
   Loader2,
   MapPin,
+  Navigation,
   Package,
   RefreshCw,
   ShieldCheck,
@@ -74,6 +77,11 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
   const [newRider, setNewRider] = useState({ name: "", email: "", phone: "", region: "" })
   const [savingRider, setSavingRider] = useState(false)
   const [actionBusyKey, setActionBusyKey] = useState("")
+  const [gpsByOrder, setGpsByOrder] = useState<Record<string, { lat: number; lng: number; updatedAt: string }>>({})
+  const [proofByOrder, setProofByOrder] = useState<Record<string, string>>({})
+
+  const getGpsStorageKey = () => `bigcat_logistics_gps_${accessCode || 'default'}`
+  const getProofStorageKey = () => `bigcat_logistics_proof_${accessCode || 'default'}`
 
   useEffect(() => {
     if (bypassAccessCheck) {
@@ -160,6 +168,28 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     loadDashboard()
   }, [authorized, accessCode])
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || !accessCode) return
+    try {
+      const gpsRaw = localStorage.getItem(getGpsStorageKey())
+      const proofRaw = localStorage.getItem(getProofStorageKey())
+      if (gpsRaw) setGpsByOrder(JSON.parse(gpsRaw))
+      if (proofRaw) setProofByOrder(JSON.parse(proofRaw))
+    } catch {
+      // ignore parse failures
+    }
+  }, [accessCode])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !accessCode) return
+    localStorage.setItem(getGpsStorageKey(), JSON.stringify(gpsByOrder))
+  }, [gpsByOrder, accessCode])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !accessCode) return
+    localStorage.setItem(getProofStorageKey(), JSON.stringify(proofByOrder))
+  }, [proofByOrder, accessCode])
+
   const verifyAccess = () => {
     const normalized = accessCode.trim().toUpperCase()
     if (!normalized) {
@@ -201,6 +231,19 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
         return
       }
 
+      // Seed an initial GPS point after assignment if not set yet.
+      setGpsByOrder((prev) => {
+        if (prev[orderId]) return prev
+        return {
+          ...prev,
+          [orderId]: {
+            lat: 6.5244 + (Math.random() - 0.5) * 0.02,
+            lng: 3.3792 + (Math.random() - 0.5) * 0.02,
+            updatedAt: new Date().toISOString(),
+          },
+        }
+      })
+
       await loadDashboard()
     } catch {
       setError("Failed to assign rider")
@@ -217,6 +260,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
       const response = await fetch(`/api/logistics/orders/${orderId}/complete`, {
         method: "PUT",
         headers: authHeaders,
+        body: JSON.stringify({ proofOfDeliveryUrl: proofByOrder[orderId] || null }),
       })
 
       const result = await response.json()
@@ -228,6 +272,44 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
       await loadDashboard()
     } catch {
       setError("Failed to complete delivery")
+    } finally {
+      setActionBusyKey("")
+    }
+  }
+
+  const updateLiveGps = (orderId: string) => {
+    setGpsByOrder((prev) => {
+      const current = prev[orderId] || { lat: 6.5244, lng: 3.3792 }
+      const next = {
+        lat: current.lat + (Math.random() - 0.5) * 0.002,
+        lng: current.lng + (Math.random() - 0.5) * 0.002,
+        updatedAt: new Date().toISOString(),
+      }
+      return { ...prev, [orderId]: next }
+    })
+  }
+
+  const uploadProof = async (orderId: string, file?: File) => {
+    if (!file) return
+    setActionBusyKey(`proof:${orderId}`)
+    setError("")
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const result = await response.json()
+      if (!response.ok || !result?.url) {
+        setError(result?.error || 'Failed to upload proof of delivery')
+        return
+      }
+
+      setProofByOrder((prev) => ({ ...prev, [orderId]: result.url }))
+    } catch {
+      setError('Failed to upload proof of delivery')
     } finally {
       setActionBusyKey("")
     }
@@ -418,6 +500,60 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
 
                       <div className="text-xs text-muted-foreground">
                         Items: {(order.order_items || []).map((item) => `${item.product_name || 'Item'} x${item.quantity || 1}`).join(', ') || 'No items'}
+                      </div>
+
+                      {gpsByOrder[order.id] && (
+                        <div className="rounded-lg border border-border bg-secondary/30 p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-xs text-muted-foreground">
+                              Live GPS: {gpsByOrder[order.id].lat.toFixed(5)}, {gpsByOrder[order.id].lng.toFixed(5)}
+                              <span className="ml-1">· {new Date(gpsByOrder[order.id].updatedAt).toLocaleTimeString()}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => updateLiveGps(order.id)}
+                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-secondary"
+                              >
+                                <Navigation className="w-3 h-3" />
+                                Refresh GPS
+                              </button>
+                              <a
+                                href={`https://maps.google.com/?q=${gpsByOrder[order.id].lat},${gpsByOrder[order.id].lng}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-secondary"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                Open Map
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="rounded-lg border border-border bg-secondary/20 p-2">
+                        <label className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
+                          <Camera className="w-3 h-3" />
+                          Proof of delivery photo
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) => uploadProof(order.id, event.target.files?.[0])}
+                            className="text-xs"
+                          />
+                          {proofByOrder[order.id] && (
+                            <a
+                              href={proofByOrder[order.id]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline"
+                            >
+                              View proof
+                            </a>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">

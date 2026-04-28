@@ -103,7 +103,70 @@ export function ProductsMarketplace({
       const response = await fetch(endpoint, { cache: 'no-store' })
       const result = await response.json()
       if (result.success) {
-        setProducts(result.data)
+        const loadedProducts = result.data || []
+        setProducts(loadedProducts)
+
+        // Check local price alerts and notify when current price is lower
+        if (typeof window !== 'undefined') {
+          try {
+            const alerts = JSON.parse(localStorage.getItem('bigcat_price_alerts') || '[]') as Array<{
+              productId: string
+              name: string
+              price: number
+            }>
+
+            if (alerts.length > 0) {
+              const notificationsKey = 'app_notifications_buyer_global'
+              const existingNotifications = JSON.parse(localStorage.getItem(notificationsKey) || '[]') as any[]
+
+              const nextAlerts = alerts.filter((alert) => {
+                const match = loadedProducts.find((p: any) => String(p.id) === String(alert.productId))
+                if (!match) return true
+
+                const currentPrice = Number(match.price || 0)
+                const oldPrice = Number(alert.price || 0)
+                if (currentPrice < oldPrice) {
+                  const alreadyNotified = existingNotifications.some((n) =>
+                    n?.eventKey === `price-drop:${alert.productId}:${oldPrice}:${currentPrice}`
+                  )
+                  if (!alreadyNotified) {
+                    existingNotifications.unshift({
+                      id: `price_drop_${alert.productId}_${Date.now()}`,
+                      type: 'system',
+                      title: 'Price Drop Alert',
+                      message: `${alert.name} dropped from ${formatNaira(oldPrice)} to ${formatNaira(currentPrice)}.`,
+                      time: 'Just now',
+                      read: false,
+                      createdAt: new Date().toISOString(),
+                      eventKey: `price-drop:${alert.productId}:${oldPrice}:${currentPrice}`,
+                    })
+                  }
+
+                  // Keep alert active with updated baseline so future drops trigger again
+                  return false
+                }
+
+                return true
+              })
+
+              // Re-add any updated alerts with latest baseline
+              const refreshedAlerts = alerts.map((alert) => {
+                const match = loadedProducts.find((p: any) => String(p.id) === String(alert.productId))
+                if (!match) return alert
+                const currentPrice = Number(match.price || 0)
+                if (currentPrice < Number(alert.price || 0)) {
+                  return { ...alert, price: currentPrice }
+                }
+                return alert
+              })
+
+              localStorage.setItem('bigcat_price_alerts', JSON.stringify(refreshedAlerts.filter((a) => loadedProducts.some((p: any) => String(p.id) === String(a.productId)))))
+              localStorage.setItem(notificationsKey, JSON.stringify(existingNotifications.slice(0, 100)))
+            }
+          } catch {
+            // Ignore localStorage parsing failures
+          }
+        }
       } else {
         setLoadError(result.error || 'Unable to load products right now.')
       }

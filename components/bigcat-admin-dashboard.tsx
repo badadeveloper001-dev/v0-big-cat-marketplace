@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, XCircle, Clock, Loader2, UserPlus } from "lucide-react"
+import { ArrowLeft, Users, Store, ShoppingBag, TrendingUp, Truck, CheckCircle2, XCircle, Clock, Loader2, UserPlus, Download, Ban, ShieldCheck } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 import { SmedanAdminDashboard } from "./smedan-admin-dashboard"
 import { PalmpayAdminDashboard } from "./palmpay-admin-dashboard"
@@ -45,6 +45,9 @@ export function BigcatAdminDashboard() {
   const [issues, setIssues] = useState<any[]>([])
   const [issueStatusFilter, setIssueStatusFilter] = useState<'all' | 'open' | 'in_review' | 'resolved' | 'rejected'>('all')
   const [updatingIssueId, setUpdatingIssueId] = useState<string | null>(null)
+  const [suspendingUserId, setSuspendingUserId] = useState<string | null>(null)
+  const [adminFeedback, setAdminFeedback] = useState('')
+  const [reportPeriod, setReportPeriod] = useState<'30d' | '90d' | 'all'>('30d')
 
   // Agent management state - BigCat only sees count
   const [agentCount, setAgentCount] = useState(0)
@@ -102,6 +105,7 @@ export function BigcatAdminDashboard() {
           email: u.email,
           joined: new Date(u.created_at).toLocaleDateString(),
           type: u.role || 'buyer',
+          is_suspended: Boolean(u.is_suspended),
         }))
         setRecentUsers(userData)
       }
@@ -370,6 +374,40 @@ export function BigcatAdminDashboard() {
     }
   }
 
+  const toggleSuspendUser = async (targetUser: any, suspended: boolean) => {
+    setSuspendingUserId(String(targetUser.id))
+    setAdminFeedback('')
+    try {
+      const res = await fetch('/api/admin/users/suspend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: targetUser.id,
+          suspended,
+          reason: suspended ? 'Suspended by BigCat admin for policy review' : null,
+        }),
+      })
+      const result = await res.json()
+      if (!result.success) {
+        setAdminFeedback(result.error || 'Unable to update user status.')
+        return
+      }
+
+      setRecentUsers((prev) => prev.map((entry) =>
+        entry.id === targetUser.id ? { ...entry, is_suspended: suspended } : entry
+      ))
+      setAdminFeedback(suspended ? 'User suspended successfully.' : 'User unsuspended successfully.')
+    } catch {
+      setAdminFeedback('Unable to update user status.')
+    } finally {
+      setSuspendingUserId(null)
+    }
+  }
+
+  const downloadRevenueReport = () => {
+    window.open(`/api/admin/revenue-report?format=csv&period=${reportPeriod}`, '_blank')
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -419,6 +457,34 @@ export function BigcatAdminDashboard() {
               Logistics Admin View
             </button>
           </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-4 mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-lg text-foreground">Platform Revenue Reports</h2>
+              <p className="text-sm text-muted-foreground">Export CSV reports for accounting and reconciliation.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={reportPeriod}
+                onChange={(e) => setReportPeriod(e.target.value as '30d' | '90d' | 'all')}
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+                <option value="all">All time</option>
+              </select>
+              <button
+                onClick={downloadRevenueReport}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                <Download className="w-4 h-4" />
+                Download CSV
+              </button>
+            </div>
+          </div>
+          {adminFeedback && <p className="mt-2 text-xs text-muted-foreground">{adminFeedback}</p>}
         </div>
 
         <div className="bg-card border border-border rounded-lg p-6 mb-8">
@@ -765,13 +831,27 @@ export function BigcatAdminDashboard() {
                         <p className="text-xs text-muted-foreground">{user.email}</p>
                         <p className="text-xs text-muted-foreground mt-1">{user.joined}</p>
                       </div>
-                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                        user.type === "merchant"
-                          ? "bg-purple-100 text-purple-700"
-                          : "bg-blue-100 text-blue-700"
-                      }`}>
-                        {user.type}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                          user.type === "merchant"
+                            ? "bg-purple-100 text-purple-700"
+                            : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {user.type}
+                        </span>
+                        <button
+                          onClick={() => toggleSuspendUser(user, !Boolean(user.is_suspended))}
+                          disabled={suspendingUserId === user.id}
+                          className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium disabled:opacity-50 ${
+                            Boolean(user.is_suspended)
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          }`}
+                        >
+                          {Boolean(user.is_suspended) ? <ShieldCheck className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+                          {Boolean(user.is_suspended) ? 'Unsuspend' : 'Suspend'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))

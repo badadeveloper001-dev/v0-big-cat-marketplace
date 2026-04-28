@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { whatsapp } from '@/lib/whatsapp'
 import { holdFundsInEscrow, releaseFundsFromEscrow } from '@/lib/escrow-actions'
 import { getUserSafetyStatus } from '@/lib/server-trust-safety'
 import { registerOrderForLogistics } from '@/lib/logistics-actions'
@@ -60,6 +61,7 @@ type CreateOrderInput = {
   deliveryAddress: string
   paymentMethod?: string
   deliveryFee?: number
+  couponCode?: string
 }
 
 export async function createOrder(
@@ -281,6 +283,20 @@ export async function createOrder(
         emailSubject: 'Payment confirmation',
       })
 
+      // WhatsApp notifications (fire-and-forget)
+      const grandTotalFormatted = `₦${grandTotal.toLocaleString('en-NG')}`
+      if (buyerProfile?.phone) {
+        whatsapp.orderPlaced(String(buyerProfile.phone), orderIdRef, grandTotalFormatted).catch(() => {})
+      }
+      // Get merchant phone for new order alert
+      const merchantProfileResult = await (supabase.from('auth_users') as any)
+        .select('phone')
+        .eq('id', normalizedMerchantId)
+        .maybeSingle()
+      if (merchantProfileResult.data?.phone) {
+        whatsapp.merchantNewOrder(String(merchantProfileResult.data.phone), orderIdRef, grandTotalFormatted).catch(() => {})
+      }
+
       let logisticsRegisteredAt: string | null = null
       if (String(payload.deliveryType || '').toLowerCase() !== 'pickup') {
         const logisticsResult = await registerOrderForLogistics({
@@ -321,6 +337,21 @@ export async function createOrder(
       }
 
       createdOrders.push(orderResult.data)
+
+      // Increment coupon usage if coupon was applied
+      if (payload.couponCode) {
+        // Increment coupon usage with a read-then-update fallback for broad schema compatibility.
+        const couponLookup = await (supabase.from('coupons') as any)
+          .select('id, current_uses')
+          .eq('code', String(payload.couponCode).toUpperCase().trim())
+          .maybeSingle()
+
+        if (!couponLookup.error && couponLookup.data?.id) {
+          await (supabase.from('coupons') as any)
+            .update({ current_uses: Number(couponLookup.data.current_uses || 0) + 1 })
+            .eq('id', couponLookup.data.id)
+        }
+      }
     }
 
     return {
@@ -395,6 +426,14 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
       }
     }
 
+    // WhatsApp status notifications (fire-and-forget)
+    if (normalizedStatus === 'shipped' || normalizedStatus === 'in_transit') {
+      const buyerPhoneRes = await (supabase.from('auth_users') as any).select('phone').eq('id', buyerId).maybeSingle()
+      if (buyerPhoneRes.data?.phone) {
+        whatsapp.orderShipped(String(buyerPhoneRes.data.phone), orderId).catch(() => {})
+      }
+    }
+
     if (normalizedStatus === 'cancelled') {
       if (buyerId) {
         await dispatchNotification({
@@ -438,6 +477,12 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
           eventKey: `order:delivered:merchant:${orderId}`,
           emailSubject: 'Order delivered',
         })
+      }
+
+      // WhatsApp delivery confirmation
+      const buyerPhoneRes2 = await (supabase.from('auth_users') as any).select('phone').eq('id', buyerId).maybeSingle()
+      if (buyerPhoneRes2.data?.phone) {
+        whatsapp.orderDelivered(String(buyerPhoneRes2.data.phone), orderId).catch(() => {})
       }
 
       const released = await releaseFundsFromEscrow(supabase, orderId, data)

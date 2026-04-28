@@ -379,7 +379,7 @@ export async function assignRiderToOrder(orderId: string, riderId: string, notes
   }
 }
 
-export async function completeLogisticsOrder(orderId: string) {
+export async function completeLogisticsOrder(orderId: string, proofOfDeliveryUrl?: string | null) {
   try {
     const supabase = await createClient()
 
@@ -391,6 +391,7 @@ export async function completeLogisticsOrder(orderId: string) {
     await upsertLogisticsAssignment(supabase, {
       order_id: orderId,
       logistics_status: 'completed',
+      notes: proofOfDeliveryUrl ? JSON.stringify({ proofOfDeliveryUrl, completedAt: new Date().toISOString() }) : null,
       completed_at: new Date().toISOString(),
     })
 
