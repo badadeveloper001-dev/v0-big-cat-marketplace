@@ -134,7 +134,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'Can I have both a buyer and merchant account?',
-        a: 'You can use the same email for both a buyer account and a merchant account. Switch between them using the profile menu.',
+        a: 'Yes, you can have both a buyer account and a merchant account, but they require separate email addresses. You can create both using different emails under the same person\'s name or business.',
       },
       {
         q: 'How do I delete my account?',
