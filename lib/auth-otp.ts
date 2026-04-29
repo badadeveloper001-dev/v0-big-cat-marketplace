@@ -1,5 +1,5 @@
 import { createHash, randomInt } from 'crypto'
-import { Resend } from 'resend'
+import { sendEmail } from '@/lib/mailer'
 
 export const SIGNUP_OTP_COOKIE = 'bigcat_signup_otp'
 export const SIGNUP_OTP_TTL_SECONDS = 60 * 5
@@ -10,8 +10,6 @@ export type PendingSignupOtp = {
   otpHash: string
   expiresAt: number
 }
-
-let resendClient: Resend | null = null
 
 function getOtpSecret() {
   return process.env.AUTH_OTP_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'bigcat-dev-otp-secret'
@@ -51,23 +49,7 @@ export function isOtpValid(payload: PendingSignupOtp | null, email: string, role
   return payload.otpHash === hashOtp(email, role, otp)
 }
 
-function getResendClient() {
-  if (resendClient) return resendClient
-
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) return null
-
-  resendClient = new Resend(apiKey)
-  return resendClient
-}
-
 export async function sendSignupOtpEmail(email: string, otp: string, role: 'buyer' | 'merchant') {
-  const resend = getResendClient()
-  if (!resend) {
-    return { success: false, error: 'RESEND_API_KEY is not configured for OTP emails.' }
-  }
-
-  const from = process.env.RESEND_FROM_EMAIL || 'BigCat Marketplace <onboarding@resend.dev>'
   const subject = `Your BigCat ${role === 'merchant' ? 'merchant ' : ''}verification code`
   const safeEmail = String(email || '').trim()
   const html = `
@@ -88,17 +70,9 @@ export async function sendSignupOtpEmail(email: string, otp: string, role: 'buye
   `
   const text = `BigCat Marketplace\n\nUse this verification code to complete your ${role} account signup for ${safeEmail}: ${otp}\n\nThis code expires in 5 minutes.`
 
-  try {
-    await resend.emails.send({
-      from,
-      to: safeEmail,
-      subject,
-      html,
-      text,
-    })
-
-    return { success: true }
-  } catch (error: any) {
-    return { success: false, error: error?.message || 'Failed to send OTP email.' }
+  const result = await sendEmail({ to: safeEmail, subject, html, text })
+  if (!result.success) {
+    return { success: false, error: result.error || 'Failed to send OTP email.' }
   }
+  return { success: true }
 }

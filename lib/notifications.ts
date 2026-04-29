@@ -1,6 +1,6 @@
 "use server"
 
-import { Resend } from "resend"
+import { sendEmail } from "@/lib/mailer"
 import { createClient } from "@/lib/supabase/server"
 
 export type NotificationType = "order" | "system" | "alert" | "report"
@@ -31,8 +31,6 @@ interface NotificationRow {
   metadata?: JsonRecord | null
 }
 
-let resendClient: Resend | null = null
-
 function isMissingNotificationInfraError(error: any) {
   const message = String(error?.message || "").toLowerCase()
   return message.includes("does not exist")
@@ -40,16 +38,6 @@ function isMissingNotificationInfraError(error: any) {
     || message.includes("schema cache")
     || message.includes("could not find")
     || message.includes("column")
-}
-
-function getResendClient() {
-  if (resendClient) return resendClient
-
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) return null
-
-  resendClient = new Resend(apiKey)
-  return resendClient
 }
 
 function escapeHtml(input: string) {
@@ -195,28 +183,12 @@ async function maybeSendEmail(userId: string, input: DispatchNotificationInput) 
     return { sent: false, reason: "User disabled email notifications" }
   }
 
-  const resend = getResendClient()
-  if (!resend) {
-    return { sent: false, reason: "RESEND_API_KEY not configured" }
-  }
-
-  const from = process.env.RESEND_FROM_EMAIL || "BigCat Marketplace <onboarding@resend.dev>"
+  const from = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "BigCat Marketplace <onboarding@resend.dev>"
   const subject = input.emailSubject || input.title
   const html = input.emailHtml || buildDefaultEmailHtml(input.title, input.message)
   const text = input.emailText || `${input.title}\n\n${input.message}`
 
-  try {
-    await resend.emails.send({
-      from,
-      to: email,
-      subject,
-      html,
-      text,
-    })
-    return { sent: true as const }
-  } catch (err: any) {
-    return { sent: false, reason: err?.message || "Unknown email error" }
-  }
+  return result.success ? { sent: true as const } : { sent: false, reason: result.error }
 }
 
 export async function dispatchNotification(input: DispatchNotificationInput) {
