@@ -10,6 +10,38 @@ interface SmedanAdminDashboardProps {
   embedded?: boolean
 }
 
+const INVALID_STATE_VALUES = new Set([
+  'unknown',
+  'nigeria',
+  'federal republic of nigeria',
+  'na',
+  'n/a',
+])
+
+function normalizeState(value: unknown) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return 'Unknown'
+
+  const compact = raw.toLowerCase().replace(/\./g, '')
+  if (INVALID_STATE_VALUES.has(compact)) return 'Unknown'
+
+  // Handle values like "Lagos, Nigeria" by taking the non-country segment.
+  const parts = raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  if (parts.length > 1) {
+    const nonCountry = parts.find((part) => {
+      const normalized = part.toLowerCase().replace(/\./g, '')
+      return !INVALID_STATE_VALUES.has(normalized)
+    })
+    if (nonCountry) return nonCountry
+  }
+
+  return raw
+}
+
 export function SmedanAdminDashboard({ bypassAccessCheck = false, embedded = false }: SmedanAdminDashboardProps = {}) {
   const router = useRouter()
   const [isAuthorized, setIsAuthorized] = useState(false)
@@ -53,7 +85,7 @@ export function SmedanAdminDashboard({ bypassAccessCheck = false, embedded = fal
           smedanId: m.smedan_id || 'N/A',
           status: m.setup_completed ? 'approved' : 'pending',
           email: m.email,
-          state: m.state || 'Unknown',
+          state: normalizeState(m.state),
           city: m.city || '',
           location: m.location || '',
           createdAt: m.created_at,
@@ -130,7 +162,8 @@ export function SmedanAdminDashboard({ bypassAccessCheck = false, embedded = fal
   const geographicPerformance = useMemo(() => {
     const grouped = merchants.reduce(
       (acc, merchant) => {
-        const state = String(merchant.state || 'Unknown').trim() || 'Unknown'
+        const state = normalizeState(merchant.state)
+        if (state === 'Unknown') return acc
 
         if (!acc[state]) {
           acc[state] = {
