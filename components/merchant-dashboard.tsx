@@ -44,7 +44,7 @@ import {
   User,
   MessageSquare,
 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { NotificationsPanel } from "./notifications-panel"
 
 function NairaIcon({ className = "" }: { className?: string }) {
@@ -704,6 +704,101 @@ export function MerchantDashboard() {
     "Respond quickly to customer messages to build trust and increase sales.",
     "Competitive pricing and fast delivery help increase your sales.",
   ]
+
+  const analyticsData = useMemo(() => {
+    const orderItems = (order: any) => (
+      Array.isArray(order?.order_items)
+        ? order.order_items
+        : Array.isArray(order?.items)
+          ? order.items
+          : []
+    )
+
+    const getOrderAmount = (order: any) => {
+      const items = orderItems(order)
+      const itemsTotal = items.reduce((sum: number, item: any) => {
+        const quantity = Math.max(1, toAmount(item?.quantity || 1))
+        const lineTotal = toAmount(item?.total_price || 0)
+        const unitAmount = toAmount(item?.unit_price || item?.price || 0)
+
+        if (lineTotal > 0) return sum + lineTotal
+        if (unitAmount > 0) return sum + (unitAmount * quantity)
+        return sum
+      }, 0)
+
+      const deliveryFee = toAmount(order?.delivery_fee || 0)
+      const productTotal = toAmount(order?.product_total || 0)
+      const grandTotal = toAmount(order?.grand_total || order?.total_amount || itemsTotal || 0)
+
+      if (itemsTotal > 0) return Math.max(0, itemsTotal)
+      if (productTotal > 0) return Math.max(0, productTotal)
+      return Math.max(0, grandTotal - deliveryFee)
+    }
+
+    const isReleasedOrder = (order: any) => {
+      const status = String(order?.status || "").toLowerCase()
+      const escrowStatus = String(order?.escrow_status || "").toLowerCase()
+      return status === "delivered" || status === "completed" || escrowStatus === "released"
+    }
+
+    const getOrderTimestamp = (order: any) => {
+      const raw = order?.released_at || order?.delivered_at || order?.updated_at || order?.created_at
+      const parsed = Date.parse(String(raw || ""))
+      return Number.isFinite(parsed) ? parsed : null
+    }
+
+    const now = new Date()
+    const weekStart = new Date(now)
+    weekStart.setDate(now.getDate() - 7)
+    weekStart.setHours(0, 0, 0, 0)
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    monthStart.setHours(0, 0, 0, 0)
+
+    const releasedOrders = allOrders.filter(isReleasedOrder)
+
+    const weeklySales = releasedOrders.reduce((sum: number, order: any) => {
+      const timestamp = getOrderTimestamp(order)
+      if (timestamp && timestamp >= weekStart.getTime()) {
+        return sum + getOrderAmount(order)
+      }
+      return sum
+    }, 0)
+
+    const monthlySales = releasedOrders.reduce((sum: number, order: any) => {
+      const timestamp = getOrderTimestamp(order)
+      if (timestamp && timestamp >= monthStart.getTime()) {
+        return sum + getOrderAmount(order)
+      }
+      return sum
+    }, 0)
+
+    const totalSales = releasedOrders.reduce((sum: number, order: any) => sum + getOrderAmount(order), 0)
+    const totalOrders = allOrders.length
+    const completedOrders = releasedOrders.length
+    const completionRate = totalOrders > 0 ? `${((completedOrders / totalOrders) * 100).toFixed(1)}%` : "0%"
+    const averageOrderValue = completedOrders > 0 ? formatNaira(totalSales / completedOrders) : formatNaira(0)
+
+    const buyerCounts = releasedOrders.reduce((acc: Record<string, number>, order: any) => {
+      const buyerId = String(order?.buyer_id || order?.buyerId || "").trim()
+      if (!buyerId) return acc
+      acc[buyerId] = (acc[buyerId] || 0) + 1
+      return acc
+    }, {})
+
+    const uniqueBuyers = Object.keys(buyerCounts).length
+    const repeatBuyers = Object.values(buyerCounts).filter((count) => count > 1).length
+    const customerRetention = uniqueBuyers > 0 ? `${((repeatBuyers / uniqueBuyers) * 100).toFixed(1)}%` : "0%"
+
+    return {
+      weeklySales,
+      monthlySales,
+      listingCount: allProducts.length,
+      completionRate,
+      averageOrderValue,
+      customerRetention,
+    }
+  }, [allOrders, allProducts])
 
   const lowStockCount = allProducts.filter((item) => {
     const stock = Number(item?.stock || 0)
@@ -1666,11 +1761,11 @@ export function MerchantDashboard() {
               <h3 className="font-semibold text-foreground mb-4">Sales Overview</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-3 bg-primary/5 rounded-xl">
-                  <p className="text-2xl font-bold text-primary">{formatNaira(0)}</p>
+                  <p className="text-2xl font-bold text-primary">{formatNaira(analyticsData.weeklySales)}</p>
                   <p className="text-xs text-muted-foreground">This Week</p>
                 </div>
                 <div className="text-center p-3 bg-primary/5 rounded-xl">
-                  <p className="text-2xl font-bold text-primary">{formatNaira(0)}</p>
+                  <p className="text-2xl font-bold text-primary">{formatNaira(analyticsData.monthlySales)}</p>
                   <p className="text-xs text-muted-foreground">This Month</p>
                 </div>
               </div>
@@ -1681,16 +1776,20 @@ export function MerchantDashboard() {
               <h3 className="font-semibold text-foreground mb-4">Performance Metrics</h3>
               <div className="space-y-3">
                 {[
-                  { label: isServiceMerchant ? "Services Views" : "Products Views", value: "0", change: "+0%" },
-                  { label: "Conversion Rate", value: "0%", change: "+0%" },
-                  { label: "Average Order Value", value: formatNaira(0), change: "+0%" },
-                  { label: "Customer Retention", value: "0%", change: "+0%" },
+                  {
+                    label: isServiceMerchant ? "Active Services" : "Active Products",
+                    value: analyticsData.listingCount.toString(),
+                    change: "Live catalog",
+                  },
+                  { label: "Order Completion Rate", value: analyticsData.completionRate, change: "Delivered + released" },
+                  { label: "Average Order Value", value: analyticsData.averageOrderValue, change: "From completed sales" },
+                  { label: "Customer Retention", value: analyticsData.customerRetention, change: "Repeat buyers" },
                 ].map((metric) => (
                   <div key={metric.label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                     <span className="text-sm text-muted-foreground">{metric.label}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-foreground">{metric.value}</span>
-                      <span className="text-xs text-primary">{metric.change}</span>
+                      <span className="text-xs text-muted-foreground">{metric.change}</span>
                     </div>
                   </div>
                 ))}
@@ -1698,7 +1797,7 @@ export function MerchantDashboard() {
             </div>
 
             <p className="text-xs text-center text-muted-foreground">
-              Analytics data updates daily. Start selling to see your metrics!
+              Analytics are calculated from your live orders and listings.
             </p>
           </div>
         ) : activeTab === "settings" ? (
