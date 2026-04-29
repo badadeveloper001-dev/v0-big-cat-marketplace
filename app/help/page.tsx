@@ -28,7 +28,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'How do I cancel an order?',
-        a: 'Orders can be cancelled before the merchant confirms shipment. Go to the order details and tap "Cancel Order". Once shipped, you must file a dispute after delivery.',
+        a: 'You cannot cancel an order after it has been placed. Once placed, your order moves through the fulfillment process. If you have a problem with an order, file a dispute from the order details page.',
       },
     ],
   },
