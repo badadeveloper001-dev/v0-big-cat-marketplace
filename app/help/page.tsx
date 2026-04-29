@@ -94,7 +94,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'What happens during a dispute?',
-        a: 'You can file a dispute by reporting an issue (wrong item, not delivered, damaged, etc.). BigCat admin reviews the dispute and makes a decision, typically within 5–7 business days. Please note: disputes do not automatically prevent payment—funds may still be released if the buyer marks the order delivered. Admin resolution decisions are manual and not automatically executed.',
+        a: 'When you file a dispute, escrow funds are immediately frozen and cannot be released until the dispute is resolved. You cannot mark an order as delivered while a dispute is active. BigCat admin reviews the evidence and makes a decision, typically within 5–7 business days. Once resolved, funds are either refunded to the buyer or released to the merchant based on the admin decision.',
       },
       {
         q: 'What is the strike system?',

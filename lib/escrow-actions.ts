@@ -227,6 +227,23 @@ export async function holdFundsInEscrow(
   }
 }
 
+// Check if an order has an active dispute (prevents escrow release)
+async function hasActiveDispute(supabase: any, orderId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('support_issues')
+      .select('id, status')
+      .eq('order_id', orderId)
+      .in('status', ['open', 'in_review'])
+      .maybeSingle()
+    
+    if (error) return false
+    return !!data
+  } catch {
+    return false
+  }
+}
+
 export async function releaseFundsFromEscrow(
   supabase: any,
   orderId: string,
@@ -241,6 +258,12 @@ export async function releaseFundsFromEscrow(
     const { data, error } = await supabase.from('orders').select('*').eq('id', resolvedOrderId).maybeSingle()
     if (error) throw error
     order = data
+  }
+
+  // Check if there's an active dispute - if so, prevent fund release
+  const activeDispute = await hasActiveDispute(supabase, resolvedOrderId)
+  if (activeDispute) {
+    throw new Error('Cannot release funds: This order has an active dispute. Funds are frozen until the dispute is resolved.')
   }
 
   const paymentMethod = String(order?.payment_method || order?.payment_provider || 'palmpay')

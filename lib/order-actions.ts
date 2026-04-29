@@ -353,6 +353,22 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
       }
     }
 
+    // Check for active disputes if marking as delivered
+    if (normalizedStatus === 'delivered') {
+      const { data: dispute, error: disputeError } = await (supabase.from('support_issues') as any)
+        .select('id, status')
+        .eq('order_id', orderId)
+        .in('status', ['open', 'in_review'])
+        .maybeSingle()
+
+      if (!disputeError && dispute) {
+        return {
+          success: false,
+          error: 'Cannot mark as delivered: This order has an active dispute. Funds are frozen until the dispute is resolved by BigCat admin.',
+        }
+      }
+    }
+
     const updateAttempts = normalizedStatus === 'delivered'
       ? [
           { status: normalizedStatus, payment_status: 'completed', updated_at: new Date().toISOString() },
