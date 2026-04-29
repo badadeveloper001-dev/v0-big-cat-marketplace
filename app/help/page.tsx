@@ -94,7 +94,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'What happens during a dispute?',
-        a: 'Escrow funds are frozen during an active dispute. Both buyer and merchant can submit evidence. BigCat admin will make a final resolution decision, usually within 5–7 business days.',
+        a: 'You can file a dispute by reporting an issue (wrong item, not delivered, damaged, etc.). BigCat admin reviews the dispute and makes a decision, typically within 5–7 business days. Please note: disputes do not automatically prevent payment—funds may still be released if the buyer marks the order delivered. Admin resolution decisions are manual and not automatically executed.',
       },
       {
         q: 'What is the strike system?',
