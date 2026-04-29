@@ -307,6 +307,13 @@ export function ServicesMarketplace({
         </div>
       )}
 
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2">
+        <span className="text-amber-500 text-base mt-0.5">💬</span>
+        <p className="text-xs text-amber-800 leading-relaxed">
+          <span className="font-semibold">Tip:</span> Always chat with the service provider before booking to confirm availability, discuss your requirements, and agree on pricing.
+        </p>
+      </div>
+
       <section>
         <h3 className="text-sm font-semibold text-foreground mb-2">Available Services</h3>
         {loading ? (
