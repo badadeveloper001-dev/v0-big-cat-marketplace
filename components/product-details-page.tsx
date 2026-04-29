@@ -53,6 +53,37 @@ export function ProductDetailsPage({ productId, onBack, onViewProduct, onViewMer
     loadRelatedProducts(product)
   }, [product])
 
+  // Price alert — must be before any early returns (Rules of Hooks)
+  useEffect(() => {
+    if (!product) return
+    try {
+      const alerts = JSON.parse(localStorage.getItem('bigcat_price_alerts') || '[]') as any[]
+      setPriceAlertActive(alerts.some((a: any) => a.productId === String(product.id)))
+    } catch { /* ignore */ }
+  }, [product?.id])
+
+  const togglePriceAlert = useCallback(() => {
+    if (!product) return
+    try {
+      const key = 'bigcat_price_alerts'
+      const alerts = JSON.parse(localStorage.getItem(key) || '[]') as any[]
+      const productIdStr = String(product.id)
+      const existing = alerts.findIndex((a: any) => a.productId === productIdStr)
+      if (existing >= 0) {
+        alerts.splice(existing, 1)
+        localStorage.setItem(key, JSON.stringify(alerts))
+        setPriceAlertActive(false)
+        setPriceAlertFeedback('Price alert removed.')
+      } else {
+        alerts.push({ productId: productIdStr, name: product.name, price: Number(product.price), setAt: Date.now() })
+        localStorage.setItem(key, JSON.stringify(alerts))
+        setPriceAlertActive(true)
+        setPriceAlertFeedback("You'll be notified if this item's price drops!")
+      }
+      setTimeout(() => setPriceAlertFeedback(''), 3000)
+    } catch { /* ignore */ }
+  }, [product])
+
   const loadProduct = async () => {
     setLoading(true)
     try {
@@ -142,37 +173,6 @@ export function ProductDetailsPage({ productId, onBack, onViewProduct, onViewMer
   const savedToWishlist = isInWishlist(String(product.id))
   const availableStock = Math.max(0, Number(product.stock || 0))
   const isOutOfStock = availableStock <= 0
-
-  // Check if price alert is active for this product
-  useEffect(() => {
-    if (!product) return
-    try {
-      const alerts = JSON.parse(localStorage.getItem('bigcat_price_alerts') || '[]') as any[]
-      setPriceAlertActive(alerts.some((a: any) => a.productId === String(product.id)))
-    } catch { /* ignore */ }
-  }, [product?.id])
-
-  const togglePriceAlert = useCallback(() => {
-    if (!product) return
-    try {
-      const key = 'bigcat_price_alerts'
-      const alerts = JSON.parse(localStorage.getItem(key) || '[]') as any[]
-      const productId = String(product.id)
-      const existing = alerts.findIndex((a: any) => a.productId === productId)
-      if (existing >= 0) {
-        alerts.splice(existing, 1)
-        localStorage.setItem(key, JSON.stringify(alerts))
-        setPriceAlertActive(false)
-        setPriceAlertFeedback('Price alert removed.')
-      } else {
-        alerts.push({ productId, name: product.name, price: Number(product.price), setAt: Date.now() })
-        localStorage.setItem(key, JSON.stringify(alerts))
-        setPriceAlertActive(true)
-        setPriceAlertFeedback("You'll be notified if this item's price drops!")
-      }
-      setTimeout(() => setPriceAlertFeedback(''), 3000)
-    } catch { /* ignore */ }
-  }, [product])
 
   const wishlistItem = {
     id: String(product.id),
