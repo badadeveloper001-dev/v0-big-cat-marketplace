@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRole } from "@/lib/role-context"
 import { createClient } from "@/lib/supabase/client"
 import { BrandWordmark } from "./brand-wordmark"
+import { OTPVerification } from "./otp-verification"
 import { ArrowLeft, Building2, Eye, EyeOff, Mail, Lock, MapPin, Phone, Hash, Loader2, CheckCircle2, Store } from "lucide-react"
 
 declare global {
@@ -62,6 +63,7 @@ export function MerchantAuth({
 }) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
+  const [showOtpVerification, setShowOtpVerification] = useState(false)
 
   const formatMerchantLocation = (city?: string | null, state?: string | null, location?: string | null) => {
     const normalizedCity = city?.trim()
@@ -104,6 +106,8 @@ export function MerchantAuth({
   const [error, setError] = useState<string>("")
   const [merchantType, setMerchantType] = useState<'products' | 'services'>('products')
   const [successMessage, setSuccessMessage] = useState<string>("")
+
+  const [verifiedMerchantProfile, setVerifiedMerchantProfile] = useState<any>(null)
   const [formData, setFormData] = useState({
     businessName: "",
     email: "",
@@ -131,6 +135,53 @@ export function MerchantAuth({
     return result.data
   }
 
+  const requestMerchantOtp = async () => {
+    const response = await fetch('/api/auth/request-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: formData.email, role: 'merchant' }),
+    })
+
+    return response.json()
+  }
+
+  const verifyMerchantOtp = async (otp: string) => {
+    const response = await fetch('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        otp,
+        email: formData.email,
+        password: formData.password,
+        name: formData.businessName,
+        phone: formData.phone,
+        city: formData.city,
+        state: formData.state,
+        role: 'merchant',
+        smedanId: formData.smedanId,
+        cacId: formData.cacId,
+        merchantType,
+      }),
+    })
+
+    const result = await response.json()
+    if (!result.success || !result.data) return result
+
+    const supabase = createClient()
+    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
+      email: formData.email,
+      password: formData.password,
+    })
+
+    if (sessionError || !sessionData.session || !sessionData.user) {
+      return { success: false, error: sessionError?.message || 'Failed to establish your session. Please try again.' }
+    }
+
+    const profile = await loadMerchantProfile(sessionData.user.id, sessionData.session.access_token)
+    setVerifiedMerchantProfile(profile)
+    return { success: true }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -141,53 +192,14 @@ export function MerchantAuth({
       const supabase = createClient()
 
       if (isSignUp) {
-        const response = await fetch('/api/auth/signup', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            name: formData.businessName,
-            phone: formData.phone,
-            city: formData.city,
-            state: formData.state,
-            role: 'merchant',
-            smedanId: formData.smedanId,
-            cacId: formData.cacId,
-            merchantType: merchantType,
-          }),
-        })
-
-        const result = await response.json()
+        const result = await requestMerchantOtp()
         if (!result.success) {
-          setError(result.error || 'An error occurred')
+          setError(result.error || 'Failed to send verification code')
           return
         }
 
-        const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
-          email: formData.email,
-          password: formData.password,
-        })
-
-        if (sessionError || !sessionData.session || !sessionData.user) {
-          setError(sessionError?.message || 'Failed to establish your session. Please try again.')
-          return
-        }
-
-        const profile = await loadMerchantProfile(sessionData.user.id, sessionData.session.access_token)
-        if (profile.role !== 'merchant') {
-          setError('This account is not a merchant account. Please use the buyer login.')
-          await supabase.auth.signOut()
-          return
-        }
-
-        setSuccessMessage('Account created successfully! Redirecting...')
-        setTimeout(() => {
-          setUser(normalizeMerchantUser(profile))
-          setRole('merchant')
-        }, 1500)
+        setShowOtpVerification(true)
+        setSuccessMessage('Verification code sent. Enter the OTP to finish creating your account.')
         return
       }
 
@@ -216,6 +228,26 @@ export function MerchantAuth({
     } finally {
       setLoading(false)
     }
+  }
+
+  if (showOtpVerification) {
+    return (
+      <OTPVerification
+        email={formData.email}
+        onBack={() => {
+          setShowOtpVerification(false)
+          setError('')
+          setSuccessMessage('')
+        }}
+        onResend={requestMerchantOtp}
+        onVerify={verifyMerchantOtp}
+        onVerifySuccess={() => {
+          if (!verifiedMerchantProfile) return
+          setUser(normalizeMerchantUser(verifiedMerchantProfile))
+          setRole('merchant')
+        }}
+      />
+    )
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -577,10 +609,10 @@ export function MerchantAuth({
                 {loading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    {isSignUp ? "Creating Account..." : "Signing In..."}
+                    {isSignUp ? "Sending OTP..." : "Signing In..."}
                   </>
                 ) : (
-                  <>{isSignUp ? "Create Merchant Account" : "Sign In"}</>
+                  <>{isSignUp ? "Send Verification Code" : "Sign In"}</>
                 )}
               </button>
             </form>
@@ -588,7 +620,7 @@ export function MerchantAuth({
             <div className="mt-4">
               {isSignUp ? (
                 <div className="rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
-                  Merchant sign-up uses the form above so your business state and city are saved with the account.
+                  Merchant sign-up now verifies the business email first before creating the account.
                 </div>
               ) : (
                 <button
@@ -606,6 +638,8 @@ export function MerchantAuth({
               <button
                 onClick={() => {
                   setIsSignUp(!isSignUp)
+                  setShowOtpVerification(false)
+                  setVerifiedMerchantProfile(null)
                   setError("")
                   setSuccessMessage("")
                   setFormData({ businessName: "", email: "", phone: "", city: "", state: "", password: "", smedanId: "", cacId: "" })

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRole } from "@/lib/role-context"
 import { createClient } from "@/lib/supabase/client"
 import { BrandWordmark } from "./brand-wordmark"
+import { OTPVerification } from "./otp-verification"
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Phone, Loader2, CheckCircle2, ShoppingBag, X, MapPin, Building2 } from "lucide-react"
 
 declare global {
@@ -64,11 +65,14 @@ export function BuyerAuth({
 }) {
   const { setRole, setUser } = useRole()
   const [isSignUp, setIsSignUp] = useState(false)
+  const [showOtpVerification, setShowOtpVerification] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string>("")
   const [successMessage, setSuccessMessage] = useState<string>("")
+
+  const [verifiedBuyer, setVerifiedBuyer] = useState<any>(null)
   const [formData, setFormData] = useState({
     email: "",
     phone: "",
@@ -89,6 +93,49 @@ export function BuyerAuth({
     role: "buyer" as const,
   })
 
+  const requestBuyerOtp = async () => {
+    const response = await fetch('/api/auth/request-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: formData.email, role: 'buyer' }),
+    })
+
+    return response.json()
+  }
+
+  const verifyBuyerOtp = async (otp: string) => {
+    const response = await fetch('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        otp,
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        phone: formData.phone,
+        city: formData.city,
+        state: formData.state,
+        role: 'buyer',
+      }),
+    })
+
+    const result = await response.json()
+    if (!result.success || !result.data) return result
+
+    const supabase = createClient()
+    const { error: sessionError } = await supabase.auth.signInWithPassword({
+      email: formData.email,
+      password: formData.password,
+    })
+
+    if (sessionError) {
+      return { success: false, error: sessionError.message || 'Failed to establish your session. Please try again.' }
+    }
+
+    setVerifiedBuyer(result.data)
+    return { success: true }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -96,36 +143,36 @@ export function BuyerAuth({
     setLoading(true)
 
     try {
-      const endpoint = isSignUp ? '/api/auth/signup' : '/api/auth/login'
-      const body = isSignUp
-        ? {
-            email: formData.email,
-            password: formData.password,
-            name: formData.name,
-            phone: formData.phone,
-            city: formData.city,
-            state: formData.state,
-            role: 'buyer'
-          }
-        : {
-            email: formData.email,
-            password: formData.password
-          }
+      if (isSignUp) {
+        const result = await requestBuyerOtp()
 
-      const response = await fetch(endpoint, {
+        if (result.success) {
+          setShowOtpVerification(true)
+          setSuccessMessage('Verification code sent. Enter the OTP to finish creating your account.')
+        } else {
+          setError(result.error || 'Failed to send verification code')
+        }
+
+        return
+      }
+
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
       })
 
       const result = await response.json()
 
       if (result.success && result.data) {
-        const user = isSignUp ? result.data : result.data.user
+        const user = result.data.user
 
-        if (!isSignUp && user.role !== "buyer") {
+        if (user.role !== "buyer") {
           setError("This account is not a buyer account. Please use the merchant login.")
           return
         }
@@ -142,18 +189,9 @@ export function BuyerAuth({
           return
         }
 
-        if (isSignUp) {
-          setSuccessMessage("Account created successfully! Redirecting...")
-          setTimeout(() => {
-            setUser(normalizeBuyerUser(user))
-            setRole("buyer")
-            onSuccess?.()
-          }, 1500)
-        } else {
-          setUser(normalizeBuyerUser(user))
-          setRole("buyer")
-          onSuccess?.()
-        }
+        setUser(normalizeBuyerUser(user))
+        setRole("buyer")
+        onSuccess?.()
       } else {
         setError(result.error || "An error occurred")
       }
@@ -163,6 +201,27 @@ export function BuyerAuth({
     } finally {
       setLoading(false)
     }
+  }
+
+  if (showOtpVerification) {
+    return (
+      <OTPVerification
+        email={formData.email}
+        onBack={() => {
+          setShowOtpVerification(false)
+          setError('')
+          setSuccessMessage('')
+        }}
+        onResend={requestBuyerOtp}
+        onVerify={verifyBuyerOtp}
+        onVerifySuccess={() => {
+          if (!verifiedBuyer) return
+          setUser(normalizeBuyerUser(verifiedBuyer))
+          setRole('buyer')
+          onSuccess?.()
+        }}
+      />
+    )
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -468,10 +527,10 @@ export function BuyerAuth({
                 {loading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    {isSignUp ? "Creating Account..." : "Signing In..."}
+                    {isSignUp ? "Sending OTP..." : "Signing In..."}
                   </>
                 ) : (
-                  <>{isSignUp ? "Create Buyer Account" : "Sign In"}</>
+                  <>{isSignUp ? "Send Verification Code" : "Sign In"}</>
                 )}
               </button>
             </form>
@@ -479,7 +538,7 @@ export function BuyerAuth({
             <div className="mt-4">
               {isSignUp ? (
                 <div className="rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
-                  Buyer sign-up uses the form above so your state and city are saved for logistics automatically.
+                  Buyer sign-up sends a verification code before the account is created so your email is confirmed first.
                 </div>
               ) : (
                 <button
@@ -497,6 +556,8 @@ export function BuyerAuth({
               <button
                 onClick={() => {
                   setIsSignUp(!isSignUp)
+                  setShowOtpVerification(false)
+                  setVerifiedBuyer(null)
                   setError("")
                   setSuccessMessage("")
                   setFormData({ email: "", phone: "", city: "", state: "", password: "", name: "" })
