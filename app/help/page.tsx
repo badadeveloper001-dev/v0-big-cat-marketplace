@@ -120,7 +120,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'Can I change my delivery address after ordering?',
-        a: 'Contact the merchant via the in-app chat immediately after placing the order. Address changes are not guaranteed once the item has been shipped.',
+          a: 'No. Buyers cannot change the delivery address after placing an order. Make sure your address is correct before checkout.',
       },
     ],
   },
