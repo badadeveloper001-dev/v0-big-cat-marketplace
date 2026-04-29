@@ -188,6 +188,7 @@ async function maybeSendEmail(userId: string, input: DispatchNotificationInput) 
   const html = input.emailHtml || buildDefaultEmailHtml(input.title, input.message)
   const text = input.emailText || `${input.title}\n\n${input.message}`
 
+  const result = await sendEmail({ from, to: email, subject, html, text })
   return result.success ? { sent: true as const } : { sent: false, reason: result.error }
 }
 
