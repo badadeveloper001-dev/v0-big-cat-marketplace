@@ -41,6 +41,7 @@ import {
   Truck,
   LogOut,
   Loader2,
+  Download,
   User,
   MessageSquare,
 } from "lucide-react"
@@ -879,6 +880,160 @@ export function MerchantDashboard() {
     : 0
 
   const nextOnboardingStep = onboardingSteps.find((step) => !step.done)
+
+  const reportMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  const reportNextMonthStart = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
+  const reportMonthLabel = reportMonthStart.toLocaleString("en-US", { month: "long", year: "numeric" })
+  const reportMonthSlug = `${reportMonthStart.getFullYear()}-${String(reportMonthStart.getMonth() + 1).padStart(2, "0")}`
+
+  const csvEscape = (value: unknown) => {
+    const text = String(value ?? "")
+    if (/[",\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`
+    }
+    return text
+  }
+
+  const downloadCsvReport = (filename: string, headers: string[], rows: Array<Array<unknown>>) => {
+    if (typeof window === "undefined") return
+    const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n")
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = filename
+    link.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const isReleasedOrderForReport = (order: any) => {
+    const status = String(order?.status || "").toLowerCase()
+    const escrowStatus = String(order?.escrow_status || "").toLowerCase()
+    return status === "delivered" || status === "completed" || escrowStatus === "released"
+  }
+
+  const getOrderTimestampForReport = (order: any) => {
+    const raw = order?.released_at || order?.delivered_at || order?.updated_at || order?.created_at
+    const parsed = Date.parse(String(raw || ""))
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  const getOrderAmountForReport = (order: any) => {
+    const items = Array.isArray(order?.order_items)
+      ? order.order_items
+      : Array.isArray(order?.items)
+        ? order.items
+        : []
+
+    const itemsTotal = items.reduce((sum: number, item: any) => {
+      const quantity = Math.max(1, toAmount(item?.quantity || 1))
+      const lineTotal = toAmount(item?.total_price || 0)
+      const unitAmount = toAmount(item?.unit_price || item?.price || 0)
+
+      if (lineTotal > 0) return sum + lineTotal
+      if (unitAmount > 0) return sum + (unitAmount * quantity)
+      return sum
+    }, 0)
+
+    const deliveryFee = toAmount(order?.delivery_fee || 0)
+    const productTotal = toAmount(order?.product_total || 0)
+    const grandTotal = toAmount(order?.grand_total || order?.total_amount || itemsTotal || 0)
+
+    if (itemsTotal > 0) return Math.max(0, itemsTotal)
+    if (productTotal > 0) return Math.max(0, productTotal)
+    return Math.max(0, grandTotal - deliveryFee)
+  }
+
+  const getCurrentMonthReleasedOrders = () => {
+    return allOrders.filter((order) => {
+      if (!isReleasedOrderForReport(order)) return false
+      const timestamp = getOrderTimestampForReport(order)
+      if (timestamp === null) return false
+      return timestamp >= reportMonthStart.getTime() && timestamp < reportNextMonthStart.getTime()
+    })
+  }
+
+  const downloadFinancialReport = () => {
+    const monthlyOrders = getCurrentMonthReleasedOrders()
+    const monthlySales = monthlyOrders.reduce((sum, order) => sum + getOrderAmountForReport(order), 0)
+    const monthlyOrderCount = monthlyOrders.length
+    const averageOrderValue = monthlyOrderCount > 0 ? monthlySales / monthlyOrderCount : 0
+    const uniqueBuyers = new Set(
+      monthlyOrders
+        .map((order) => String(order?.buyer_id || order?.buyerId || "").trim())
+        .filter(Boolean),
+    ).size
+
+    const rows = [
+      ["Report Period", reportMonthLabel],
+      ["Merchant", user?.merchantProfile?.business_name || user?.name || user?.email || "Merchant"],
+      ["Monthly Sales", monthlySales.toFixed(2)],
+      ["Completed/Released Orders", monthlyOrderCount],
+      ["Average Order Value", averageOrderValue.toFixed(2)],
+      ["Unique Customers", uniqueBuyers],
+      ["Active Listings", allProducts.length],
+      ["Current Escrow Balance", stats.find((item) => item.label === "Escrow Balance")?.value || formatNaira(0)],
+      ["Generated At", new Date().toISOString()],
+    ]
+
+    downloadCsvReport(
+      `bigcat-financial-report-${reportMonthSlug}.csv`,
+      ["Metric", "Value"],
+      rows,
+    )
+  }
+
+  const downloadSalesReport = () => {
+    const monthlyOrders = getCurrentMonthReleasedOrders()
+    const rows = monthlyOrders.map((order) => {
+      const items = Array.isArray(order?.order_items)
+        ? order.order_items
+        : Array.isArray(order?.items)
+          ? order.items
+          : []
+
+      const quantity = items.reduce((sum: number, item: any) => sum + Math.max(1, Number(item?.quantity || 1)), 0)
+      const timestamp = getOrderTimestampForReport(order)
+      const orderDate = timestamp ? new Date(timestamp).toISOString() : ""
+
+      return [
+        order?.id || "",
+        orderDate,
+        String(order?.status || ""),
+        String(order?.payment_status || ""),
+        String(order?.escrow_status || ""),
+        String(order?.buyer_id || order?.buyerId || ""),
+        quantity,
+        getOrderAmountForReport(order).toFixed(2),
+      ]
+    })
+
+    downloadCsvReport(
+      `bigcat-sales-report-${reportMonthSlug}.csv`,
+      ["Order ID", "Date", "Status", "Payment Status", "Escrow Status", "Buyer ID", "Items Qty", "Amount (NGN)"],
+      rows,
+    )
+  }
+
+  const downloadCatalogReport = () => {
+    const rows = allProducts.map((item) => [
+      item?.id || "",
+      item?.name || item?.title || "",
+      item?.category || "",
+      isServiceMerchant ? "service" : "product",
+      Number(item?.price || item?.base_price || 0).toFixed(2),
+      Number(item?.cost_price || 0).toFixed(2),
+      isServiceMerchant ? "N/A" : Number(item?.stock || 0),
+      item?.is_active === false ? "inactive" : "active",
+      item?.created_at || "",
+    ])
+
+    downloadCsvReport(
+      `bigcat-catalog-report-${reportMonthSlug}.csv`,
+      ["ID", "Name", "Category", "Type", "Sell Price (NGN)", "Cost Price (NGN)", "Stock", "Status", "Created At"],
+      rows,
+    )
+  }
 
   const handleLogout = async () => {
     const result = await logout()
@@ -1793,6 +1948,34 @@ export function MerchantDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl p-4 mb-4">
+              <h3 className="font-semibold text-foreground mb-2">Download Reports</h3>
+              <p className="text-xs text-muted-foreground mb-4">Export your monthly financial, sales, and catalog reports as CSV.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  onClick={downloadFinancialReport}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  Financial Report
+                </button>
+                <button
+                  onClick={downloadSalesReport}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background text-foreground px-3 py-2 text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  Sales Report
+                </button>
+                <button
+                  onClick={downloadCatalogReport}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background text-foreground px-3 py-2 text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  Catalog Report
+                </button>
               </div>
             </div>
 
