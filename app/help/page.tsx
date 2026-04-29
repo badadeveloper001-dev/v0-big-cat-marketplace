@@ -38,7 +38,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
     items: [
       {
         q: 'How does escrow work?',
-        a: 'When you pay, your money is held securely in escrow. To release the funds to the merchant, you must mark the order as "Delivered" in your orders list after you have received it. Funds are automatically released to the merchant once you mark it as delivered. If you do not mark it as delivered, funds are auto-released after 7 days.',
+        a: 'When you pay, your money is held securely in escrow. To release the funds to the merchant, you must mark the order as "Delivered" in your orders list after you have received it. Funds are automatically released to the merchant once you mark it as delivered. If you do not mark it as delivered, funds are auto-released after 48 hours.',
       },
       {
         q: 'When should I mark my order as delivered?',
