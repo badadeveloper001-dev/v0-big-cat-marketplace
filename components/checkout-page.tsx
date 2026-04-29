@@ -71,10 +71,13 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     setDeliveryFee(fee)
   }, [deliveryType, deliveryAddress, totalWeight, fulfillmentMethod])
 
+  const VAT_RATE = 0.075 // Nigeria standard VAT 7.5%
   const productTotal = getTotal()
   const serviceTotal = Number(serviceBooking?.basePrice || 0)
   const preDiscountTotal = serviceBooking ? serviceTotal : (productTotal + deliveryFee)
-  const grandTotal = preDiscountTotal
+  const vatBase = serviceBooking ? serviceTotal : productTotal // VAT applies to goods/services, not delivery
+  const vatAmount = Math.round(vatBase * VAT_RATE)
+  const grandTotal = preDiscountTotal + vatAmount
   const isWalletPayment = paymentMethod === 'palmpay'
   const isWalletInsufficient = isWalletPayment && (serviceBooking || deliveryAddress.trim()) && walletBalance < grandTotal
   const walletShortfall = isWalletInsufficient ? grandTotal - walletBalance : 0
@@ -620,10 +623,14 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
                   <span className="text-muted-foreground">Service Price</span>
                   <span className="font-medium text-foreground">{formatNaira(Number(serviceBooking.basePrice || 0))}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">VAT (7.5%)</span>
+                  <span className="font-medium text-foreground">{formatNaira(vatAmount)}</span>
+                </div>
                 <div className="h-px bg-border my-2" />
                 <div className="flex justify-between">
                   <span className="font-semibold text-foreground">Total Amount</span>
-                  <span className="font-bold text-primary text-lg">{formatNaira(Number(serviceBooking.basePrice || 0))}</span>
+                  <span className="font-bold text-primary text-lg">{formatNaira(grandTotal)}</span>
                 </div>
               </>
             ) : (
@@ -637,6 +644,10 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
                   <span className="font-medium text-foreground">
                     {deliveryAddress.trim() ? formatNaira(deliveryFee) : '--'}
                   </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">VAT (7.5%)</span>
+                  <span className="font-medium text-foreground">{formatNaira(vatAmount)}</span>
                 </div>
                 <div className="h-px bg-border my-2" />
                 <div className="flex justify-between">
