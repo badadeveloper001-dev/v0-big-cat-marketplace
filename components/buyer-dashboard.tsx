@@ -914,11 +914,12 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     return <BuyerOrders onBack={() => setShowOrders(false)} />
   }
 
-  if (showServices && user?.userId) {
+  if (showServices) {
     return (
       <ServicesMarketplace
-        buyerId={user.userId}
+        buyerId={user?.userId ?? 'guest'}
         onBack={() => setShowServices(false)}
+        onNeedsAuth={() => { setShowServices(false); setShowAuthPrompt(true) }}
         onChatMerchant={(conversation) => {
             if (guardSuspendedAction()) return
           setShowServices(false)
@@ -1160,11 +1161,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
                 key={cat.name}
                 onClick={() => {
                   if (cat.target === "services") {
-                    if (!user) {
-                      setShowAuthPrompt(true)
-                      return
-                    }
-                      if (guardSuspendedAction()) return
+                      if (user && guardSuspendedAction()) return
                     setShowServices(true)
                     return
                   }

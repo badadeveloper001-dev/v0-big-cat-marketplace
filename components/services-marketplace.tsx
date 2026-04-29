@@ -9,10 +9,12 @@ export function ServicesMarketplace({
   buyerId,
   onBack,
   onChatMerchant,
+  onNeedsAuth,
 }: {
   buyerId: string
   onBack: () => void
   onChatMerchant?: (conversation?: any) => void
+  onNeedsAuth?: () => void
 }) {
   const [services, setServices] = useState<any[]>([])
   const [bookings, setBookings] = useState<any[]>([])
@@ -121,6 +123,7 @@ export function ServicesMarketplace({
   }, [buyerId])
 
   const startChatWithMerchant = async (service: any) => {
+    if (buyerId === 'guest') { onNeedsAuth?.(); return }
     if (guardSuspendedAction()) return
 
     const merchantId = String(service?.merchant_id || '').trim()
@@ -160,6 +163,7 @@ export function ServicesMarketplace({
   }
 
   const submitBooking = async () => {
+    if (buyerId === 'guest') { onNeedsAuth?.(); return }
     if (guardSuspendedAction()) return
 
     if (!selectedService) return
