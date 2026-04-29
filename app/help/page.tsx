@@ -72,7 +72,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'How do I get paid for my sales?',
-        a: 'Once a buyer releases escrow funds or an order is auto-released (after 7 days), the amount (minus platform fees) is credited to your merchant wallet and can be withdrawn to your bank account.',
+        a: 'Once a buyer marks an order as delivered or escrow is auto-released (after 48 hours), the amount (minus platform fees) is credited to your merchant wallet. You can view your wallet balance in your merchant dashboard.',
       },
       {
         q: 'What are merchant tokens?',
