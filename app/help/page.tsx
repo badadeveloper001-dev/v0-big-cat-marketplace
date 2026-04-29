@@ -16,7 +16,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'What payment methods are accepted?',
-        a: 'We accept PalmPay wallet, bank transfer, and cash on delivery (for select locations). All payments are protected by our escrow system.',
+        a: 'We accept PalmPay wallet, bank transfer, and credit/debit card payments. All payments are protected by our escrow system.',
       },
       {
         q: 'Can I track my order?',
