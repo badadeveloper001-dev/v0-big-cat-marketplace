@@ -24,7 +24,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'What if I receive a wrong or damaged item?',
-        a: 'Do NOT release funds from escrow. Open a dispute from the order details page within 48 hours of delivery. Our support team will investigate and resolve it.',
+        a: 'Do NOT mark the order as delivered. Instead, open a dispute from the order details page within 48 hours of delivery. Our support team will investigate and resolve it. Funds are automatically released to the merchant only after you mark the order as delivered.',
       },
       {
         q: 'How do I cancel an order?',
@@ -38,11 +38,11 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
     items: [
       {
         q: 'How does escrow work?',
-        a: 'When you pay, your money is held securely in escrow — it is NOT released to the merchant until you confirm you have received your order in good condition. This protects both buyers and sellers.',
+        a: 'When you pay, your money is held securely in escrow. To release the funds to the merchant, you must mark the order as "Delivered" in your orders list after you have received it. Funds are automatically released to the merchant once you mark it as delivered. If you do not mark it as delivered, funds are auto-released after 7 days.',
       },
       {
-        q: 'When should I release funds?',
-        a: 'Only release funds after you have received your order and are satisfied with it. Once released, the transaction is final.',
+        q: 'When should I mark my order as delivered?',
+        a: 'Mark your order as delivered only after you have received it and are satisfied with it. Once marked as delivered, the transaction is final and funds are released to the merchant.',
       },
       {
         q: 'What is VAT on BigCat?',
