@@ -76,6 +76,10 @@ function toAmount(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function formatMonthValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+}
+
 export function MerchantDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
   const [activeTab, setActiveTab] = useState("home")
@@ -108,6 +112,7 @@ export function MerchantDashboard() {
   const [todoError, setTodoError] = useState("")
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default")
   const [unreadMessages, setUnreadMessages] = useState(0)
+  const [reportMonth, setReportMonth] = useState(() => formatMonthValue(new Date()))
   const merchantKind = user?.merchantType || user?.merchantProfile?.merchant_type || 'products'
   const isServiceMerchant = merchantKind === 'services'
 
@@ -881,10 +886,30 @@ export function MerchantDashboard() {
 
   const nextOnboardingStep = onboardingSteps.find((step) => !step.done)
 
-  const reportMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  const reportNextMonthStart = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
-  const reportMonthLabel = reportMonthStart.toLocaleString("en-US", { month: "long", year: "numeric" })
-  const reportMonthSlug = `${reportMonthStart.getFullYear()}-${String(reportMonthStart.getMonth() + 1).padStart(2, "0")}`
+  const selectedReportMonth = useMemo(() => {
+    const monthMatch = /^(\d{4})-(\d{2})$/.exec(reportMonth)
+    if (!monthMatch) {
+      const now = new Date()
+      return {
+        start: new Date(now.getFullYear(), now.getMonth(), 1),
+        end: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+        label: now.toLocaleString("en-US", { month: "long", year: "numeric" }),
+        slug: formatMonthValue(now),
+      }
+    }
+
+    const year = Number(monthMatch[1])
+    const monthIndex = Math.max(0, Math.min(11, Number(monthMatch[2]) - 1))
+    const start = new Date(year, monthIndex, 1)
+    const end = new Date(year, monthIndex + 1, 1)
+
+    return {
+      start,
+      end,
+      label: start.toLocaleString("en-US", { month: "long", year: "numeric" }),
+      slug: formatMonthValue(start),
+    }
+  }, [reportMonth])
 
   const csvEscape = (value: unknown) => {
     const text = String(value ?? "")
@@ -944,17 +969,17 @@ export function MerchantDashboard() {
     return Math.max(0, grandTotal - deliveryFee)
   }
 
-  const getCurrentMonthReleasedOrders = () => {
+  const getSelectedMonthReleasedOrders = () => {
     return allOrders.filter((order) => {
       if (!isReleasedOrderForReport(order)) return false
       const timestamp = getOrderTimestampForReport(order)
       if (timestamp === null) return false
-      return timestamp >= reportMonthStart.getTime() && timestamp < reportNextMonthStart.getTime()
+      return timestamp >= selectedReportMonth.start.getTime() && timestamp < selectedReportMonth.end.getTime()
     })
   }
 
   const downloadFinancialReport = () => {
-    const monthlyOrders = getCurrentMonthReleasedOrders()
+    const monthlyOrders = getSelectedMonthReleasedOrders()
     const monthlySales = monthlyOrders.reduce((sum, order) => sum + getOrderAmountForReport(order), 0)
     const monthlyOrderCount = monthlyOrders.length
     const averageOrderValue = monthlyOrderCount > 0 ? monthlySales / monthlyOrderCount : 0
@@ -965,7 +990,7 @@ export function MerchantDashboard() {
     ).size
 
     const rows = [
-      ["Report Period", reportMonthLabel],
+      ["Report Period", selectedReportMonth.label],
       ["Merchant", user?.merchantProfile?.business_name || user?.name || user?.email || "Merchant"],
       ["Monthly Sales", monthlySales.toFixed(2)],
       ["Completed/Released Orders", monthlyOrderCount],
@@ -977,14 +1002,14 @@ export function MerchantDashboard() {
     ]
 
     downloadCsvReport(
-      `bigcat-financial-report-${reportMonthSlug}.csv`,
+      `bigcat-financial-report-${selectedReportMonth.slug}.csv`,
       ["Metric", "Value"],
       rows,
     )
   }
 
   const downloadSalesReport = () => {
-    const monthlyOrders = getCurrentMonthReleasedOrders()
+    const monthlyOrders = getSelectedMonthReleasedOrders()
     const rows = monthlyOrders.map((order) => {
       const items = Array.isArray(order?.order_items)
         ? order.order_items
@@ -1009,7 +1034,7 @@ export function MerchantDashboard() {
     })
 
     downloadCsvReport(
-      `bigcat-sales-report-${reportMonthSlug}.csv`,
+      `bigcat-sales-report-${selectedReportMonth.slug}.csv`,
       ["Order ID", "Date", "Status", "Payment Status", "Escrow Status", "Buyer ID", "Items Qty", "Amount (NGN)"],
       rows,
     )
@@ -1029,7 +1054,7 @@ export function MerchantDashboard() {
     ])
 
     downloadCsvReport(
-      `bigcat-catalog-report-${reportMonthSlug}.csv`,
+      `bigcat-catalog-report-${selectedReportMonth.slug}.csv`,
       ["ID", "Name", "Category", "Type", "Sell Price (NGN)", "Cost Price (NGN)", "Stock", "Status", "Created At"],
       rows,
     )
@@ -1953,7 +1978,16 @@ export function MerchantDashboard() {
 
             <div className="bg-card border border-border rounded-2xl p-4 mb-4">
               <h3 className="font-semibold text-foreground mb-2">Download Reports</h3>
-              <p className="text-xs text-muted-foreground mb-4">Export your monthly financial, sales, and catalog reports as CSV.</p>
+              <p className="text-xs text-muted-foreground mb-3">Export your monthly financial, sales, and catalog reports as CSV.</p>
+              <div className="mb-4">
+                <label className="block text-xs text-muted-foreground mb-1">Report Month</label>
+                <input
+                  type="month"
+                  value={reportMonth}
+                  onChange={(e) => setReportMonth(e.target.value)}
+                  className="w-full sm:w-auto rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                />
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
                   onClick={downloadFinancialReport}
