@@ -36,22 +36,32 @@ export interface SendEmailResult {
 let smtpTransport: nodemailer.Transporter | null = null
 let resendClient: Resend | null = null
 
+function getEnv(name: string) {
+  return String(process.env[name] || '').trim()
+}
+
 function getSmtpTransport(): nodemailer.Transporter | null {
-  const host = process.env.EMAIL_HOST
+  const host = getEnv('EMAIL_HOST')
   if (!host) return null
 
   if (smtpTransport) return smtpTransport
 
-  const port = parseInt(process.env.EMAIL_PORT || '587', 10)
-  const secure = process.env.EMAIL_SECURE === 'true' || port === 465
+  const portRaw = getEnv('EMAIL_PORT') || '587'
+  const port = parseInt(portRaw, 10)
+  const secure = getEnv('EMAIL_SECURE') === 'true' || port === 465
+  const user = getEnv('EMAIL_USER')
+  const pass = getEnv('EMAIL_PASS')
 
   smtpTransport = nodemailer.createTransport({
     host,
     port,
     secure,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user,
+      pass,
     },
   })
 
@@ -68,11 +78,23 @@ function getResendClient(): Resend | null {
 
 function defaultFrom(): string {
   // SMTP from address
-  if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM
-  if (process.env.EMAIL_USER) return `BigCat Marketplace <${process.env.EMAIL_USER}>`
+  if (getEnv('EMAIL_FROM')) return getEnv('EMAIL_FROM')
+  if (getEnv('EMAIL_USER')) return `BigCat Marketplace <${getEnv('EMAIL_USER')}>`
   // Resend from address
-  if (process.env.RESEND_FROM_EMAIL) return process.env.RESEND_FROM_EMAIL
+  if (getEnv('RESEND_FROM_EMAIL')) return getEnv('RESEND_FROM_EMAIL')
   return 'BigCat Marketplace <onboarding@resend.dev>'
+}
+
+function isTransientSmtpError(error: any) {
+  const code = String(error?.code || '').toUpperCase()
+  const message = String(error?.message || '').toLowerCase()
+  return code === 'EAI_AGAIN'
+    || code === 'EBUSY'
+    || code === 'ESOCKET'
+    || code === 'ECONNRESET'
+    || code === 'ETIMEDOUT'
+    || message.includes('getaddrinfo')
+    || message.includes('timed out')
 }
 
 /**
@@ -84,18 +106,34 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   // --- 1. Try SMTP ---
   const smtp = getSmtpTransport()
   if (smtp) {
-    try {
-      await smtp.sendMail({
-        from,
-        to: input.to,
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-      })
-      return { success: true, provider: 'smtp' }
-    } catch (err: any) {
-      console.error('[mailer] SMTP send failed:', err?.message)
-      return { success: false, provider: 'smtp', error: err?.message || 'SMTP send failed' }
+    const maxAttempts = 3
+    let lastError: any = null
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        await smtp.sendMail({
+          from,
+          to: input.to,
+          subject: input.subject,
+          html: input.html,
+          text: input.text,
+        })
+        return { success: true, provider: 'smtp' }
+      } catch (err: any) {
+        lastError = err
+        const shouldRetry = attempt < maxAttempts && isTransientSmtpError(err)
+        console.error(`[mailer] SMTP send failed (attempt ${attempt}/${maxAttempts}):`, err?.message)
+
+        if (!shouldRetry) break
+
+        // Reset transport before retry so nodemailer can establish a fresh socket.
+        smtpTransport = null
+      }
+    }
+
+    console.error('[mailer] SMTP failed after retries, trying Resend fallback')
+    if (!lastError) {
+      return { success: false, provider: 'smtp', error: 'SMTP send failed' }
     }
   }
 
