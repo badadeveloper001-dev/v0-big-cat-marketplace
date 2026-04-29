@@ -11,6 +11,7 @@ import { ProfilePage } from "@/components/profile-page"
 import { MerchantProfilePage } from "@/components/merchant-profile-page"
 import { SettingsPage } from "@/components/settings-page"
 import { PaymentMethodsPage } from "@/components/payment-methods-page"
+import { MerchantWithdrawal } from "@/components/merchant-withdrawal"
 import { ChatInterface } from "@/components/chat-interface"
 import { formatNaira } from "@/lib/currency-utils"
 import { BrandWordmark } from "./brand-wordmark"
@@ -44,6 +45,7 @@ import {
   Download,
   User,
   MessageSquare,
+  ArrowUpRight,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { NotificationsPanel } from "./notifications-panel"
@@ -87,6 +89,7 @@ export function MerchantDashboard() {
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showPaymentMethods, setShowPaymentMethods] = useState(false)
+  const [showWithdrawal, setShowWithdrawal] = useState(false)
   
   // Real data states
   const [stats, setStats] = useState<any[]>([])
@@ -700,6 +703,7 @@ export function MerchantDashboard() {
     ),
     { label: "View Orders", icon: ShoppingBag, primary: false, action: () => setActiveTab("orders") },
     { label: "Analytics", icon: BarChart3, primary: false, action: () => setActiveTab("analytics") },
+    { label: "Withdraw", icon: ArrowUpRight, primary: false, action: () => setShowWithdrawal(true) },
     { label: "AI BizPilot", icon: Sparkles, primary: false, highlight: true, action: () => setActiveTab("ai") },
   ]
 
@@ -1233,6 +1237,18 @@ export function MerchantDashboard() {
 
   if (showPaymentMethods) {
     return <PaymentMethodsPage onBack={() => setShowPaymentMethods(false)} />
+  }
+
+  if (showWithdrawal) {
+    return <MerchantWithdrawal 
+      merchantId={user?.userId || ""} 
+      walletBalance={tokenBalance}
+      onBack={() => setShowWithdrawal(false)}
+      onSuccess={() => {
+        setShowWithdrawal(false)
+        loadInitialData()
+      }}
+    />
   }
 
   return (
