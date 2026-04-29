@@ -657,16 +657,16 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     if (typeof window === "undefined") return
     switch (label) {
       case "Help Center":
-        window.open("https://help.netlify.com", "_blank")
+        window.location.href = "/help"
         break
       case "Contact Us":
-        window.location.href = "mailto:support@bigcat.ng?subject=BigCat%20Support%20Request"
+        window.location.href = "/contact"
         break
       case "Terms of Service":
-        window.open("https://www.netlify.com/terms/", "_blank")
+        window.location.href = "/terms"
         break
       case "Privacy Policy":
-        window.open("https://www.netlify.com/privacy/", "_blank")
+        window.location.href = "/privacy"
         break
       default:
         break

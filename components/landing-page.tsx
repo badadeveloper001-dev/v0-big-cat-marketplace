@@ -488,8 +488,10 @@ export function LandingPage() {
           <div className="flex items-center gap-6 flex-wrap justify-center">
             <Link href="/marketplace" className="text-gray-500 hover:text-gray-300 text-xs transition-colors">Browse</Link>
             <Link href="/marketplace" className="text-gray-500 hover:text-gray-300 text-xs transition-colors">Sell</Link>
-            <Link href="/marketplace" className="text-gray-500 hover:text-gray-300 text-xs transition-colors">Partners</Link>
-            <Link href="/marketplace" className="text-gray-500 hover:text-gray-300 text-xs transition-colors">Support</Link>
+            <Link href="/help" className="text-gray-500 hover:text-gray-300 text-xs transition-colors">Help Center</Link>
+            <Link href="/contact" className="text-gray-500 hover:text-gray-300 text-xs transition-colors">Contact</Link>
+            <Link href="/terms" className="text-gray-500 hover:text-gray-300 text-xs transition-colors">Terms</Link>
+            <Link href="/privacy" className="text-gray-500 hover:text-gray-300 text-xs transition-colors">Privacy</Link>
           </div>
           <div className="flex items-center gap-4">
             <div className="bg-white rounded-lg px-3 py-1.5">

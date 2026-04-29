@@ -509,7 +509,9 @@ export function BuyerAuth({
 
             <div className="mt-6 pt-6 border-t border-border/50">
               <p className="text-xs text-muted-foreground text-center">
-                By continuing, you agree to our Terms of Service and Privacy Policy
+                By continuing, you agree to our{' '}
+                <a href="/terms" className="underline hover:text-foreground">Terms of Service</a>{' '}and{' '}
+                <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>
               </p>
             </div>
           </div>
