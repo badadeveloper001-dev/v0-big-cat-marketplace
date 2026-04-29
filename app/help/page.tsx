@@ -72,7 +72,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'How do I get paid for my sales?',
-        a: 'Once a buyer marks an order as delivered or escrow is auto-released (after 48 hours), the amount (minus platform fees) is credited to your merchant wallet. You can view your wallet balance in your merchant dashboard.',
+        a: 'Once a buyer marks an order as delivered or escrow is auto-released (after 48 hours), the amount (minus platform fees) is credited to your merchant wallet. You can withdraw your wallet funds to your registered bank account anytime. Minimum withdrawal is ₦1,000 with a 2.5% processing fee. Use the "Withdraw" button in your merchant dashboard to initiate a withdrawal.',
       },
       {
         q: 'What are merchant tokens?',
