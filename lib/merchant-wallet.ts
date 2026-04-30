@@ -18,13 +18,9 @@ type WalletOrder = {
   id: string
   merchant_id?: string | null
   status?: string | null
-  escrow_status?: string | null
   grand_total?: number | null
-  total_amount?: number | null
   product_total?: number | null
   delivery_fee?: number | null
-  order_items?: any[] | null
-  items?: any[] | null
   created_at?: string | null
 }
 
@@ -84,30 +80,15 @@ function isCompletedStatus(value: unknown) {
 
 function isSettledOrder(order: WalletOrder) {
   const status = String(order?.status || '').toLowerCase().trim()
-  const escrow = String(order?.escrow_status || '').toLowerCase().trim()
-  return status === 'delivered' || status === 'completed' || escrow === 'released'
+  return status === 'delivered' || status === 'completed'
 }
 
 function getOrderPayoutAmount(order: WalletOrder) {
-  const orderItems = Array.isArray(order.order_items)
-    ? order.order_items
-    : Array.isArray(order.items)
-      ? order.items
-      : []
-
-  const itemsTotal = orderItems.reduce((sum: number, item: any) => {
-    const quantity = Math.max(1, toAmount(item?.quantity || 1))
-    const lineTotal = toAmount(item?.total_price || 0)
-    const unitAmount = toAmount(item?.unit_price || item?.price || 0)
-    if (lineTotal > 0) return sum + lineTotal
-    if (unitAmount > 0) return sum + (unitAmount * quantity)
-    return sum
-  }, 0)
-
   const deliveryFee = Math.max(0, toAmount(order.delivery_fee))
-  const grandTotal = Math.max(0, toAmount(order.grand_total ?? order.total_amount))
+  const grandTotal = Math.max(0, toAmount(order.grand_total))
   const productTotal = Math.max(0, toAmount(order.product_total))
-  return Math.max(0, itemsTotal || productTotal || (grandTotal - deliveryFee))
+  // Use product_total if available, otherwise grand_total minus delivery fee
+  return Math.max(0, productTotal || (grandTotal > deliveryFee ? grandTotal - deliveryFee : grandTotal))
 }
 
 async function resolveMerchantKeys(supabase: any, merchantIdOrEmail: string) {
@@ -150,33 +131,17 @@ async function resolveMerchantKeys(supabase: any, merchantIdOrEmail: string) {
 async function getSettledOrdersForMerchant(supabase: any, merchantKeys: string[]) {
   if (!Array.isArray(merchantKeys) || merchantKeys.length === 0) return [] as WalletOrder[]
 
+  // orders table has: id, buyer_id, merchant_id, status, grand_total, product_total, delivery_fee, created_at
+  // NOTE: no escrow_status or seller_id column on orders table
   const deliveredResult = await (supabase.from('orders') as any)
-    .select('id, merchant_id, status, escrow_status, grand_total, total_amount, product_total, delivery_fee, order_items, items, created_at')
+    .select('id, merchant_id, status, grand_total, product_total, delivery_fee, created_at')
     .in('merchant_id', merchantKeys)
     .in('status', ['delivered', 'completed'])
     .order('created_at', { ascending: true })
 
-  const releasedEscrowResult = await (supabase.from('orders') as any)
-    .select('id, merchant_id, status, escrow_status, grand_total, total_amount, product_total, delivery_fee, order_items, items, created_at')
-    .in('merchant_id', merchantKeys)
-    .eq('escrow_status', 'released')
-    .order('created_at', { ascending: true })
+  if (deliveredResult.error) return [] as WalletOrder[]
 
-  const merged = [
-    ...(Array.isArray(deliveredResult.data) ? deliveredResult.data : []),
-    ...(Array.isArray(releasedEscrowResult.data) ? releasedEscrowResult.data : []),
-  ]
-
-  if (deliveredResult.error && releasedEscrowResult.error) return [] as WalletOrder[]
-
-  const byId = new Map<string, WalletOrder>()
-  for (const row of merged as WalletOrder[]) {
-    const id = String(row?.id || '').trim()
-    if (!id) continue
-    byId.set(id, row)
-  }
-
-  return Array.from(byId.values()).filter((order) => isSettledOrder(order))
+  return (Array.isArray(deliveredResult.data) ? deliveredResult.data : []) as WalletOrder[]
 }
 
 async function getReleasedEscrowCreditsForMerchant(supabase: any, merchantKeys: string[]) {
@@ -288,15 +253,10 @@ export async function getMerchantWalletDiagnostics(merchantId: string) {
       .select('id', { count: 'exact', head: true })
       .in('merchant_id', merchantKeys)
       .in('status', ['delivered', 'completed'])
-    const releasedCountResult = await (supabase.from('orders') as any)
-      .select('id', { count: 'exact', head: true })
-      .in('merchant_id', merchantKeys)
-      .eq('escrow_status', 'released')
-
-    if (deliveredCountResult.error && releasedCountResult.error) {
-      ordersError = formatErrorMessage(deliveredCountResult.error) || formatErrorMessage(releasedCountResult.error)
+    if (deliveredCountResult.error) {
+      ordersError = formatErrorMessage(deliveredCountResult.error)
     } else {
-      settledOrdersCount = Number(deliveredCountResult.count || 0) + Number(releasedCountResult.count || 0)
+      settledOrdersCount = Number(deliveredCountResult.count || 0)
     }
 
     const escrowResult = await (supabase.from('escrow') as any)

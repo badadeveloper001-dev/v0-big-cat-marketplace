@@ -262,6 +262,28 @@ export async function releaseFundsFromEscrow(
     order = data
   }
 
+  // Fetch order_items separately so getEscrowBreakdown can compute correct amounts
+  // (order_items is a separate table, not a column on orders)
+  if (order && !Array.isArray((order as any).order_items)) {
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('id, total_price, unit_price, quantity')
+      .eq('order_id', resolvedOrderId)
+    if (Array.isArray(items) && items.length > 0) {
+      ;(order as any).order_items = items
+      // Also ensure product_total is set so the order record reflects the real amount
+      const itemsTotal = items.reduce((sum: number, item: any) => sum + (Number(item.total_price) || 0), 0)
+      if (itemsTotal > 0 && !((order as any).product_total > 0)) {
+        ;(order as any).product_total = itemsTotal
+        ;(order as any).grand_total = itemsTotal + (Number((order as any).delivery_fee) || 0)
+        // Persist the corrected totals to the DB
+        await supabase.from('orders')
+          .update({ product_total: (order as any).product_total, grand_total: (order as any).grand_total })
+          .eq('id', resolvedOrderId)
+      }
+    }
+  }
+
   // Check if there's an active dispute - if so, prevent fund release
   const activeDispute = await hasActiveDispute(supabase, resolvedOrderId)
   if (activeDispute) {
