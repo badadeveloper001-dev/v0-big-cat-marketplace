@@ -71,10 +71,30 @@ function getOrderPayoutAmount(order: WalletOrder) {
   return Math.max(0, itemsTotal || productTotal || (grandTotal - deliveryFee))
 }
 
-async function getSettledOrdersForMerchant(supabase: any, merchantId: string) {
+async function resolveMerchantKeys(supabase: any, merchantIdOrEmail: string) {
+  const identifier = String(merchantIdOrEmail || '').trim()
+  if (!identifier) return [] as string[]
+
+  const keys = new Set<string>([identifier])
+
+  const { data } = await (supabase.from('auth_users') as any)
+    .select('id, email')
+    .or(`id.eq.${identifier},email.eq.${identifier}`)
+    .limit(1)
+    .maybeSingle()
+
+  if (data?.id) keys.add(String(data.id))
+  if (data?.email) keys.add(String(data.email))
+
+  return Array.from(keys).filter(Boolean)
+}
+
+async function getSettledOrdersForMerchant(supabase: any, merchantKeys: string[]) {
+  if (!Array.isArray(merchantKeys) || merchantKeys.length === 0) return [] as WalletOrder[]
+
   const { data, error } = await (supabase.from('orders') as any)
     .select('id, merchant_id, status, escrow_status, grand_total, total_amount, product_total, delivery_fee, order_items, items, created_at')
-    .eq('merchant_id', merchantId)
+    .in('merchant_id', merchantKeys)
     .or('status.in.(delivered,completed),escrow_status.eq.released')
     .order('created_at', { ascending: true })
 
@@ -137,14 +157,16 @@ export async function backfillMerchantWalletFromOrders(merchantId: string) {
 
   try {
     const supabase = await createClient()
+    const merchantKeys = await resolveMerchantKeys(supabase, id)
+    if (merchantKeys.length === 0) return
 
-    const orders = await getSettledOrdersForMerchant(supabase, id)
+    const orders = await getSettledOrdersForMerchant(supabase, merchantKeys)
     if (orders.length === 0) return
 
     // Get already-credited order IDs so we don't double-credit
     const { data: existingTx, error: txError } = await (supabase.from('transactions') as any)
       .select('order_id')
-      .eq('merchant_id', id)
+      .in('merchant_id', merchantKeys)
       .in('type', ['escrow_release', 'payment', 'wallet_credit'])
       .not('order_id', 'is', null)
 
@@ -161,10 +183,12 @@ export async function backfillMerchantWalletFromOrders(merchantId: string) {
 
       if (amount <= 0) continue
 
+      const txMerchantId = String(order.merchant_id || id).trim() || id
+
       await creditMerchantWalletFromEscrow({
         supabase,
         orderId,
-        merchantId: id,
+        merchantId: txMerchantId,
         amount,
         reason: `Backfill: escrow payout for order ${orderId}`,
       })
@@ -180,9 +204,14 @@ export async function getMerchantWalletOverview(merchantId: string, options?: { 
 
   try {
     const supabase = await createClient()
+    const merchantKeys = await resolveMerchantKeys(supabase, id)
+    if (merchantKeys.length === 0) {
+      return { success: true, balance: 0, transactions: [] as WalletTransaction[], withdrawalHistory: [] as WalletTransaction[] }
+    }
+
     const { data, error } = await (supabase.from('transactions') as any)
       .select('id, order_id, merchant_id, type, amount, reason, status, created_at')
-      .eq('merchant_id', id)
+      .in('merchant_id', merchantKeys)
       .order('created_at', { ascending: false })
       .limit(Math.max(1, Math.min(options?.limit || 100, 500)))
 
@@ -193,7 +222,7 @@ export async function getMerchantWalletOverview(merchantId: string, options?: { 
 
     // Derive settled-order credits that are missing from transactions,
     // so merchants still see correct balance even if insert policies failed.
-    const settledOrders = await getSettledOrdersForMerchant(supabase, id)
+    const settledOrders = await getSettledOrdersForMerchant(supabase, merchantKeys)
     const creditedOrderIds = new Set(
       completedRows
         .filter((tx) => CREDIT_TYPES.includes(normalizeType(tx.type)))

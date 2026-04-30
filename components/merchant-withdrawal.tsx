@@ -14,6 +14,14 @@ interface WithdrawalRecord {
   status: 'completed' | 'pending'
 }
 
+interface WalletActivity {
+  id: string
+  type: string
+  amount: number
+  reason: string
+  timestamp: string
+}
+
 interface MerchantWithdrawalProps {
   merchantId: string
   walletBalance: number
@@ -35,6 +43,7 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
   const [success, setSuccess] = useState(false)
   const [liveWalletBalance, setLiveWalletBalance] = useState(walletBalance)
   const [withdrawalHistory, setWithdrawalHistory] = useState<WithdrawalRecord[]>([])
+  const [walletActivity, setWalletActivity] = useState<WalletActivity[]>([])
 
   const getStorageKey = () => `merchant_withdrawal_history_${merchantId}`
   const getBankAccountKey = () => `merchant_bank_account_${merchantId}`
@@ -58,6 +67,17 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
 
         if (result?.success) {
           setLiveWalletBalance(Number(result.balance || 0))
+          const activity: WalletActivity[] = Array.isArray(result.transactions)
+            ? result.transactions.slice(0, 8).map((item: any) => ({
+                id: String(item?.id || `tx_${Date.now()}_${Math.random()}`),
+                type: String(item?.type || ''),
+                amount: Number(item?.amount || 0),
+                reason: String(item?.reason || ''),
+                timestamp: String(item?.created_at || new Date().toISOString()),
+              }))
+            : []
+          setWalletActivity(activity)
+
           const mapped: WithdrawalRecord[] = Array.isArray(result.withdrawals)
             ? result.withdrawals.map((item: any) => {
                 const gross = Number(item?.amount || 0)
@@ -91,6 +111,7 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
         }
       }
       setLiveWalletBalance(walletBalance)
+      setWalletActivity([])
     }
 
     if (merchantId) {
@@ -463,6 +484,32 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
                   <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 font-medium">Completed</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {walletActivity.length > 0 && (
+          <div className="mt-6 pt-6 border-t border-border">
+            <h3 className="font-semibold text-foreground mb-3 text-sm">Wallet Activity</h3>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {walletActivity.map((item) => {
+                const normalized = item.type.toLowerCase()
+                const isDebit = normalized.includes('withdraw') || normalized.includes('debit')
+                const tone = isDebit ? 'text-red-600 bg-red-50' : 'text-emerald-700 bg-emerald-50'
+                const sign = isDebit ? '-' : '+'
+
+                return (
+                  <div key={item.id} className="flex items-start justify-between rounded-xl border border-border bg-card px-3 py-2.5">
+                    <div className="pr-3">
+                      <p className="text-xs font-semibold text-foreground truncate">{item.reason || item.type}</p>
+                      <p className="text-[11px] text-muted-foreground">{new Date(item.timestamp).toLocaleString()}</p>
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${tone}`}>
+                      {sign}{formatNaira(Math.abs(item.amount || 0))}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
