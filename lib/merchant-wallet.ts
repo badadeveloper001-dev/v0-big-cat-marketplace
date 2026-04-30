@@ -65,6 +65,17 @@ function isMissingTransactionsTable(error: any) {
     || message.includes('relation "public.transactions" does not exist')
 }
 
+function formatErrorMessage(error: any) {
+  if (!error) return null
+  const message = error?.message
+  if (typeof message === 'string' && message.trim()) return message
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
 function isCompletedStatus(value: unknown) {
   const status = String(value || '').toLowerCase().trim()
   if (!status) return true
@@ -139,14 +150,33 @@ async function resolveMerchantKeys(supabase: any, merchantIdOrEmail: string) {
 async function getSettledOrdersForMerchant(supabase: any, merchantKeys: string[]) {
   if (!Array.isArray(merchantKeys) || merchantKeys.length === 0) return [] as WalletOrder[]
 
-  const { data, error } = await (supabase.from('orders') as any)
+  const deliveredResult = await (supabase.from('orders') as any)
     .select('id, merchant_id, status, escrow_status, grand_total, total_amount, product_total, delivery_fee, order_items, items, created_at')
     .in('merchant_id', merchantKeys)
-    .or('status.in.(delivered,completed),escrow_status.eq.released')
+    .in('status', ['delivered', 'completed'])
     .order('created_at', { ascending: true })
 
-  if (error || !Array.isArray(data)) return [] as WalletOrder[]
-  return (data as WalletOrder[]).filter((order) => isSettledOrder(order))
+  const releasedEscrowResult = await (supabase.from('orders') as any)
+    .select('id, merchant_id, status, escrow_status, grand_total, total_amount, product_total, delivery_fee, order_items, items, created_at')
+    .in('merchant_id', merchantKeys)
+    .eq('escrow_status', 'released')
+    .order('created_at', { ascending: true })
+
+  const merged = [
+    ...(Array.isArray(deliveredResult.data) ? deliveredResult.data : []),
+    ...(Array.isArray(releasedEscrowResult.data) ? releasedEscrowResult.data : []),
+  ]
+
+  if (deliveredResult.error && releasedEscrowResult.error) return [] as WalletOrder[]
+
+  const byId = new Map<string, WalletOrder>()
+  for (const row of merged as WalletOrder[]) {
+    const id = String(row?.id || '').trim()
+    if (!id) continue
+    byId.set(id, row)
+  }
+
+  return Array.from(byId.values()).filter((order) => isSettledOrder(order))
 }
 
 async function getReleasedEscrowCreditsForMerchant(supabase: any, merchantKeys: string[]) {
@@ -179,16 +209,45 @@ async function getReleasedEscrowCreditsForMerchant(supabase: any, merchantKeys: 
 async function getReleasedServiceBookingCreditsForMerchant(supabase: any, merchantKeys: string[]) {
   if (!Array.isArray(merchantKeys) || merchantKeys.length === 0) return [] as WalletTransaction[]
 
-  const { data, error } = await (supabase.from('service_bookings') as any)
+  const byStatusResult = await (supabase.from('service_bookings') as any)
     .select('id, merchant_id, quoted_price, status, payment_status, escrow_status, updated_at, created_at')
     .in('merchant_id', merchantKeys)
-    .or('status.eq.released,payment_status.eq.released,escrow_status.eq.released')
+    .eq('status', 'released')
     .order('updated_at', { ascending: false })
     .limit(500)
 
-  if (error || !Array.isArray(data)) return [] as WalletTransaction[]
+  const byPaymentStatusResult = await (supabase.from('service_bookings') as any)
+    .select('id, merchant_id, quoted_price, status, payment_status, escrow_status, updated_at, created_at')
+    .in('merchant_id', merchantKeys)
+    .eq('payment_status', 'released')
+    .order('updated_at', { ascending: false })
+    .limit(500)
 
-  return (data as ServiceBookingRow[])
+  const byEscrowStatusResult = await (supabase.from('service_bookings') as any)
+    .select('id, merchant_id, quoted_price, status, payment_status, escrow_status, updated_at, created_at')
+    .in('merchant_id', merchantKeys)
+    .eq('escrow_status', 'released')
+    .order('updated_at', { ascending: false })
+    .limit(500)
+
+  const merged = [
+    ...(Array.isArray(byStatusResult.data) ? byStatusResult.data : []),
+    ...(Array.isArray(byPaymentStatusResult.data) ? byPaymentStatusResult.data : []),
+    ...(Array.isArray(byEscrowStatusResult.data) ? byEscrowStatusResult.data : []),
+  ]
+
+  if (byStatusResult.error && byPaymentStatusResult.error && byEscrowStatusResult.error) {
+    return [] as WalletTransaction[]
+  }
+
+  const byId = new Map<string, ServiceBookingRow>()
+  for (const row of merged as ServiceBookingRow[]) {
+    const id = String(row?.id || '').trim()
+    if (!id) continue
+    byId.set(id, row)
+  }
+
+  return Array.from(byId.values())
     .map((row) => ({
       id: `service-${String(row.id || '')}`,
       order_id: null,
@@ -222,30 +281,50 @@ export async function getMerchantWalletDiagnostics(merchantId: string) {
     const txResult = await (supabase.from('transactions') as any)
       .select('id', { count: 'exact', head: true })
       .in('merchant_id', merchantKeys)
-    if (txResult.error) transactionError = String(txResult.error.message || txResult.error)
+    if (txResult.error) transactionError = formatErrorMessage(txResult.error)
     else transactionsCount = Number(txResult.count || 0)
 
-    const orderResult = await (supabase.from('orders') as any)
+    const deliveredCountResult = await (supabase.from('orders') as any)
       .select('id', { count: 'exact', head: true })
       .in('merchant_id', merchantKeys)
-      .or('status.in.(delivered,completed),escrow_status.eq.released')
-    if (orderResult.error) ordersError = String(orderResult.error.message || orderResult.error)
-    else settledOrdersCount = Number(orderResult.count || 0)
+      .in('status', ['delivered', 'completed'])
+    const releasedCountResult = await (supabase.from('orders') as any)
+      .select('id', { count: 'exact', head: true })
+      .in('merchant_id', merchantKeys)
+      .eq('escrow_status', 'released')
+
+    if (deliveredCountResult.error && releasedCountResult.error) {
+      ordersError = formatErrorMessage(deliveredCountResult.error) || formatErrorMessage(releasedCountResult.error)
+    } else {
+      settledOrdersCount = Number(deliveredCountResult.count || 0) + Number(releasedCountResult.count || 0)
+    }
 
     const escrowResult = await (supabase.from('escrow') as any)
       .select('id', { count: 'exact', head: true })
       .in('recipient_id', merchantKeys)
       .eq('status', 'released')
       .eq('type', 'product')
-    if (escrowResult.error) escrowError = String(escrowResult.error.message || escrowResult.error)
+    if (escrowResult.error) escrowError = formatErrorMessage(escrowResult.error)
     else releasedEscrowCount = Number(escrowResult.count || 0)
 
-    const serviceBookingsResult = await (supabase.from('service_bookings') as any)
+    const serviceByStatusCount = await (supabase.from('service_bookings') as any)
       .select('id', { count: 'exact', head: true })
       .in('merchant_id', merchantKeys)
-      .or('status.eq.released,payment_status.eq.released,escrow_status.eq.released')
-    if (serviceBookingsResult.error) serviceBookingsError = String(serviceBookingsResult.error.message || serviceBookingsResult.error)
-    else releasedServiceBookingsCount = Number(serviceBookingsResult.count || 0)
+      .eq('status', 'released')
+    const serviceByPaymentCount = await (supabase.from('service_bookings') as any)
+      .select('id', { count: 'exact', head: true })
+      .in('merchant_id', merchantKeys)
+      .eq('payment_status', 'released')
+    const serviceByEscrowCount = await (supabase.from('service_bookings') as any)
+      .select('id', { count: 'exact', head: true })
+      .in('merchant_id', merchantKeys)
+      .eq('escrow_status', 'released')
+
+    if (serviceByStatusCount.error && serviceByPaymentCount.error && serviceByEscrowCount.error) {
+      serviceBookingsError = formatErrorMessage(serviceByStatusCount.error) || formatErrorMessage(serviceByPaymentCount.error) || formatErrorMessage(serviceByEscrowCount.error)
+    } else {
+      releasedServiceBookingsCount = Number(serviceByStatusCount.count || 0) + Number(serviceByPaymentCount.count || 0) + Number(serviceByEscrowCount.count || 0)
+    }
 
     return {
       success: true,
