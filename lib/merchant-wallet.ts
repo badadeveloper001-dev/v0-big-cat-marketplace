@@ -14,6 +14,20 @@ type WalletTransaction = {
   created_at?: string | null
 }
 
+type WalletOrder = {
+  id: string
+  merchant_id?: string | null
+  status?: string | null
+  escrow_status?: string | null
+  grand_total?: number | null
+  total_amount?: number | null
+  product_total?: number | null
+  delivery_fee?: number | null
+  order_items?: any[] | null
+  items?: any[] | null
+  created_at?: string | null
+}
+
 function toAmount(value: unknown) {
   const parsed = Number(value || 0)
   return Number.isFinite(parsed) ? parsed : 0
@@ -27,6 +41,45 @@ function isCompletedStatus(value: unknown) {
   const status = String(value || '').toLowerCase().trim()
   if (!status) return true
   return status === 'completed' || status === 'success' || status === 'settled'
+}
+
+function isSettledOrder(order: WalletOrder) {
+  const status = String(order?.status || '').toLowerCase().trim()
+  const escrow = String(order?.escrow_status || '').toLowerCase().trim()
+  return status === 'delivered' || status === 'completed' || escrow === 'released'
+}
+
+function getOrderPayoutAmount(order: WalletOrder) {
+  const orderItems = Array.isArray(order.order_items)
+    ? order.order_items
+    : Array.isArray(order.items)
+      ? order.items
+      : []
+
+  const itemsTotal = orderItems.reduce((sum: number, item: any) => {
+    const quantity = Math.max(1, toAmount(item?.quantity || 1))
+    const lineTotal = toAmount(item?.total_price || 0)
+    const unitAmount = toAmount(item?.unit_price || item?.price || 0)
+    if (lineTotal > 0) return sum + lineTotal
+    if (unitAmount > 0) return sum + (unitAmount * quantity)
+    return sum
+  }, 0)
+
+  const deliveryFee = Math.max(0, toAmount(order.delivery_fee))
+  const grandTotal = Math.max(0, toAmount(order.grand_total ?? order.total_amount))
+  const productTotal = Math.max(0, toAmount(order.product_total))
+  return Math.max(0, itemsTotal || productTotal || (grandTotal - deliveryFee))
+}
+
+async function getSettledOrdersForMerchant(supabase: any, merchantId: string) {
+  const { data, error } = await (supabase.from('orders') as any)
+    .select('id, merchant_id, status, escrow_status, grand_total, total_amount, product_total, delivery_fee, order_items, items, created_at')
+    .eq('merchant_id', merchantId)
+    .or('status.in.(delivered,completed),escrow_status.eq.released')
+    .order('created_at', { ascending: true })
+
+  if (error || !Array.isArray(data)) return [] as WalletOrder[]
+  return (data as WalletOrder[]).filter((order) => isSettledOrder(order))
 }
 
 function computeBalanceFromTransactions(rows: WalletTransaction[]) {
@@ -85,20 +138,14 @@ export async function backfillMerchantWalletFromOrders(merchantId: string) {
   try {
     const supabase = await createClient()
 
-    // Get all delivered/completed orders for this merchant
-    const { data: orders, error: ordersError } = await (supabase.from('orders') as any)
-      .select('id, merchant_id, status, escrow_status, grand_total, total_amount, product_total, delivery_fee, order_items, items, created_at')
-      .eq('merchant_id', id)
-      .in('status', ['delivered', 'completed'])
-      .order('created_at', { ascending: true })
-
-    if (ordersError || !Array.isArray(orders) || orders.length === 0) return
+    const orders = await getSettledOrdersForMerchant(supabase, id)
+    if (orders.length === 0) return
 
     // Get already-credited order IDs so we don't double-credit
     const { data: existingTx, error: txError } = await (supabase.from('transactions') as any)
       .select('order_id')
       .eq('merchant_id', id)
-      .in('type', ['escrow_release', 'payment'])
+      .in('type', ['escrow_release', 'payment', 'wallet_credit'])
       .not('order_id', 'is', null)
 
     const creditedOrderIds = new Set<string>(
@@ -110,25 +157,7 @@ export async function backfillMerchantWalletFromOrders(merchantId: string) {
       const orderId = String(order.id || '')
       if (!orderId || creditedOrderIds.has(orderId)) continue
 
-      const orderItems = Array.isArray(order.order_items)
-        ? order.order_items
-        : Array.isArray(order.items)
-          ? order.items
-          : []
-
-      const itemsTotal = orderItems.reduce((sum: number, item: any) => {
-        const quantity = Math.max(1, toAmount(item?.quantity || 1))
-        const lineTotal = toAmount(item?.total_price || 0)
-        const unitAmount = toAmount(item?.unit_price || item?.price || 0)
-        if (lineTotal > 0) return sum + lineTotal
-        if (unitAmount > 0) return sum + (unitAmount * quantity)
-        return sum
-      }, 0)
-
-      const deliveryFee = Math.max(0, toAmount(order.delivery_fee))
-      const grandTotal = Math.max(0, toAmount(order.grand_total ?? order.total_amount))
-      const productTotal = Math.max(0, toAmount(order.product_total))
-      const amount = Math.max(0, itemsTotal || productTotal || (grandTotal - deliveryFee))
+      const amount = getOrderPayoutAmount(order)
 
       if (amount <= 0) continue
 
@@ -161,12 +190,39 @@ export async function getMerchantWalletOverview(merchantId: string, options?: { 
 
     const rows = (data || []) as WalletTransaction[]
     const completedRows = rows.filter((tx) => isCompletedStatus(tx.status))
-    const balance = computeBalanceFromTransactions(completedRows)
+
+    // Derive settled-order credits that are missing from transactions,
+    // so merchants still see correct balance even if insert policies failed.
+    const settledOrders = await getSettledOrdersForMerchant(supabase, id)
+    const creditedOrderIds = new Set(
+      completedRows
+        .filter((tx) => CREDIT_TYPES.includes(normalizeType(tx.type)))
+        .map((tx) => String(tx.order_id || '').trim())
+        .filter(Boolean)
+    )
+
+    const syntheticCredits: WalletTransaction[] = settledOrders
+      .filter((order) => !creditedOrderIds.has(String(order.id || '').trim()))
+      .map((order) => ({
+        id: `derived-${String(order.id || '')}`,
+        order_id: String(order.id || ''),
+        merchant_id: id,
+        type: 'wallet_credit',
+        amount: getOrderPayoutAmount(order),
+        reason: `Derived payout for settled order ${String(order.id || '')}`,
+        status: 'completed',
+        created_at: order.created_at || new Date().toISOString(),
+      }))
+      .filter((tx) => toAmount(tx.amount) > 0)
+
+    const rowsWithDerived = [...rows, ...syntheticCredits]
+    const completedRowsWithDerived = rowsWithDerived.filter((tx) => isCompletedStatus(tx.status))
+    const balance = computeBalanceFromTransactions(completedRowsWithDerived)
 
     return {
       success: true,
       balance: Math.max(0, balance),
-      transactions: rows,
+      transactions: rowsWithDerived,
       withdrawalHistory: rows.filter((tx) => DEBIT_TYPES.includes(normalizeType(tx.type))),
     }
   } catch (error: any) {
@@ -194,7 +250,7 @@ export async function creditMerchantWalletFromEscrow(params: {
       .select('id, type, amount, status')
       .eq('order_id', orderId)
       .eq('merchant_id', merchantId)
-      .in('type', ['escrow_release', 'payment'])
+      .in('type', ['escrow_release', 'payment', 'wallet_credit'])
       .maybeSingle()
 
     if (!checkError && existing && isCompletedStatus(existing.status)) {

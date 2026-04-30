@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { ArrowLeft, AlertCircle, CheckCircle2, Loader2, Wallet, Landmark, ShieldCheck } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
 
 interface WithdrawalRecord {
@@ -101,6 +101,7 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
   const amount = Number(withdrawalAmount) || 0
   const fee = Math.round(amount * (WITHDRAWAL_FEE_PERCENT / 100))
   const netAmount = amount - fee
+  const quickAmounts = [5000, 10000, 25000, 50000].filter((value) => value <= liveWalletBalance)
 
   const canProceed = () => {
     if (step === 'account') {
@@ -209,12 +210,43 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center overflow-y-auto">
-      <div className="bg-background rounded-2xl p-6 max-w-md w-full my-8">
+      <div className="bg-background rounded-2xl p-6 max-w-md w-full my-8 border border-border shadow-xl">
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-bold text-foreground">Withdraw Funds</h2>
           <button onClick={onBack} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-5 h-5" />
           </button>
+        </div>
+
+        <div className="mb-5 rounded-2xl bg-gradient-to-br from-primary/15 via-primary/5 to-transparent border border-primary/20 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Wallet Balance</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{formatNaira(liveWalletBalance)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Withdrawable now</p>
+            </div>
+            <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
+              <Wallet className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-5 grid grid-cols-3 gap-2">
+          {[
+            { id: 'account', label: 'Bank' },
+            { id: 'amount', label: 'Amount' },
+            { id: 'confirm', label: 'Confirm' },
+          ].map((item) => {
+            const active = step === item.id
+            return (
+              <div
+                key={item.id}
+                className={`rounded-xl px-3 py-2 text-center text-xs font-medium border ${active ? 'bg-primary text-white border-primary' : 'bg-muted/50 text-muted-foreground border-border'}`}
+              >
+                {item.label}
+              </div>
+            )
+          })}
         </div>
 
         {/* Step 1: Bank Account */}
@@ -250,6 +282,12 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
                 <option value="Other">Other</option>
               </select>
             </div>
+
+            <div className="rounded-xl bg-muted/50 border border-border p-3 text-xs text-muted-foreground flex items-start gap-2">
+              <Landmark className="w-4 h-4 mt-0.5 text-primary" />
+              <p>Bank details are saved to your device for faster future withdrawals.</p>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-foreground mb-1">Account Number (10 digits)</label>
               <input
@@ -280,10 +318,28 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
         {/* Step 2: Amount */}
         {step === 'amount' && (
           <div className="space-y-4">
-            <div className="bg-secondary/30 rounded-xl p-3 text-sm">
+            <div className="bg-secondary/30 rounded-xl p-3 text-sm border border-border">
               <p className="text-muted-foreground mb-1">Available Balance</p>
               <p className="font-bold text-foreground text-lg">{formatNaira(liveWalletBalance)}</p>
             </div>
+
+            {quickAmounts.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-foreground mb-2">Quick amounts</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {quickAmounts.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setWithdrawalAmount(String(value))}
+                      className="rounded-lg border border-border bg-background hover:bg-muted px-3 py-2 text-xs font-semibold text-foreground"
+                    >
+                      {formatNaira(value)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-medium text-foreground mb-1">Amount to Withdraw</label>
@@ -369,7 +425,7 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 space-y-1">
-              <p className="font-semibold">Instant Transfer</p>
+              <p className="font-semibold flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" /> Secure Transfer</p>
               <p>Funds will be transferred to your bank account within 24 hours.</p>
             </div>
 
