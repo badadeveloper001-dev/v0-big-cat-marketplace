@@ -29,7 +29,7 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
   const [lastLoaded, setLastLoaded] = useState<string>("")
 
   const isMerchant = user?.role === "merchant"
-  const merchantId = String(user?.userId || "").trim()
+  const merchantId = String(user?.email || user?.userId || "").trim()
 
   const loadMerchantWallet = async () => {
     if (!merchantId) {

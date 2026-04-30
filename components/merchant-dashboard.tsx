@@ -117,6 +117,7 @@ export function MerchantDashboard() {
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [reportMonth, setReportMonth] = useState(() => formatMonthValue(new Date()))
   const merchantKind = user?.merchantType || user?.merchantProfile?.merchant_type || 'products'
+  const walletMerchantId = String(user?.email || user?.userId || '').trim()
   const isServiceMerchant = merchantKind === 'services'
 
   useEffect(() => {
@@ -459,7 +460,7 @@ export function MerchantDashboard() {
           fetch(`/api/merchant/tokens?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
           }),
-          fetch(`/api/merchant/wallet?merchantId=${encodeURIComponent(user.userId)}`, {
+          fetch(`/api/merchant/wallet?merchantId=${encodeURIComponent(walletMerchantId || user.userId)}`, {
             cache: 'no-store',
           }),
           fetch(`/api/orders/merchant?merchantId=${encodeURIComponent(user.userId)}`, {
@@ -631,7 +632,7 @@ export function MerchantDashboard() {
       // Reload live wallet balance after fetching orders so the stat card stays fresh
       let liveWalletBalance = 0
       try {
-        const walletResp = await fetch(`/api/merchant/wallet?merchantId=${encodeURIComponent(user.userId)}`, { cache: 'no-store' })
+        const walletResp = await fetch(`/api/merchant/wallet?merchantId=${encodeURIComponent(walletMerchantId || user.userId)}`, { cache: 'no-store' })
         const walletJson = await walletResp.json()
         if (walletJson?.success) {
           liveWalletBalance = Number(walletJson.balance || 0)
@@ -1244,7 +1245,7 @@ export function MerchantDashboard() {
 
   if (showWithdrawal) {
     return <MerchantWithdrawal 
-      merchantId={user?.userId || ""} 
+      merchantId={walletMerchantId || user?.userId || ""} 
       walletBalance={walletBalance}
       onBack={() => setShowWithdrawal(false)}
       onSuccess={() => {
