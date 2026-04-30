@@ -39,6 +39,17 @@ type EscrowRow = {
   created_at?: string | null
 }
 
+type ServiceBookingRow = {
+  id: string
+  merchant_id?: string | null
+  quoted_price?: number | null
+  status?: string | null
+  payment_status?: string | null
+  escrow_status?: string | null
+  updated_at?: string | null
+  created_at?: string | null
+}
+
 function toAmount(value: unknown) {
   const parsed = Number(value || 0)
   return Number.isFinite(parsed) ? parsed : 0
@@ -165,6 +176,32 @@ async function getReleasedEscrowCreditsForMerchant(supabase: any, merchantKeys: 
     .filter((row) => toAmount(row.amount) > 0)
 }
 
+async function getReleasedServiceBookingCreditsForMerchant(supabase: any, merchantKeys: string[]) {
+  if (!Array.isArray(merchantKeys) || merchantKeys.length === 0) return [] as WalletTransaction[]
+
+  const { data, error } = await (supabase.from('service_bookings') as any)
+    .select('id, merchant_id, quoted_price, status, payment_status, escrow_status, updated_at, created_at')
+    .in('merchant_id', merchantKeys)
+    .or('status.eq.released,payment_status.eq.released,escrow_status.eq.released')
+    .order('updated_at', { ascending: false })
+    .limit(500)
+
+  if (error || !Array.isArray(data)) return [] as WalletTransaction[]
+
+  return (data as ServiceBookingRow[])
+    .map((row) => ({
+      id: `service-${String(row.id || '')}`,
+      order_id: null,
+      merchant_id: String(row.merchant_id || ''),
+      type: 'wallet_credit',
+      amount: Math.max(0, toAmount(row.quoted_price)),
+      reason: `Service booking released payout (${String(row.id || '')})`,
+      status: 'completed',
+      created_at: row.updated_at || row.created_at || new Date().toISOString(),
+    }))
+    .filter((row) => toAmount(row.amount) > 0)
+}
+
 export async function getMerchantWalletDiagnostics(merchantId: string) {
   const id = String(merchantId || '').trim()
   if (!id) return { success: false, error: 'Merchant id is required' }
@@ -176,9 +213,11 @@ export async function getMerchantWalletDiagnostics(merchantId: string) {
     let transactionsCount = 0
     let settledOrdersCount = 0
     let releasedEscrowCount = 0
+    let releasedServiceBookingsCount = 0
     let transactionError: string | null = null
     let ordersError: string | null = null
     let escrowError: string | null = null
+    let serviceBookingsError: string | null = null
 
     const txResult = await (supabase.from('transactions') as any)
       .select('id', { count: 'exact', head: true })
@@ -201,6 +240,13 @@ export async function getMerchantWalletDiagnostics(merchantId: string) {
     if (escrowResult.error) escrowError = String(escrowResult.error.message || escrowResult.error)
     else releasedEscrowCount = Number(escrowResult.count || 0)
 
+    const serviceBookingsResult = await (supabase.from('service_bookings') as any)
+      .select('id', { count: 'exact', head: true })
+      .in('merchant_id', merchantKeys)
+      .or('status.eq.released,payment_status.eq.released,escrow_status.eq.released')
+    if (serviceBookingsResult.error) serviceBookingsError = String(serviceBookingsResult.error.message || serviceBookingsResult.error)
+    else releasedServiceBookingsCount = Number(serviceBookingsResult.count || 0)
+
     return {
       success: true,
       merchantInput: id,
@@ -208,10 +254,12 @@ export async function getMerchantWalletDiagnostics(merchantId: string) {
       transactionsCount,
       settledOrdersCount,
       releasedEscrowCount,
+      releasedServiceBookingsCount,
       errors: {
         transactions: transactionError,
         orders: ordersError,
         escrow: escrowError,
+        serviceBookings: serviceBookingsError,
       },
     }
   } catch (error: any) {
@@ -384,7 +432,9 @@ export async function getMerchantWalletOverview(merchantId: string, options?: { 
       return orderId ? (!creditedOrderIds.has(orderId) && !syntheticOrderIds.has(orderId)) : true
     })
 
-    const rowsWithDerived = [...rows, ...syntheticCredits, ...escrowCreditsFiltered]
+    const serviceCredits = await getReleasedServiceBookingCreditsForMerchant(supabase, merchantKeys)
+
+    const rowsWithDerived = [...rows, ...syntheticCredits, ...escrowCreditsFiltered, ...serviceCredits]
     const completedRowsWithDerived = rowsWithDerived.filter((tx) => isCompletedStatus(tx.status))
     const balance = computeBalanceFromTransactions(completedRowsWithDerived)
 
