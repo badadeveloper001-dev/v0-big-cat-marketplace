@@ -37,6 +37,12 @@ function normalizeType(value: unknown) {
   return String(value || '').toLowerCase().trim()
 }
 
+function isMissingTransactionsTable(error: any) {
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes("could not find the table 'public.transactions'")
+    || message.includes('relation "public.transactions" does not exist')
+}
+
 function isCompletedStatus(value: unknown) {
   const status = String(value || '').toLowerCase().trim()
   if (!status) return true
@@ -170,6 +176,11 @@ export async function backfillMerchantWalletFromOrders(merchantId: string) {
       .in('type', ['escrow_release', 'payment', 'wallet_credit'])
       .not('order_id', 'is', null)
 
+    if (txError && isMissingTransactionsTable(txError)) {
+      // No transactions table in this environment; skip backfill writes.
+      return
+    }
+
     const creditedOrderIds = new Set<string>(
       txError ? [] : (existingTx || []).map((tx: any) => String(tx.order_id || '')).filter(Boolean)
     )
@@ -215,9 +226,15 @@ export async function getMerchantWalletOverview(merchantId: string, options?: { 
       .order('created_at', { ascending: false })
       .limit(Math.max(1, Math.min(options?.limit || 100, 500)))
 
-    if (error) throw error
+    let rows = [] as WalletTransaction[]
+    if (error) {
+      if (!isMissingTransactionsTable(error)) {
+        throw error
+      }
+    } else {
+      rows = (data || []) as WalletTransaction[]
+    }
 
-    const rows = (data || []) as WalletTransaction[]
     const completedRows = rows.filter((tx) => isCompletedStatus(tx.status))
 
     // Derive settled-order credits that are missing from transactions,
@@ -393,6 +410,14 @@ export async function createMerchantWithdrawal(params: {
     if (result.success) {
       inserted = { ...result.data, type: payload.type, amount }
       break
+    }
+
+    if (isMissingTransactionsTable(result.error)) {
+      return {
+        success: false,
+        error: 'Withdrawals are temporarily unavailable while wallet transaction storage is being configured.',
+        balance: overview.balance,
+      }
     }
   }
 
