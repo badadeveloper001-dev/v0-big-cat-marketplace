@@ -640,9 +640,10 @@ export function MerchantDashboard() {
       } catch { /* ignore */ }
 
       const statsData = [
+        { label: "Total Cost Price", value: formatNaira(totalInventoryCost), change: `${merchantProducts.length} products`, trend: "up", icon: NairaIcon },
         { label: "Total Sales", value: formatNaira(totalSales), change: `${releasedOrders.length} orders released`, trend: "up", icon: NairaIcon },
-        { label: "Wallet Balance", value: formatNaira(liveWalletBalance), change: "Available to withdraw", trend: "up", icon: NairaIcon, action: () => setShowWithdrawal(true) },
         { label: profitLoss >= 0 ? "Profit" : "Loss", value: profitValue, valueClass: profitLoss >= 0 ? "text-primary" : "text-destructive", change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
+        { label: "Wallet Balance", value: formatNaira(liveWalletBalance), change: "Tap to withdraw", trend: "up", icon: NairaIcon, action: () => setShowWithdrawal(true) },
         { label: "Escrow Balance", value: formatNaira(escrowBalance), change: nextTokenBalance > 0 ? `${nextTokenBalance} tokens` : "Held safely", trend: "up", icon: Clock },
       ]
       setStats(statsData)
@@ -1484,10 +1485,10 @@ export function MerchantDashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {stats.map((stat) => (
+              {stats.map((stat, idx) => (
                 <div
                   key={stat.label}
-                  className={`bg-card border border-border rounded-2xl p-4 shadow-sm ${stat.action ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''}`}
+                  className={`bg-card border border-border rounded-2xl p-4 shadow-sm ${stat.action ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''} ${stats.length % 2 !== 0 && idx === stats.length - 1 ? 'col-span-2' : ''}`}
                   onClick={stat.action}
                 >
                   <div className="flex items-center justify-between mb-3">

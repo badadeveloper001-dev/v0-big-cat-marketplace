@@ -201,7 +201,8 @@ export async function creditMerchantWalletFromEscrow(params: {
       return { success: true, skipped: true, reason: 'Escrow credit already recorded for this order' }
     }
 
-    // Try escrow_release first. If DB enum blocks this custom type, fall back to payment.
+    // Try escrow_release → payment → wallet_credit in order.
+    // wallet_credit is guaranteed to be in CREDIT_TYPES and is the safest enum value.
     const attempts = [
       {
         order_id: orderId,
@@ -221,6 +222,15 @@ export async function creditMerchantWalletFromEscrow(params: {
         status: 'completed',
         created_at: new Date().toISOString(),
       },
+      {
+        order_id: orderId,
+        merchant_id: merchantId,
+        type: 'wallet_credit',
+        amount,
+        reason: params.reason || `Escrow released for order ${orderId}`,
+        status: 'completed',
+        created_at: new Date().toISOString(),
+      },
     ]
 
     let lastError: any = null
@@ -232,6 +242,7 @@ export async function creditMerchantWalletFromEscrow(params: {
       lastError = inserted.error
     }
 
+    console.error('[wallet] creditMerchantWalletFromEscrow: all type attempts failed', { orderId, merchantId, amount, lastError })
     return { success: false, error: String(lastError || 'Failed to credit merchant wallet') }
   } catch (error: any) {
     return { success: false, error: error?.message || 'Failed to credit merchant wallet' }
