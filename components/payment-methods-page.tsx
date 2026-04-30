@@ -23,12 +23,15 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
   const { user } = useRole()
   const [loading, setLoading] = useState(true)
   const [showWithdraw, setShowWithdraw] = useState(false)
+  const [fundAmount, setFundAmount] = useState("5000")
+  const [funding, setFunding] = useState(false)
   const [balance, setBalance] = useState(0)
   const [transactions, setTransactions] = useState<WalletTransactionRow[]>([])
   const [error, setError] = useState("")
   const [lastLoaded, setLastLoaded] = useState<string>("")
 
   const isMerchant = user?.role === "merchant"
+  const authUserId = String(user?.userId || "").trim()
   const merchantId = String(user?.email || user?.userId || "").trim()
 
   const loadMerchantWallet = async () => {
@@ -77,6 +80,47 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
 
   const creditTypes = new Set(["wallet_credit", "escrow_release", "payment"])
   const debitTypes = new Set(["withdrawal", "wallet_debit"])
+
+  const handleFundWallet = async () => {
+    const amount = Number(fundAmount || 0)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a valid funding amount')
+      return
+    }
+
+    if (!authUserId || !merchantId) {
+      setError('Merchant identity is missing. Please sign in again.')
+      return
+    }
+
+    setFunding(true)
+    setError("")
+    try {
+      const response = await fetch('/api/merchant/wallet/fund', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          authUserId,
+          merchantId,
+          amount,
+          reason: `Merchant funded wallet with ${formatNaira(amount)}`,
+        }),
+      })
+
+      const result = await response.json()
+      if (!result?.success) {
+        setError(result?.error || 'Failed to fund wallet')
+        return
+      }
+
+      setFundAmount('5000')
+      await loadMerchantWallet()
+    } catch {
+      setError('Could not fund wallet. Please try again.')
+    } finally {
+      setFunding(false)
+    }
+  }
 
   const totalIn = transactions.reduce((sum, tx) => {
     const type = String(tx.type || "").toLowerCase().trim()
@@ -170,15 +214,35 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="w-full rounded-xl border border-border bg-muted/50 py-3 px-4">
+                  <label className="text-xs text-muted-foreground block mb-1">Add Funds</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={fundAmount}
+                      onChange={(event) => setFundAmount(event.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                      placeholder="Amount"
+                    />
+                    <button
+                      onClick={handleFundWallet}
+                      disabled={funding}
+                      className="rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {funding ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
+                </div>
                 <button
                   onClick={() => setShowWithdraw(true)}
                   className="w-full rounded-xl bg-primary text-primary-foreground font-semibold py-3 hover:opacity-90 transition-opacity"
                 >
                   Withdraw Funds
                 </button>
-                <div className="w-full rounded-xl border border-border bg-muted/50 py-3 px-4 text-sm text-muted-foreground flex items-center gap-2">
+                <div className="w-full rounded-xl border border-border bg-muted/50 py-3 px-4 text-sm text-muted-foreground flex items-center gap-2 sm:col-span-2">
                   <Landmark className="w-4 h-4" />
-                  Bank transfer settling within 24 hours
+                  Wallet funding is instant after confirmation. Bank transfer withdrawals settle within 24 hours.
                 </div>
               </div>
 

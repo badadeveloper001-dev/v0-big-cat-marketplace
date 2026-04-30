@@ -684,3 +684,67 @@ export async function createMerchantWithdrawal(params: {
     transaction: inserted,
   }
 }
+
+export async function createMerchantWalletFunding(params: {
+  merchantId: string
+  amount: number
+  reason?: string
+}) {
+  const merchantId = String(params.merchantId || '').trim()
+  const amount = Math.max(0, toAmount(params.amount))
+  const reason = String(params.reason || '').trim() || 'Wallet funding'
+
+  if (!merchantId || amount <= 0) {
+    return { success: false, error: 'merchantId and amount are required', balance: 0 }
+  }
+
+  const overview = await getMerchantWalletOverview(merchantId, { limit: 300 })
+  const currentBalance = overview.success ? Math.max(0, toAmount(overview.balance)) : 0
+
+  const supabase = await createClient()
+  const payloadAttempts = [
+    {
+      merchant_id: merchantId,
+      type: 'wallet_credit',
+      amount,
+      reason,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+    },
+    {
+      merchant_id: merchantId,
+      type: 'payment',
+      amount,
+      reason,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+    },
+  ]
+
+  let inserted: any = null
+  for (const payload of payloadAttempts) {
+    const result = await insertTransactionWithFallback(supabase, payload)
+    if (result.success) {
+      inserted = { ...result.data, type: payload.type, amount }
+      break
+    }
+
+    if (isMissingTransactionsTable(result.error)) {
+      return {
+        success: false,
+        error: 'Wallet funding is temporarily unavailable while wallet transaction storage is being configured.',
+        balance: currentBalance,
+      }
+    }
+  }
+
+  if (!inserted) {
+    return { success: false, error: 'Failed to record wallet funding transaction', balance: currentBalance }
+  }
+
+  return {
+    success: true,
+    balance: currentBalance + amount,
+    transaction: inserted,
+  }
+}
