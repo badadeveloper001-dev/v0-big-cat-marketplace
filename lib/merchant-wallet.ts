@@ -78,6 +78,73 @@ async function insertTransactionWithFallback(supabase: any, payload: Record<stri
   return { success: false, error: lastError?.message || 'Failed to record transaction' }
 }
 
+export async function backfillMerchantWalletFromOrders(merchantId: string) {
+  const id = String(merchantId || '').trim()
+  if (!id) return
+
+  try {
+    const supabase = await createClient()
+
+    // Get all delivered/completed orders for this merchant
+    const { data: orders, error: ordersError } = await (supabase.from('orders') as any)
+      .select('id, merchant_id, status, escrow_status, grand_total, total_amount, product_total, delivery_fee, order_items, items, created_at')
+      .eq('merchant_id', id)
+      .in('status', ['delivered', 'completed'])
+      .order('created_at', { ascending: true })
+
+    if (ordersError || !Array.isArray(orders) || orders.length === 0) return
+
+    // Get already-credited order IDs so we don't double-credit
+    const { data: existingTx, error: txError } = await (supabase.from('transactions') as any)
+      .select('order_id')
+      .eq('merchant_id', id)
+      .in('type', ['escrow_release', 'payment'])
+      .not('order_id', 'is', null)
+
+    const creditedOrderIds = new Set<string>(
+      txError ? [] : (existingTx || []).map((tx: any) => String(tx.order_id || '')).filter(Boolean)
+    )
+
+    // Credit each uncredited delivered order
+    for (const order of orders) {
+      const orderId = String(order.id || '')
+      if (!orderId || creditedOrderIds.has(orderId)) continue
+
+      const orderItems = Array.isArray(order.order_items)
+        ? order.order_items
+        : Array.isArray(order.items)
+          ? order.items
+          : []
+
+      const itemsTotal = orderItems.reduce((sum: number, item: any) => {
+        const quantity = Math.max(1, toAmount(item?.quantity || 1))
+        const lineTotal = toAmount(item?.total_price || 0)
+        const unitAmount = toAmount(item?.unit_price || item?.price || 0)
+        if (lineTotal > 0) return sum + lineTotal
+        if (unitAmount > 0) return sum + (unitAmount * quantity)
+        return sum
+      }, 0)
+
+      const deliveryFee = Math.max(0, toAmount(order.delivery_fee))
+      const grandTotal = Math.max(0, toAmount(order.grand_total ?? order.total_amount))
+      const productTotal = Math.max(0, toAmount(order.product_total))
+      const amount = Math.max(0, itemsTotal || productTotal || (grandTotal - deliveryFee))
+
+      if (amount <= 0) continue
+
+      await creditMerchantWalletFromEscrow({
+        supabase,
+        orderId,
+        merchantId: id,
+        amount,
+        reason: `Backfill: escrow payout for order ${orderId}`,
+      })
+    }
+  } catch {
+    // Silently fail — backfill is best-effort
+  }
+}
+
 export async function getMerchantWalletOverview(merchantId: string, options?: { limit?: number }) {
   const id = String(merchantId || '').trim()
   if (!id) return { success: false, error: 'Merchant id is required', balance: 0, transactions: [] as WalletTransaction[] }

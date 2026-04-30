@@ -628,9 +628,20 @@ export function MerchantDashboard() {
         ? formatNaira(profitLoss)
         : `-${formatNaira(Math.abs(profitLoss))}`
 
+      // Reload live wallet balance after fetching orders so the stat card stays fresh
+      let liveWalletBalance = 0
+      try {
+        const walletResp = await fetch(`/api/merchant/wallet?merchantId=${encodeURIComponent(user.userId)}`, { cache: 'no-store' })
+        const walletJson = await walletResp.json()
+        if (walletJson?.success) {
+          liveWalletBalance = Number(walletJson.balance || 0)
+          setWalletBalance(liveWalletBalance)
+        }
+      } catch { /* ignore */ }
+
       const statsData = [
-        { label: "Total Cost Price", value: formatNaira(totalInventoryCost), change: `${merchantProducts.length} products`, trend: "up", icon: NairaIcon },
-        { label: "Total Sales", value: formatNaira(totalSales), change: `${releasedOrders.length} released`, trend: "up", icon: NairaIcon },
+        { label: "Total Sales", value: formatNaira(totalSales), change: `${releasedOrders.length} orders released`, trend: "up", icon: NairaIcon },
+        { label: "Wallet Balance", value: formatNaira(liveWalletBalance), change: "Available to withdraw", trend: "up", icon: NairaIcon, action: () => setShowWithdrawal(true) },
         { label: profitLoss >= 0 ? "Profit" : "Loss", value: profitValue, valueClass: profitLoss >= 0 ? "text-primary" : "text-destructive", change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
         { label: "Escrow Balance", value: formatNaira(escrowBalance), change: nextTokenBalance > 0 ? `${nextTokenBalance} tokens` : "Held safely", trend: "up", icon: Clock },
       ]
@@ -1476,7 +1487,8 @@ export function MerchantDashboard() {
               {stats.map((stat) => (
                 <div
                   key={stat.label}
-                  className="bg-card border border-border rounded-2xl p-4 shadow-sm"
+                  className={`bg-card border border-border rounded-2xl p-4 shadow-sm ${stat.action ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''}`}
+                  onClick={stat.action}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10">
