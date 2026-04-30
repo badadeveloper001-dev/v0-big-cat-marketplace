@@ -28,6 +28,17 @@ type WalletOrder = {
   created_at?: string | null
 }
 
+type EscrowRow = {
+  id: string
+  order_id?: string | null
+  recipient_id?: string | null
+  type?: string | null
+  status?: string | null
+  amount?: number | null
+  released_at?: string | null
+  created_at?: string | null
+}
+
 function toAmount(value: unknown) {
   const parsed = Number(value || 0)
   return Number.isFinite(parsed) ? parsed : 0
@@ -106,6 +117,33 @@ async function getSettledOrdersForMerchant(supabase: any, merchantKeys: string[]
 
   if (error || !Array.isArray(data)) return [] as WalletOrder[]
   return (data as WalletOrder[]).filter((order) => isSettledOrder(order))
+}
+
+async function getReleasedEscrowCreditsForMerchant(supabase: any, merchantKeys: string[]) {
+  if (!Array.isArray(merchantKeys) || merchantKeys.length === 0) return [] as WalletTransaction[]
+
+  const { data, error } = await (supabase.from('escrow') as any)
+    .select('id, order_id, recipient_id, type, status, amount, released_at, created_at')
+    .in('recipient_id', merchantKeys)
+    .eq('status', 'released')
+    .eq('type', 'product')
+    .order('released_at', { ascending: false })
+    .limit(500)
+
+  if (error || !Array.isArray(data)) return [] as WalletTransaction[]
+
+  return (data as EscrowRow[])
+    .map((row) => ({
+      id: `escrow-${String(row.id || '')}`,
+      order_id: String(row.order_id || ''),
+      merchant_id: String(row.recipient_id || ''),
+      type: 'wallet_credit',
+      amount: Math.max(0, toAmount(row.amount)),
+      reason: `Escrow released for order ${String(row.order_id || '')}`,
+      status: 'completed',
+      created_at: row.released_at || row.created_at || new Date().toISOString(),
+    }))
+    .filter((row) => toAmount(row.amount) > 0)
 }
 
 function computeBalanceFromTransactions(rows: WalletTransaction[]) {
@@ -261,7 +299,19 @@ export async function getMerchantWalletOverview(merchantId: string, options?: { 
       }))
       .filter((tx) => toAmount(tx.amount) > 0)
 
-    const rowsWithDerived = [...rows, ...syntheticCredits]
+    const syntheticOrderIds = new Set(
+      syntheticCredits
+        .map((tx) => String(tx.order_id || '').trim())
+        .filter(Boolean)
+    )
+
+    const escrowCredits = await getReleasedEscrowCreditsForMerchant(supabase, merchantKeys)
+    const escrowCreditsFiltered = escrowCredits.filter((tx) => {
+      const orderId = String(tx.order_id || '').trim()
+      return orderId ? (!creditedOrderIds.has(orderId) && !syntheticOrderIds.has(orderId)) : true
+    })
+
+    const rowsWithDerived = [...rows, ...syntheticCredits, ...escrowCreditsFiltered]
     const completedRowsWithDerived = rowsWithDerived.filter((tx) => isCompletedStatus(tx.status))
     const balance = computeBalanceFromTransactions(completedRowsWithDerived)
 
