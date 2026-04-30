@@ -94,14 +94,33 @@ async function resolveMerchantKeys(supabase: any, merchantIdOrEmail: string) {
 
   const keys = new Set<string>([identifier])
 
-  const { data } = await (supabase.from('auth_users') as any)
+  let data: any = null
+
+  const byIdOrExactEmail = await (supabase.from('auth_users') as any)
     .select('id, email')
     .or(`id.eq.${identifier},email.eq.${identifier}`)
     .limit(1)
     .maybeSingle()
 
+  if (!byIdOrExactEmail.error && byIdOrExactEmail.data) {
+    data = byIdOrExactEmail.data
+  }
+
+  if (!data && identifier.includes('@')) {
+    const byEmailInsensitive = await (supabase.from('auth_users') as any)
+      .select('id, email')
+      .ilike('email', identifier)
+      .limit(1)
+      .maybeSingle()
+
+    if (!byEmailInsensitive.error && byEmailInsensitive.data) {
+      data = byEmailInsensitive.data
+    }
+  }
+
   if (data?.id) keys.add(String(data.id))
   if (data?.email) keys.add(String(data.email))
+  if (identifier.includes('@')) keys.add(identifier.toLowerCase())
 
   return Array.from(keys).filter(Boolean)
 }
