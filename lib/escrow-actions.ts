@@ -1,3 +1,5 @@
+import { creditMerchantWalletFromEscrow } from '@/lib/merchant-wallet'
+
 type OrderFinancialRecord = {
   id: string
   merchant_id?: string | null
@@ -277,6 +279,8 @@ export async function releaseFundsFromEscrow(
     new Date().toISOString(),
   )
 
+  const breakdown = getEscrowBreakdown({ ...order, ...persistedOrder })
+
   await persistEscrowRows(
     supabase,
     {
@@ -287,8 +291,19 @@ export async function releaseFundsFromEscrow(
     'released',
   )
 
+  const merchantId = String((persistedOrder as any)?.merchant_id || (order as any)?.merchant_id || '').trim()
+  if (merchantId && breakdown.productAmount > 0) {
+    await creditMerchantWalletFromEscrow({
+      supabase,
+      orderId: resolvedOrderId,
+      merchantId,
+      amount: breakdown.productAmount,
+      reason: `Escrow release payout for order ${resolvedOrderId}`,
+    })
+  }
+
   return {
     order: persistedOrder,
-    breakdown: getEscrowBreakdown({ ...order, ...persistedOrder }),
+    breakdown,
   }
 }

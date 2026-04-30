@@ -455,8 +455,11 @@ export function MerchantDashboard() {
       let merchantProducts: any[] = []
 
       if (user?.userId) {
-        const [tokenResponse, ordersResponse, productsResponse] = await Promise.all([
+        const [tokenResponse, walletResponse, ordersResponse, productsResponse] = await Promise.all([
           fetch(`/api/merchant/tokens?merchantId=${encodeURIComponent(user.userId)}`, {
+            cache: 'no-store',
+          }),
+          fetch(`/api/merchant/wallet?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
           }),
           fetch(`/api/orders/merchant?merchantId=${encodeURIComponent(user.userId)}`, {
@@ -468,12 +471,17 @@ export function MerchantDashboard() {
         ])
 
         const tokenResult = await tokenResponse.json()
+        const walletResult = await walletResponse.json()
         const ordersResult = await ordersResponse.json()
         const productsResult = await productsResponse.json()
 
         if (tokenResult.success) {
           nextTokenBalance = Number(tokenResult.balance || 0)
           setTokenBalance(nextTokenBalance)
+        }
+
+        if (walletResult?.success) {
+          setWalletBalance(Number(walletResult.balance || 0))
         }
 
         merchantOrders = Array.isArray(ordersResult.data)
@@ -1083,8 +1091,6 @@ export function MerchantDashboard() {
     setTokenPaymentMethod("wallet")
     setTokenBuying(false)
     if (typeof window !== "undefined" && user?.userId) {
-      const stored = localStorage.getItem(`wallet_balance_${user.userId}`)
-      setWalletBalance(stored ? parseFloat(stored) : 0)
       const card = localStorage.getItem(`demo_card_balance_${user.userId}`)
       setCardBalance(card !== null ? parseFloat(card) : 50000)
       const bank = localStorage.getItem(`demo_bank_balance_${user.userId}`)
@@ -1103,9 +1109,7 @@ export function MerchantDashboard() {
     // Check selected payment source balance
     let currentBalance = 0
     if (tokenPaymentMethod === "wallet") {
-      currentBalance = typeof window !== "undefined"
-        ? parseFloat(localStorage.getItem(`wallet_balance_${user.userId}`) || "0")
-        : 0
+      currentBalance = walletBalance
     } else if (tokenPaymentMethod === "card") {
       const raw = typeof window !== "undefined" ? localStorage.getItem(`demo_card_balance_${user.userId}`) : null
       currentBalance = raw !== null ? parseFloat(raw) : 50000
@@ -1136,20 +1140,7 @@ export function MerchantDashboard() {
       // Deduct from the chosen payment source
       const newBalance = currentBalance - price
       if (tokenPaymentMethod === "wallet") {
-        localStorage.setItem(`wallet_balance_${user.userId}`, newBalance.toString())
         setWalletBalance(newBalance)
-        // Record wallet transaction
-        const txKey = `wallet_balance_${user.userId}_transactions`
-        const txRaw = localStorage.getItem(txKey)
-        const transactions = txRaw ? JSON.parse(txRaw) : []
-        transactions.unshift({
-          id: crypto.randomUUID(),
-          type: "debit",
-          amount: price,
-          description: `Bought ${amount} tokens`,
-          date: new Date().toISOString(),
-        })
-        localStorage.setItem(txKey, JSON.stringify(transactions))
       } else if (tokenPaymentMethod === "card") {
         localStorage.setItem(`demo_card_balance_${user.userId}`, newBalance.toString())
         setCardBalance(newBalance)
@@ -1242,11 +1233,12 @@ export function MerchantDashboard() {
   if (showWithdrawal) {
     return <MerchantWithdrawal 
       merchantId={user?.userId || ""} 
-      walletBalance={tokenBalance}
+      walletBalance={walletBalance}
       onBack={() => setShowWithdrawal(false)}
       onSuccess={() => {
         setShowWithdrawal(false)
-        loadInitialData()
+        loadStats()
+        loadOrders()
       }}
     />
   }

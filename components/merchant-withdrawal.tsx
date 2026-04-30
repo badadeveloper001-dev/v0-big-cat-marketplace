@@ -33,13 +33,14 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [liveWalletBalance, setLiveWalletBalance] = useState(walletBalance)
   const [withdrawalHistory, setWithdrawalHistory] = useState<WithdrawalRecord[]>([])
 
   const getStorageKey = () => `merchant_withdrawal_history_${merchantId}`
   const getBankAccountKey = () => `merchant_bank_account_${merchantId}`
 
   useEffect(() => {
-    // Load saved bank account and withdrawal history
+    // Load saved bank account locally and wallet data from backend.
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(getBankAccountKey())
       if (saved) {
@@ -48,13 +49,54 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
         setBankName(parsed.bankName || '')
         setAccountName(parsed.accountName || '')
       }
-
-      const history = localStorage.getItem(getStorageKey())
-      if (history) {
-        setWithdrawalHistory(JSON.parse(history))
-      }
     }
-  }, [merchantId])
+
+    const loadWallet = async () => {
+      try {
+        const response = await fetch(`/api/merchant/wallet?merchantId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' })
+        const result = await response.json()
+
+        if (result?.success) {
+          setLiveWalletBalance(Number(result.balance || 0))
+          const mapped: WithdrawalRecord[] = Array.isArray(result.withdrawals)
+            ? result.withdrawals.map((item: any) => {
+                const gross = Number(item?.amount || 0)
+                const parsedFeeMatch = String(item?.reason || '').match(/Fee:\s*(\d+(?:\.\d+)?)/i)
+                const feeValue = parsedFeeMatch ? Number(parsedFeeMatch[1]) : 0
+                return {
+                  id: String(item?.id || `wd_${Date.now()}_${Math.random()}`),
+                  amount: gross,
+                  fee: feeValue,
+                  net: Math.max(0, gross - feeValue),
+                  timestamp: String(item?.created_at || new Date().toISOString()),
+                  bankAccount: String(item?.reason || 'Bank account'),
+                  status: 'completed',
+                }
+              })
+            : []
+          setWithdrawalHistory(mapped)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(getStorageKey(), JSON.stringify(mapped))
+          }
+          return
+        }
+      } catch {
+        // Fall back to local history if backend is unavailable.
+      }
+
+      if (typeof window !== 'undefined') {
+        const history = localStorage.getItem(getStorageKey())
+        if (history) {
+          setWithdrawalHistory(JSON.parse(history))
+        }
+      }
+      setLiveWalletBalance(walletBalance)
+    }
+
+    if (merchantId) {
+      loadWallet()
+    }
+  }, [merchantId, walletBalance])
 
   const amount = Number(withdrawalAmount) || 0
   const fee = Math.round(amount * (WITHDRAWAL_FEE_PERCENT / 100))
@@ -65,7 +107,7 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
       return bankAccount.trim() && bankName.trim() && accountName.trim()
     }
     if (step === 'amount') {
-      return amount >= MIN_WITHDRAWAL && amount <= walletBalance
+      return amount >= MIN_WITHDRAWAL && amount <= liveWalletBalance
     }
     return true
   }
@@ -88,7 +130,7 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
       setError(`Minimum withdrawal is ${formatNaira(MIN_WITHDRAWAL)}`)
       return
     }
-    if (amount > walletBalance) {
+    if (amount > liveWalletBalance) {
       setError('Insufficient wallet balance')
       return
     }
@@ -100,28 +142,41 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
     setError('')
 
     try {
-      // Create withdrawal record
+      const bankDisplay = `${bankName} ****${bankAccount.slice(-4)}`
+      const response = await fetch('/api/merchant/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantId,
+          amount,
+          fee,
+          netAmount,
+          bankDisplay,
+        }),
+      })
+
+      const result = await response.json()
+      if (!result?.success) {
+        setError(result?.error || 'Failed to process withdrawal. Please try again.')
+        return
+      }
+
       const record: WithdrawalRecord = {
-        id: `withdrawal_${Date.now()}`,
+        id: String(result?.transaction?.id || `withdrawal_${Date.now()}`),
         amount,
         fee,
         net: netAmount,
-        timestamp: new Date().toISOString(),
-        bankAccount: `${bankName} ****${bankAccount.slice(-4)}`,
+        timestamp: String(result?.transaction?.created_at || new Date().toISOString()),
+        bankAccount: bankDisplay,
         status: 'completed',
       }
 
-      // Update withdrawal history
       const newHistory = [record, ...withdrawalHistory]
       if (typeof window !== 'undefined') {
         localStorage.setItem(getStorageKey(), JSON.stringify(newHistory))
       }
       setWithdrawalHistory(newHistory)
-
-      // In a real system, you'd:
-      // 1. Deduct from merchant wallet
-      // 2. Create transaction record in backend
-      // 3. Initiate bank transfer
+      setLiveWalletBalance(Number(result?.balance || 0))
 
       setWithdrawalAmount('')
       setSuccess(true)
@@ -227,7 +282,7 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
           <div className="space-y-4">
             <div className="bg-secondary/30 rounded-xl p-3 text-sm">
               <p className="text-muted-foreground mb-1">Available Balance</p>
-              <p className="font-bold text-foreground text-lg">{formatNaira(walletBalance)}</p>
+              <p className="font-bold text-foreground text-lg">{formatNaira(liveWalletBalance)}</p>
             </div>
 
             <div>
