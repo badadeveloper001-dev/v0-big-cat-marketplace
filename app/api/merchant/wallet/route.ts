@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getMerchantWalletOverview, backfillMerchantWalletFromOrders } from '@/lib/merchant-wallet'
+import { getMerchantWalletOverview, backfillMerchantWalletFromOrders, getMerchantWalletDiagnostics } from '@/lib/merchant-wallet'
 
 export async function GET(request: NextRequest) {
   const merchantId = String(request.nextUrl.searchParams.get('merchantId') || '').trim()
@@ -16,10 +16,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: result.error || 'Failed to load wallet', balance: 0 }, { status: 400 })
   }
 
+  const debug = String(request.nextUrl.searchParams.get('debug') || '').trim() === '1'
+  const diagnostics = debug ? await getMerchantWalletDiagnostics(merchantId) : null
+
   return NextResponse.json({
     success: true,
     balance: result.balance,
     withdrawals: result.withdrawalHistory,
     transactions: result.transactions,
+    diagnostics,
   })
 }

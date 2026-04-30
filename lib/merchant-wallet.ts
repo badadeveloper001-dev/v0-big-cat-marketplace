@@ -146,6 +146,60 @@ async function getReleasedEscrowCreditsForMerchant(supabase: any, merchantKeys: 
     .filter((row) => toAmount(row.amount) > 0)
 }
 
+export async function getMerchantWalletDiagnostics(merchantId: string) {
+  const id = String(merchantId || '').trim()
+  if (!id) return { success: false, error: 'Merchant id is required' }
+
+  try {
+    const supabase = await createClient()
+    const merchantKeys = await resolveMerchantKeys(supabase, id)
+
+    let transactionsCount = 0
+    let settledOrdersCount = 0
+    let releasedEscrowCount = 0
+    let transactionError: string | null = null
+    let ordersError: string | null = null
+    let escrowError: string | null = null
+
+    const txResult = await (supabase.from('transactions') as any)
+      .select('id', { count: 'exact', head: true })
+      .in('merchant_id', merchantKeys)
+    if (txResult.error) transactionError = String(txResult.error.message || txResult.error)
+    else transactionsCount = Number(txResult.count || 0)
+
+    const orderResult = await (supabase.from('orders') as any)
+      .select('id', { count: 'exact', head: true })
+      .in('merchant_id', merchantKeys)
+      .or('status.in.(delivered,completed),escrow_status.eq.released')
+    if (orderResult.error) ordersError = String(orderResult.error.message || orderResult.error)
+    else settledOrdersCount = Number(orderResult.count || 0)
+
+    const escrowResult = await (supabase.from('escrow') as any)
+      .select('id', { count: 'exact', head: true })
+      .in('recipient_id', merchantKeys)
+      .eq('status', 'released')
+      .eq('type', 'product')
+    if (escrowResult.error) escrowError = String(escrowResult.error.message || escrowResult.error)
+    else releasedEscrowCount = Number(escrowResult.count || 0)
+
+    return {
+      success: true,
+      merchantInput: id,
+      merchantKeys,
+      transactionsCount,
+      settledOrdersCount,
+      releasedEscrowCount,
+      errors: {
+        transactions: transactionError,
+        orders: ordersError,
+        escrow: escrowError,
+      },
+    }
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Failed to inspect wallet diagnostics' }
+  }
+}
+
 function computeBalanceFromTransactions(rows: WalletTransaction[]) {
   return rows.reduce((sum, tx) => {
     const amount = Math.max(0, toAmount(tx.amount))
