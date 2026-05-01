@@ -1,5 +1,57 @@
 import { createClient } from '@/lib/supabase/server'
 
+// Direct REST helper — bypasses supabase-js client issues in serverless
+async function dbFetch<T = any>(
+  table: string,
+  params: Record<string, string>,
+  select: string = '*',
+): Promise<{ data: T[] | null; error: string | null }> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return { data: null, error: 'Missing env vars' }
+
+  const qs = new URLSearchParams({ select, ...params }).toString()
+  try {
+    const res = await fetch(`${url}/rest/v1/${table}?${qs}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+      cache: 'no-store',
+    })
+    if (!res.ok) return { data: null, error: `HTTP ${res.status}` }
+    const data = await res.json()
+    return { data: Array.isArray(data) ? data : [], error: null }
+  } catch (e: any) {
+    return { data: null, error: e?.message || 'fetch error' }
+  }
+}
+
+async function dbPost(
+  table: string,
+  body: Record<string, any>,
+): Promise<{ data: any; error: string | null }> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return { data: null, error: 'Missing env vars' }
+
+  try {
+    const res = await fetch(`${url}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+      },
+      body: JSON.stringify(body),
+    })
+    const text = await res.text()
+    const data = text ? JSON.parse(text) : null
+    if (!res.ok) return { data: null, error: `HTTP ${res.status}: ${text}` }
+    return { data, error: null }
+  } catch (e: any) {
+    return { data: null, error: e?.message || 'fetch error' }
+  }
+}
+
 const CREDIT_TYPES = ['escrow_release', 'payment', 'wallet_credit']
 const DEBIT_TYPES = ['withdrawal', 'wallet_debit']
 
@@ -91,71 +143,78 @@ function getOrderPayoutAmount(order: WalletOrder) {
   return Math.max(0, productTotal || (grandTotal > deliveryFee ? grandTotal - deliveryFee : grandTotal))
 }
 
-async function resolveMerchantKeys(supabase: any, merchantIdOrEmail: string) {
+async function resolveMerchantKeys(_supabase: any, merchantIdOrEmail: string) {
   const identifier = String(merchantIdOrEmail || '').trim()
   if (!identifier) return [] as string[]
 
   const keys = new Set<string>([identifier])
 
-  let data: any = null
-
-  const byIdOrExactEmail = await (supabase.from('auth_users') as any)
-    .select('id, email')
-    .or(`id.eq.${identifier},email.eq.${identifier}`)
-    .limit(1)
-    .maybeSingle()
-
-  if (!byIdOrExactEmail.error && byIdOrExactEmail.data) {
-    data = byIdOrExactEmail.data
-  }
-
-  if (!data && identifier.includes('@')) {
-    const byEmailInsensitive = await (supabase.from('auth_users') as any)
-      .select('id, email')
-      .ilike('email', identifier)
-      .limit(1)
-      .maybeSingle()
-
-    if (!byEmailInsensitive.error && byEmailInsensitive.data) {
-      data = byEmailInsensitive.data
-    }
-  }
-
-  if (data?.id) keys.add(String(data.id))
-  if (data?.email) keys.add(String(data.email))
-  if (identifier.includes('@')) keys.add(identifier.toLowerCase())
+  // Try to resolve email↔UUID using direct REST
+  const isEmail = identifier.includes('@')
+  const param = isEmail ? { email: `eq.${identifier}` } : { id: `eq.${identifier}` }
+  const { data } = await dbFetch('auth_users', param, 'id,email')
+  const row = Array.isArray(data) && data.length > 0 ? data[0] : null
+  if (row?.id) keys.add(String(row.id))
+  if (row?.email) keys.add(String(row.email))
+  if (isEmail) keys.add(identifier.toLowerCase())
 
   return Array.from(keys).filter(Boolean)
 }
 
-async function getSettledOrdersForMerchant(supabase: any, merchantKeys: string[]) {
+async function getSettledOrdersForMerchant(_supabase: any, merchantKeys: string[]) {
   if (!Array.isArray(merchantKeys) || merchantKeys.length === 0) return [] as WalletOrder[]
 
-  // orders table has: id, buyer_id, merchant_id, status, grand_total, product_total, delivery_fee, created_at
-  // NOTE: no escrow_status or seller_id column on orders table
-  const deliveredResult = await (supabase.from('orders') as any)
-    .select('id, merchant_id, status, grand_total, product_total, delivery_fee, created_at')
-    .in('merchant_id', merchantKeys)
-    .in('status', ['delivered', 'completed'])
-    .order('created_at', { ascending: true })
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return [] as WalletOrder[]
 
-  if (deliveredResult.error) return [] as WalletOrder[]
+  // Use OR filter across multiple merchant keys
+  const merchantFilter = merchantKeys.map(k => `merchant_id.eq.${k}`).join(',')
+  const qs = new URLSearchParams({
+    select: 'id,merchant_id,status,grand_total,product_total,delivery_fee,created_at',
+    'status': 'in.(delivered,completed)',
+    order: 'created_at.asc',
+  }).toString() + `&or=(${encodeURIComponent(merchantFilter)})`
 
-  return (Array.isArray(deliveredResult.data) ? deliveredResult.data : []) as WalletOrder[]
+  try {
+    const res = await fetch(`${url}/rest/v1/orders?${qs}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+      cache: 'no-store',
+    })
+    if (!res.ok) return [] as WalletOrder[]
+    const data = await res.json()
+    return (Array.isArray(data) ? data : []) as WalletOrder[]
+  } catch {
+    return [] as WalletOrder[]
+  }
 }
 
-async function getReleasedEscrowCreditsForMerchant(supabase: any, merchantKeys: string[]) {
+async function getReleasedEscrowCreditsForMerchant(_supabase: any, merchantKeys: string[]) {
   if (!Array.isArray(merchantKeys) || merchantKeys.length === 0) return [] as WalletTransaction[]
 
-  const { data, error } = await (supabase.from('escrow') as any)
-    .select('id, order_id, recipient_id, type, status, amount, released_at, created_at')
-    .in('recipient_id', merchantKeys)
-    .eq('status', 'released')
-    .eq('type', 'product')
-    .order('released_at', { ascending: false })
-    .limit(500)
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return [] as WalletTransaction[]
 
-  if (error || !Array.isArray(data)) return [] as WalletTransaction[]
+  const recipientFilter = merchantKeys.map(k => `recipient_id.eq.${k}`).join(',')
+  const qs = new URLSearchParams({
+    select: 'id,order_id,recipient_id,type,status,amount,released_at,created_at',
+    status: 'eq.released',
+    type: 'eq.product',
+    order: 'released_at.desc',
+    limit: '500',
+  }).toString() + `&or=(${encodeURIComponent(recipientFilter)})`
+
+  let data: any[] | null = null
+  try {
+    const res = await fetch(`${url}/rest/v1/escrow?${qs}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+      cache: 'no-store',
+    })
+    if (res.ok) data = await res.json()
+  } catch { /* ignore */ }
+
+  if (!Array.isArray(data)) return [] as WalletTransaction[]
 
   return (data as EscrowRow[])
     .map((row) => ({
