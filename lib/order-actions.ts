@@ -58,6 +58,12 @@ export async function getBuyerOrders(buyerId: string) {
         .select('order_id, logistics_status, rider_id, assigned_at, completed_at, updated_at')
         .in('order_id', orderIds)
 
+      console.log(`[getBuyerOrders] Fetched ${orderIds.length} orders, assignments result:`, {
+        hasError: !!assignmentsResult.error,
+        count: Array.isArray(assignmentsResult.data) ? assignmentsResult.data.length : 0,
+        sample: assignmentsResult.data?.[0]
+      })
+
       if (!assignmentsResult.error && Array.isArray(assignmentsResult.data)) {
         assignmentByOrderId = new Map(assignmentsResult.data.map((row: any) => [String(row.order_id || ''), row]))
 
@@ -65,10 +71,18 @@ export async function getBuyerOrders(buyerId: string) {
           .map((row: any) => String(row?.rider_id || '').trim())
           .filter(Boolean)
 
+        console.log(`[getBuyerOrders] Found ${riderIds.length} rider IDs to fetch`)
+
         if (riderIds.length > 0) {
           const ridersResult = await (supabase.from('logistics_riders') as any)
             .select('id, name, phone, region')
             .in('id', riderIds)
+
+          console.log(`[getBuyerOrders] Fetched riders:`, {
+            hasError: !!ridersResult.error,
+            count: Array.isArray(ridersResult.data) ? ridersResult.data.length : 0,
+            sample: ridersResult.data?.[0]
+          })
 
           if (!ridersResult.error && Array.isArray(ridersResult.data)) {
             riderById = new Map(ridersResult.data.map((row: any) => [String(row.id || ''), row]))
@@ -91,8 +105,10 @@ export async function getBuyerOrders(buyerId: string) {
       }
     })
 
+    console.log(`[getBuyerOrders] Returning ${enriched.length} enriched orders`)
     return { success: true, data: enriched }
   } catch (error: any) {
+    console.error(`[getBuyerOrders] Error:`, error)
     return { success: false, error: error.message, data: [] }
   }
 }
