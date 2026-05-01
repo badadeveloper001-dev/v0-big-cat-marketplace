@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowLeft, Loader2, Wallet, Landmark, RefreshCw, ArrowDownLeft, ArrowUpRight } from "lucide-react"
+import { ArrowLeft, Loader2, Wallet, Landmark, RefreshCw, ArrowDownLeft, ArrowUpRight, Plus, Trash2, CreditCard, ShoppingBag } from "lucide-react"
 import { useRole } from "@/lib/role-context"
 import { formatNaira } from "@/lib/currency-utils"
 import { MerchantWithdrawal } from "@/components/merchant-withdrawal"
@@ -17,6 +17,226 @@ interface WalletTransactionRow {
   reason?: string | null
   status?: string | null
   created_at?: string | null
+}
+
+interface BuyerOrder {
+  id: string
+  status?: string | null
+  grand_total?: number | null
+  product_total?: number | null
+  delivery_fee?: number | null
+  payment_method?: string | null
+  created_at?: string | null
+}
+
+interface SavedPaymentMethod {
+  id: string
+  type?: string | null
+  details?: any
+  is_default?: boolean | null
+  created_at?: string | null
+}
+
+function BuyerWalletSection({ userId }: { userId: string }) {
+  const [loading, setLoading] = useState(true)
+  const [orders, setOrders] = useState<BuyerOrder[]>([])
+  const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([])
+  const [pmError, setPmError] = useState("")
+  const [showAddCard, setShowAddCard] = useState(false)
+  const [newMethodType, setNewMethodType] = useState("card")
+  const [newMethodDetails, setNewMethodDetails] = useState("")
+  const [addingMethod, setAddingMethod] = useState(false)
+  const [removingId, setRemovingId] = useState("")
+
+  const loadData = async () => {
+    if (!userId) { setLoading(false); return }
+    setLoading(true)
+    try {
+      const [ordRes, pmRes] = await Promise.all([
+        fetch(`/api/buyer/orders?userId=${encodeURIComponent(userId)}`, { cache: "no-store" }),
+        fetch(`/api/user/payment-methods?userId=${encodeURIComponent(userId)}`, { cache: "no-store" }),
+      ])
+      const ordData = await ordRes.json().catch(() => ({}))
+      const pmData = await pmRes.json().catch(() => ({}))
+      setOrders(Array.isArray(ordData?.data) ? ordData.data : Array.isArray(ordData?.orders) ? ordData.orders : [])
+      setPaymentMethods(Array.isArray(pmData?.data) ? pmData.data : [])
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadData() }, [userId])
+
+  const totalSpent = orders.reduce((s, o) => s + (Number(o.grand_total) || 0), 0)
+  const escrowHeld = orders
+    .filter(o => o.status && !['delivered','completed','cancelled'].includes(o.status))
+    .reduce((s, o) => s + (Number(o.product_total) || Number(o.grand_total) || 0), 0)
+
+  const handleAddMethod = async () => {
+    if (!newMethodDetails.trim()) return
+    setAddingMethod(true)
+    setPmError("")
+    try {
+      const res = await fetch('/api/user/payment-methods', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, method: { type: newMethodType, details: { label: newMethodDetails.trim() } } }),
+      })
+      const result = await res.json()
+      if (!result?.success) { setPmError(result?.error || 'Failed to add method'); return }
+      setNewMethodDetails("")
+      setShowAddCard(false)
+      await loadData()
+    } catch { setPmError('Could not add payment method.') }
+    finally { setAddingMethod(false) }
+  }
+
+  const handleRemoveMethod = async (methodId: string) => {
+    setRemovingId(methodId)
+    try {
+      await fetch(`/api/user/payment-methods?userId=${userId}&methodId=${methodId}`, { method: 'DELETE' })
+      await loadData()
+    } catch { /* ignore */ }
+    finally { setRemovingId("") }
+  }
+
+  if (loading) {
+    return (
+      <div className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin" />
+        <span className="text-sm">Loading wallet...</span>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {/* Summary cards */}
+      <section className="grid grid-cols-3 gap-3">
+        <div className="rounded-2xl border border-border bg-card p-3 flex flex-col gap-1">
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Total Spent</p>
+          <p className="text-base font-bold text-foreground">{formatNaira(totalSpent)}</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-3 flex flex-col gap-1">
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Orders</p>
+          <p className="text-base font-bold text-foreground">{orders.length}</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-3 flex flex-col gap-1">
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wide">In Escrow</p>
+          <p className="text-base font-bold text-amber-600">{formatNaira(escrowHeld)}</p>
+        </div>
+      </section>
+
+      {/* Saved payment methods */}
+      <section className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2"><CreditCard className="w-4 h-4" /> Saved Payment Methods</h3>
+          <button
+            onClick={() => setShowAddCard(v => !v)}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add
+          </button>
+        </div>
+
+        {showAddCard && (
+          <div className="rounded-xl border border-border bg-muted/50 p-3 space-y-2">
+            <select
+              value={newMethodType}
+              onChange={e => setNewMethodType(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            >
+              <option value="card">Debit / Credit Card</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="palmpay">PalmPay</option>
+              <option value="opay">OPay</option>
+            </select>
+            <input
+              type="text"
+              placeholder={newMethodType === 'card' ? 'Card nickname (e.g. GTB Visa ****1234)' : 'Account label'}
+              value={newMethodDetails}
+              onChange={e => setNewMethodDetails(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+            {pmError && <p className="text-xs text-red-600">{pmError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={handleAddMethod}
+                disabled={addingMethod}
+                className="flex-1 rounded-lg bg-primary text-primary-foreground text-sm font-semibold py-2 hover:opacity-90 disabled:opacity-60"
+              >
+                {addingMethod ? 'Saving...' : 'Save Method'}
+              </button>
+              <button onClick={() => setShowAddCard(false)} className="px-4 rounded-lg border border-border text-sm hover:bg-muted">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {paymentMethods.length === 0 ? (
+          <div className="rounded-xl bg-muted/50 border border-border p-3 text-sm text-muted-foreground">
+            No saved payment methods yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {paymentMethods.map(pm => (
+              <div key={pm.id} className="rounded-xl border border-border bg-background px-3 py-2.5 flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium capitalize">{pm.type?.replace(/_/g,' ') || 'Payment method'}</p>
+                  <p className="text-xs text-muted-foreground">{pm.details?.label || pm.details?.account_number || JSON.stringify(pm.details || {})}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  {pm.is_default && <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5">Default</span>}
+                  <button
+                    onClick={() => handleRemoveMethod(pm.id)}
+                    disabled={removingId === pm.id}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    {removingId === pm.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Recent orders */}
+      <section className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <ShoppingBag className="w-4 h-4" />
+          <h3 className="font-semibold">Order History</h3>
+        </div>
+        {orders.length === 0 ? (
+          <div className="rounded-xl bg-muted/50 border border-border p-3 text-sm text-muted-foreground">No orders yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {orders.slice(0, 10).map(order => {
+              const statusColor: Record<string,string> = {
+                delivered: 'text-emerald-600', completed: 'text-emerald-600',
+                shipped: 'text-blue-600', in_transit: 'text-blue-600',
+                cancelled: 'text-red-600', pending: 'text-amber-600',
+              }
+              const color = statusColor[String(order.status || '')] || 'text-muted-foreground'
+              return (
+                <div key={order.id} className="rounded-xl border border-border bg-background px-3 py-2.5 flex items-center justify-between">
+                  <div className="min-w-0 pr-3">
+                    <p className="text-sm font-medium truncate">Order #{order.id.substring(0,8).toUpperCase()}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(order.created_at || '').toLocaleDateString()}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold">{formatNaira(Number(order.grand_total) || 0)}</p>
+                    <p className={`text-xs font-medium capitalize ${color}`}>{String(order.status || '').replace(/_/g,' ')}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
+    </>
+  )
 }
 
 export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
@@ -290,15 +510,7 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
             </section>
           </>
         ) : (
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="text-lg font-bold text-foreground mb-2">Payment Methods</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Wallet and merchant payout tools are only available on merchant accounts.
-            </p>
-            <div className="rounded-xl border border-border bg-muted/50 p-4 text-sm text-muted-foreground">
-              Buyer card and transfer management UI is being upgraded.
-            </div>
-          </section>
+          <BuyerWalletSection userId={authUserId} />
         )}
       </main>
     </div>

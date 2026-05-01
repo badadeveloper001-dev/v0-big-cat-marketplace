@@ -85,7 +85,18 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { methodId } = await request.json()
+    let methodId: string | null = null
+    let userId: string | null = null
+
+    // Support both query-param style and JSON body style
+    const qMethodId = request.nextUrl.searchParams.get('methodId')
+    const qUserId = request.nextUrl.searchParams.get('userId')
+    if (qMethodId) {
+      methodId = qMethodId
+      userId = qUserId
+    } else {
+      try { const body = await request.json(); methodId = body.methodId; userId = body.userId } catch { /* */ }
+    }
 
     if (!methodId) {
       return NextResponse.json(
@@ -94,10 +105,10 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    const auth = await requireAuthenticatedUser(undefined, request)
+    const auth = await requireAuthenticatedUser(userId || undefined, request)
     if (auth.response) return auth.response
 
-    const result = await removePaymentMethod(auth.user.id, methodId)
+    const result = await removePaymentMethod(userId || auth.user.id, methodId)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Remove payment method API error:', error)

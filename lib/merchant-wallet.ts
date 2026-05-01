@@ -435,18 +435,27 @@ export async function getMerchantWalletOverview(merchantId: string, options?: { 
 
     const completedRows = rows.filter((tx) => isCompletedStatus(tx.status))
 
-    // Derive settled-order credits that are missing from transactions,
-    // so merchants still see correct balance even if insert policies failed.
-    const settledOrders = await getSettledOrdersForMerchant(supabase, merchantKeys)
+    // Get released escrow credits — primary source of truth for payout amounts
+    const escrowCredits = await getReleasedEscrowCreditsForMerchant(supabase, merchantKeys)
+
+    // Track which order IDs are already credited (from transactions ledger OR escrow table)
     const creditedOrderIds = new Set(
       completedRows
         .filter((tx) => CREDIT_TYPES.includes(normalizeType(tx.type)))
         .map((tx) => String(tx.order_id || '').trim())
         .filter(Boolean)
     )
+    const escrowCreditedOrderIds = new Set(
+      escrowCredits.map((tx) => String(tx.order_id || '').trim()).filter(Boolean)
+    )
 
+    // Synthetic fallback only for orders NOT already covered by escrow or transactions
+    const settledOrders = await getSettledOrdersForMerchant(supabase, merchantKeys)
     const syntheticCredits: WalletTransaction[] = settledOrders
-      .filter((order) => !creditedOrderIds.has(String(order.id || '').trim()))
+      .filter((order) => {
+        const oid = String(order.id || '').trim()
+        return oid && !creditedOrderIds.has(oid) && !escrowCreditedOrderIds.has(oid)
+      })
       .map((order) => ({
         id: `derived-${String(order.id || '')}`,
         order_id: String(order.id || ''),
@@ -459,21 +468,10 @@ export async function getMerchantWalletOverview(merchantId: string, options?: { 
       }))
       .filter((tx) => toAmount(tx.amount) > 0)
 
-    const syntheticOrderIds = new Set(
-      syntheticCredits
-        .map((tx) => String(tx.order_id || '').trim())
-        .filter(Boolean)
-    )
-
-    const escrowCredits = await getReleasedEscrowCreditsForMerchant(supabase, merchantKeys)
-    const escrowCreditsFiltered = escrowCredits.filter((tx) => {
-      const orderId = String(tx.order_id || '').trim()
-      return orderId ? (!creditedOrderIds.has(orderId) && !syntheticOrderIds.has(orderId)) : true
-    })
-
     const serviceCredits = await getReleasedServiceBookingCreditsForMerchant(supabase, merchantKeys)
 
-    const rowsWithDerived = [...rows, ...syntheticCredits, ...escrowCreditsFiltered, ...serviceCredits]
+    // Combine: real transactions + escrow credits (primary) + synthetic fallbacks + service credits
+    const rowsWithDerived = [...rows, ...escrowCredits, ...syntheticCredits, ...serviceCredits]
     const completedRowsWithDerived = rowsWithDerived.filter((tx) => isCompletedStatus(tx.status))
     const balance = computeBalanceFromTransactions(completedRowsWithDerived)
 
