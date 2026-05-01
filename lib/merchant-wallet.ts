@@ -168,14 +168,8 @@ async function getSettledOrdersForMerchant(_supabase: any, merchantKeys: string[
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return [] as WalletOrder[]
 
-  // Use OR filter across multiple merchant keys
-  const merchantFilter = merchantKeys.map(k => `merchant_id.eq.${k}`).join(',')
-  const qs = new URLSearchParams({
-    select: 'id,merchant_id,status,grand_total,product_total,delivery_fee,created_at',
-    'status': 'in.(delivered,completed)',
-    order: 'created_at.asc',
-  }).toString() + `&or=(${encodeURIComponent(merchantFilter)})`
-
+  const inList = merchantKeys.join(',')
+  const qs = `select=id,merchant_id,status,grand_total,product_total,delivery_fee,created_at&merchant_id=in.(${inList})&status=in.(delivered,completed)&order=created_at.asc`
   try {
     const res = await fetch(`${url}/rest/v1/orders?${qs}`, {
       headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
@@ -196,15 +190,8 @@ async function getReleasedEscrowCreditsForMerchant(_supabase: any, merchantKeys:
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return [] as WalletTransaction[]
 
-  const recipientFilter = merchantKeys.map(k => `recipient_id.eq.${k}`).join(',')
-  const qs = new URLSearchParams({
-    select: 'id,order_id,recipient_id,type,status,amount,released_at,created_at',
-    status: 'eq.released',
-    type: 'eq.product',
-    order: 'released_at.desc',
-    limit: '500',
-  }).toString() + `&or=(${encodeURIComponent(recipientFilter)})`
-
+  const inList = merchantKeys.join(',')
+  const qs = `select=id,order_id,recipient_id,type,status,amount,released_at,created_at&recipient_id=in.(${inList})&status=eq.released&type=eq.product&order=released_at.desc&limit=500`
   let data: any[] | null = null
   try {
     const res = await fetch(`${url}/rest/v1/escrow?${qs}`, {
