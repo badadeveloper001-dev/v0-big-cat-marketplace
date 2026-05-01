@@ -85,30 +85,51 @@ async function upsertLogisticsAssignment(
 ) {
   const now = new Date().toISOString()
 
+  const existingResult = await (supabase.from('logistics_order_assignments') as any)
+    .select('order_id, rider_id, logistics_status, notes, assigned_at, completed_at')
+    .eq('order_id', payload.order_id)
+    .maybeSingle()
+
+  if (existingResult.error) {
+    const message = String(existingResult.error.message || '')
+    if (includesMissingTable(message, 'logistics_order_assignments')) {
+      return null
+    }
+  }
+
+  const existing = existingResult.data || null
+  const resolvedRiderId = payload.rider_id !== undefined ? payload.rider_id : (existing?.rider_id ?? null)
+  const resolvedStatus = payload.logistics_status ?? existing?.logistics_status ?? 'pending'
+  const resolvedNotes = payload.notes !== undefined ? payload.notes : (existing?.notes ?? null)
+  const resolvedAssignedAt = payload.assigned_at !== undefined
+    ? payload.assigned_at
+    : (existing?.assigned_at ?? (resolvedRiderId ? now : null))
+  const resolvedCompletedAt = payload.completed_at !== undefined ? payload.completed_at : (existing?.completed_at ?? null)
+
   const attempts = [
     {
       order_id: payload.order_id,
-      rider_id: payload.rider_id ?? null,
-      logistics_status: payload.logistics_status ?? 'pending',
-      notes: payload.notes ?? null,
-      assigned_at: payload.assigned_at ?? (payload.rider_id ? now : null),
-      completed_at: payload.completed_at ?? null,
+      rider_id: resolvedRiderId,
+      logistics_status: resolvedStatus,
+      notes: resolvedNotes,
+      assigned_at: resolvedAssignedAt,
+      completed_at: resolvedCompletedAt,
       updated_at: now,
     },
     {
       order_id: payload.order_id,
-      rider_id: payload.rider_id ?? null,
-      logistics_status: payload.logistics_status ?? 'pending',
-      assigned_at: payload.assigned_at ?? (payload.rider_id ? now : null),
-      completed_at: payload.completed_at ?? null,
+      rider_id: resolvedRiderId,
+      logistics_status: resolvedStatus,
+      assigned_at: resolvedAssignedAt,
+      completed_at: resolvedCompletedAt,
       updated_at: now,
     },
     {
       order_id: payload.order_id,
-      rider_id: payload.rider_id ?? null,
-      logistics_status: payload.logistics_status ?? 'pending',
-      assigned_at: payload.assigned_at ?? (payload.rider_id ? now : null),
-      completed_at: payload.completed_at ?? null,
+      rider_id: resolvedRiderId,
+      logistics_status: resolvedStatus,
+      assigned_at: resolvedAssignedAt,
+      completed_at: resolvedCompletedAt,
     },
   ]
 
