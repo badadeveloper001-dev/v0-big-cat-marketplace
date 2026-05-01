@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw, ChevronDown } from "lucide-react"
+import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
 import { useRole } from "@/lib/role-context"
 import {
   createEscrowRecord,
@@ -14,19 +14,16 @@ interface MerchantOrdersProps {
   onBack: () => void
 }
 
-const statusOptions = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'processing', label: 'Processing' },
-  { value: 'shipped', label: 'Shipped' },
-  { value: 'delivered', label: 'Delivered' },
-]
-
 const statusConfig: { [key: string]: { label: string; color: string; icon: any } } = {
   pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700', icon: Clock },
   paid: { label: 'Paid', color: 'bg-blue-100 text-blue-700', icon: Package },
-  processing: { label: 'Processing', color: 'bg-purple-100 text-purple-700', icon: RefreshCw },
-  shipped: { label: 'Shipped', color: 'bg-indigo-100 text-indigo-700', icon: Truck },
+  processing: { label: 'Order Received', color: 'bg-purple-100 text-purple-700', icon: RefreshCw },
+  order_received: { label: 'Order Received', color: 'bg-purple-100 text-purple-700', icon: RefreshCw },
+  order_packed: { label: 'Order Packed', color: 'bg-indigo-100 text-indigo-700', icon: Package },
+  order_taken_for_delivery: { label: 'Taken For Delivery', color: 'bg-indigo-100 text-indigo-700', icon: Truck },
+  in_transit: { label: 'In Transit', color: 'bg-blue-100 text-blue-700', icon: Truck },
+  completed: { label: 'Completed By Logistics', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
+  shipped: { label: 'In Transit', color: 'bg-blue-100 text-blue-700', icon: Truck },
   delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
 }
 
@@ -303,21 +300,40 @@ export function MerchantOrders({ onBack }: MerchantOrdersProps) {
                   {order.status !== 'delivered' && (
                     <div className="mt-3 pt-3 border-t border-border">
                       <p className="text-xs text-muted-foreground mb-2">Update Status</p>
-                      <div className="relative">
-                        <select
-                          value={order.status}
-                          onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                      {(String(order.status).toLowerCase() === 'paid' || String(order.status).toLowerCase() === 'pending') && (
+                        <button
+                          onClick={() => handleStatusChange(order.id, 'order_received')}
                           disabled={isUpdating}
-                          className="w-full appearance-none px-4 py-2.5 bg-muted rounded-lg text-foreground pr-10 disabled:opacity-50"
+                          className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium disabled:opacity-60"
                         >
-                          {statusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
-                      </div>
+                          Mark Order Received
+                        </button>
+                      )}
+
+                      {String(order.status).toLowerCase() === 'order_received' && (
+                        <button
+                          onClick={() => handleStatusChange(order.id, 'order_packed')}
+                          disabled={isUpdating}
+                          className="w-full rounded-lg bg-indigo-600 text-white py-2.5 text-sm font-medium disabled:opacity-60"
+                        >
+                          Mark Order Packed
+                        </button>
+                      )}
+
+                      {String(order.status).toLowerCase() === 'order_packed' && (
+                        <button
+                          onClick={() => handleStatusChange(order.id, 'order_taken_for_delivery')}
+                          disabled={isUpdating}
+                          className="w-full rounded-lg bg-emerald-600 text-white py-2.5 text-sm font-medium disabled:opacity-60"
+                        >
+                          Mark Order Taken For Delivery
+                        </button>
+                      )}
+
+                      {['order_taken_for_delivery', 'in_transit', 'completed'].includes(String(order.status).toLowerCase()) && (
+                        <p className="text-xs text-muted-foreground">Waiting for logistics and buyer confirmation to complete settlement.</p>
+                      )}
+
                       {isUpdating && (
                         <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                           <RefreshCw className="w-3 h-3 animate-spin" />

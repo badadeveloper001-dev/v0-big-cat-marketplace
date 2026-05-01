@@ -24,12 +24,55 @@ function isMissingResourceError(error: any) {
     || message.includes('column')
 }
 
+function normalizeWorkflowStatus(input: string) {
+  const raw = String(input || '').trim().toLowerCase()
+  if (raw === 'order_received') return 'order_received'
+  if (raw === 'order_packed') return 'order_packed'
+  if (raw === 'order_taken_for_delivery') return 'order_taken_for_delivery'
+  if (raw === 'order_in_transit') return 'in_transit'
+  if (raw === 'order_completed') return 'completed'
+  if (raw === 'order_received_and_satisfied') return 'delivered'
+
+  // Backward compatibility with old statuses.
+  if (raw === 'processing') return 'order_received'
+  if (raw === 'shipped') return 'in_transit'
+  return raw
+}
+
+function getTrackingId(orderId: string) {
+  return `BC-${String(orderId || '').replace(/-/g, '').slice(0, 10).toUpperCase()}`
+}
+
 export async function getBuyerOrders(buyerId: string) {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase.from('orders').select('*, order_items(*, products(*))').eq('buyer_id', buyerId).order('created_at', { ascending: false })
     if (error) throw error
-    return { success: true, data: data || [] }
+
+    const orderIds = Array.isArray(data) ? data.map((order: any) => String(order.id || '')).filter(Boolean) : []
+    let assignmentByOrderId = new Map<string, any>()
+
+    if (orderIds.length > 0) {
+      const assignmentsResult = await (supabase.from('logistics_order_assignments') as any)
+        .select('order_id, logistics_status, rider_id, updated_at')
+        .in('order_id', orderIds)
+
+      if (!assignmentsResult.error && Array.isArray(assignmentsResult.data)) {
+        assignmentByOrderId = new Map(assignmentsResult.data.map((row: any) => [String(row.order_id || ''), row]))
+      }
+    }
+
+    const enriched = (data || []).map((order: any) => {
+      const assignment = assignmentByOrderId.get(String(order.id || ''))
+      return {
+        ...order,
+        tracking_id: getTrackingId(String(order.id || '')),
+        logistics_status: String(assignment?.logistics_status || ''),
+        rider_id: assignment?.rider_id || null,
+      }
+    })
+
+    return { success: true, data: enriched }
   } catch (error: any) {
     return { success: false, error: error.message, data: [] }
   }
@@ -107,12 +150,6 @@ export async function createOrder(
       acc[key].push(item)
       return acc
     }, {})
-
-    const buyerProfileResult = await (supabase.from('auth_users') as any)
-      .select('name, email, phone, city, state')
-      .eq('id', payload.buyerId)
-      .maybeSingle()
-    const buyerProfile = buyerProfileResult.data || null
 
     const createdOrders: any[] = []
 
@@ -281,28 +318,7 @@ export async function createOrder(
         emailSubject: 'Payment confirmation',
       })
 
-      let logisticsRegisteredAt: string | null = null
-      if (String(payload.deliveryType || '').toLowerCase() !== 'pickup') {
-        const logisticsResult = await registerOrderForLogistics({
-          order_id: orderIdRef,
-          customer_name: String(buyerProfile?.name || buyerProfile?.email || 'Customer'),
-          customer_phone: String(buyerProfile?.phone || ''),
-          customer_city: String(buyerProfile?.city || ''),
-          customer_state: String(buyerProfile?.state || ''),
-          delivery_address: payload.deliveryAddress,
-          items: merchantItems.map((item) => ({
-            product_name: item.productName || 'Product',
-            quantity: Number(item.quantity || 0),
-          })),
-          total_amount: grandTotal,
-          delivery_fee: allocatedDeliveryFee,
-          status: 'pending',
-        })
-
-        if (logisticsResult.success) {
-          logisticsRegisteredAt = new Date().toISOString()
-        }
-      }
+      const logisticsRegisteredAt: string | null = null
 
       try {
         await (supabase.from('order_automation_state') as any).upsert({
@@ -339,18 +355,57 @@ export async function createOrder(
 export async function updateOrderStatus(orderId: string, status: string, actorId?: string) {
   try {
     const supabase = await createClient()
-    const normalizedStatus = String(status || '').trim() === 'completed' ? 'delivered' : String(status || '').trim()
+    const normalizedStatus = normalizeWorkflowStatus(status)
 
-    if (actorId) {
-      const orderResult = await (supabase.from('orders') as any).select('*').eq('id', orderId).single()
-      if (orderResult.error) throw orderResult.error
+    const orderResult = await (supabase.from('orders') as any).select('*').eq('id', orderId).single()
+    if (orderResult.error) throw orderResult.error
 
-      const order = (orderResult.data || {}) as any
-      const buyerId = String(order.buyer_id || '')
-      const merchantId = String(order.merchant_id || '')
-      if (buyerId !== actorId && merchantId !== actorId) {
-        return { success: false, error: 'You are not allowed to update this order.' }
+    const order = (orderResult.data || {}) as any
+    const buyerId = String(order.buyer_id || '')
+    const merchantId = String(order.merchant_id || '')
+    const currentStatus = normalizeWorkflowStatus(String(order.status || ''))
+
+    const actorRole = actorId
+      ? (actorId === merchantId ? 'merchant' : actorId === buyerId ? 'buyer' : 'unknown')
+      : 'system'
+
+    if (actorRole === 'unknown') {
+      return { success: false, error: 'You are not allowed to update this order.' }
+    }
+
+    const merchantAllowed = new Set([
+      'order_received',
+      'order_packed',
+      'order_taken_for_delivery',
+    ])
+
+    const buyerAllowed = new Set([
+      'delivered',
+      'order_received_and_satisfied',
+    ])
+
+    if (actorRole === 'merchant' && !merchantAllowed.has(String(status || '').trim().toLowerCase()) && !merchantAllowed.has(normalizedStatus)) {
+      return { success: false, error: 'Merchants can only update: Order Received, Order Packed, and Order Taken for Delivery.' }
+    }
+
+    if (actorRole === 'buyer' && !buyerAllowed.has(String(status || '').trim().toLowerCase()) && normalizedStatus !== 'delivered') {
+      return { success: false, error: 'Buyers can only confirm: Order Received and Satisfied.' }
+    }
+
+    if (actorRole === 'merchant') {
+      if (normalizedStatus === 'order_received' && !['paid', 'pending', 'order_received'].includes(currentStatus)) {
+        return { success: false, error: 'Order must be paid before merchant can mark it as received.' }
       }
+      if (normalizedStatus === 'order_packed' && !['order_received', 'order_packed'].includes(currentStatus)) {
+        return { success: false, error: 'Merchant can only pack an order after marking it as received.' }
+      }
+      if (normalizedStatus === 'order_taken_for_delivery' && !['order_packed', 'order_taken_for_delivery'].includes(currentStatus)) {
+        return { success: false, error: 'Merchant can only mark taken for delivery after order is packed.' }
+      }
+    }
+
+    if (actorRole === 'buyer' && normalizedStatus === 'delivered' && !['completed', 'delivered'].includes(currentStatus)) {
+      return { success: false, error: 'Buyer can confirm satisfaction only after logistics marks order as completed.' }
     }
 
     // Check for active disputes if marking as delivered
@@ -395,18 +450,89 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
 
     if (!data && lastError) throw lastError
 
-    const buyerId = String(data?.buyer_id || '')
-    const merchantId = String(data?.merchant_id || '')
+    const trackingId = getTrackingId(orderId)
 
-    if (normalizedStatus === 'in_transit' || normalizedStatus === 'shipped') {
+    if (normalizedStatus === 'order_received') {
+      if (buyerId) {
+        await dispatchNotification({
+          userId: buyerId,
+          type: 'order',
+          title: 'Merchant received your order',
+          message: `Order ${orderId} has been received by the merchant and is being prepared.`,
+          eventKey: `order:received-by-merchant:${orderId}`,
+          emailSubject: 'Merchant received your order',
+        })
+      }
+    }
+
+    if (normalizedStatus === 'order_packed') {
+      if (String(data?.delivery_type || '').toLowerCase() !== 'pickup') {
+        await registerOrderForLogistics({
+          order_id: String(data?.id || orderId),
+          customer_name: 'Customer',
+          customer_phone: '',
+          customer_city: '',
+          customer_state: '',
+          delivery_address: String(data?.delivery_address || ''),
+          items: Array.isArray(data?.order_items)
+            ? data.order_items.map((item: any) => ({
+                product_name: String(item?.product_name || 'Product'),
+                quantity: Number(item?.quantity || 1),
+              }))
+            : [],
+          total_amount: Number(data?.grand_total || data?.total_amount || 0),
+          delivery_fee: Number(data?.delivery_fee || 0),
+          status: 'pending',
+        })
+      }
+
+      if (buyerId) {
+        await dispatchNotification({
+          userId: buyerId,
+          type: 'order',
+          title: 'Order packed by merchant',
+          message: `Order ${orderId} is packed and has been sent to logistics for dispatch.`,
+          eventKey: `order:packed:${orderId}`,
+          emailSubject: 'Your order is packed',
+        })
+      }
+    }
+
+    if (normalizedStatus === 'order_taken_for_delivery') {
+      if (buyerId) {
+        await dispatchNotification({
+          userId: buyerId,
+          type: 'order',
+          title: 'Order handed to logistics',
+          message: `Order ${orderId} has been handed over to logistics. Tracking ID: ${trackingId}.`,
+          eventKey: `order:handover:${orderId}`,
+          emailSubject: 'Order handed to logistics',
+        })
+      }
+    }
+
+    if (normalizedStatus === 'in_transit') {
       if (buyerId) {
         await dispatchNotification({
           userId: buyerId,
           type: 'order',
           title: 'Delivery update',
-          message: `Order ${orderId} is now in transit.`,
+          message: `Order ${orderId} is now in transit. Tracking ID: ${trackingId}.`,
           eventKey: `order:delivery-update:${orderId}:${normalizedStatus}`,
           emailSubject: 'Your order is in transit',
+        })
+      }
+    }
+
+    if (normalizedStatus === 'completed') {
+      if (buyerId) {
+        await dispatchNotification({
+          userId: buyerId,
+          type: 'order',
+          title: 'Order delivered by logistics',
+          message: `Order ${orderId} was delivered. Please confirm: Order Received and Satisfied to release merchant payment.`,
+          eventKey: `order:logistics-completed:${orderId}`,
+          emailSubject: 'Order delivered - confirmation needed',
         })
       }
     }

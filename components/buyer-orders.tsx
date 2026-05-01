@@ -20,12 +20,17 @@ interface BuyerOrdersProps {
 const statusConfig: { [key: string]: { label: string; color: string; icon: any; step: number } } = {
   pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700', icon: Clock, step: 1 },
   paid: { label: 'Paid', color: 'bg-blue-100 text-blue-700', icon: Package, step: 2 },
-  processing: { label: 'Processing', color: 'bg-purple-100 text-purple-700', icon: RefreshCw, step: 3 },
-  shipped: { label: 'Shipped', color: 'bg-indigo-100 text-indigo-700', icon: Truck, step: 4 },
-  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', icon: CheckCircle2, step: 5 },
+  processing: { label: 'Merchant Received', color: 'bg-purple-100 text-purple-700', icon: RefreshCw, step: 3 },
+  order_received: { label: 'Merchant Received', color: 'bg-purple-100 text-purple-700', icon: RefreshCw, step: 3 },
+  order_packed: { label: 'Order Packed', color: 'bg-indigo-100 text-indigo-700', icon: Package, step: 4 },
+  order_taken_for_delivery: { label: 'Taken For Delivery', color: 'bg-indigo-100 text-indigo-700', icon: Truck, step: 5 },
+  in_transit: { label: 'In Transit', color: 'bg-blue-100 text-blue-700', icon: Truck, step: 6 },
+  completed: { label: 'Delivered (Awaiting You)', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2, step: 7 },
+  shipped: { label: 'In Transit', color: 'bg-indigo-100 text-indigo-700', icon: Truck, step: 6 },
+  delivered: { label: 'Delivered & Satisfied', color: 'bg-green-100 text-green-700', icon: CheckCircle2, step: 8 },
 }
 
-const orderSteps = ['Pending', 'Paid', 'Processing', 'Shipped', 'Delivered']
+const orderSteps = ['Pending', 'Paid', 'Received', 'Packed', 'Handover', 'Transit', 'Delivered', 'Satisfied']
 
 function getOrderItemsAmount(order: any) {
   const orderItems = Array.isArray(order?.order_items)
@@ -224,8 +229,6 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
         syncEscrowForOrders(fetched)
         setLastUpdatedAt(Date.now())
         fetchIssues()
-        fetchIssues()
-        fetchIssues()
       } else {
         setError(result.error || 'Failed to fetch orders')
       }
@@ -394,7 +397,7 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
     }
   }
 
-  const handleMarkAsDelivered = async (orderId: string) => {
+  const handleConfirmReceivedAndSatisfied = async (orderId: string) => {
     setUpdatingOrderId(orderId)
     setError("")
 
@@ -404,12 +407,12 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ orderId, status: 'delivered' }),
+        body: JSON.stringify({ orderId, status: 'order_received_and_satisfied' }),
       })
 
       const result = await response.json()
       if (!result.success) {
-        setError(result.error || 'Failed to mark order as delivered')
+        setError(result.error || 'Failed to confirm order satisfaction')
         return
       }
 
@@ -422,7 +425,7 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
         setEscrowMap((prev) => ({ ...prev, [orderId]: updatedEscrow }))
       }
     } catch {
-      setError('Failed to mark order as delivered')
+      setError('Failed to confirm order satisfaction')
     } finally {
       setUpdatingOrderId(null)
     }
@@ -580,6 +583,7 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                   <div className="mt-3 pt-3 border-t border-border">
                     <p className="text-xs text-muted-foreground mb-1">Delivery Address</p>
                     <p className="text-sm text-foreground">{order.delivery_address}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Tracking ID: {String(order.tracking_id || `BC-${String(order.id).replace(/-/g, '').slice(0, 10).toUpperCase()}`)}</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {order.delivery_type === 'pickup'
                         ? 'Pickup at Drop-off Point'
@@ -633,10 +637,10 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                     </div>
                   )}
 
-                  {order.status !== 'delivered' && (
+                  {String(order.status).toLowerCase() === 'completed' && (
                     <div className="mt-3 pt-3 border-t border-border">
                       <button
-                        onClick={() => handleMarkAsDelivered(String(order.id))}
+                        onClick={() => handleConfirmReceivedAndSatisfied(String(order.id))}
                         disabled={updatingOrderId === String(order.id)}
                         className="w-full rounded-lg bg-[#6C2BD9] text-white py-2.5 text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-2"
                       >
@@ -646,7 +650,7 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                             Updating...
                           </>
                         ) : (
-                          'Mark as Delivered'
+                          'Order Received and Satisfied'
                         )}
                       </button>
                     </div>

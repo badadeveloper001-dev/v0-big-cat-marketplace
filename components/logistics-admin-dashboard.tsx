@@ -277,6 +277,30 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     }
   }
 
+  const markInTransit = async (orderId: string) => {
+    setActionBusyKey(`transit:${orderId}`)
+    setError("")
+
+    try {
+      const response = await fetch(`/api/logistics/orders/${orderId}/in-transit`, {
+        method: 'PUT',
+        headers: authHeaders,
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        setError(result.error || 'Failed to mark order in transit')
+        return
+      }
+
+      await loadDashboard()
+    } catch {
+      setError('Failed to mark order in transit')
+    } finally {
+      setActionBusyKey("")
+    }
+  }
+
   const updateLiveGps = (orderId: string) => {
     setGpsByOrder((prev) => {
       const current = prev[orderId] || { lat: 6.5244, lng: 3.3792 }
@@ -488,6 +512,8 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
                           <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                             String(order.logistics_status || '').toLowerCase() === 'completed'
                               ? 'bg-primary/10 text-primary'
+                              : String(order.logistics_status || '').toLowerCase() === 'in_transit'
+                                ? 'bg-indigo-100 text-indigo-700'
                               : String(order.logistics_status || '').toLowerCase() === 'assigned'
                                 ? 'bg-blue-100 text-blue-700'
                                 : 'bg-chart-4/10 text-chart-4'
@@ -572,20 +598,23 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
                         </select>
 
                         <button
-                          onClick={() => completeOrder(order.id)}
-                          disabled={String(order.logistics_status).toLowerCase() === 'completed' || actionBusyKey === `complete:${order.id}`}
-                          className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                          onClick={() => markInTransit(order.id)}
+                          disabled={String(order.logistics_status).toLowerCase() === 'completed' || String(order.logistics_status).toLowerCase() === 'in_transit' || actionBusyKey === `transit:${order.id}`}
+                          className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
                         >
-                          {actionBusyKey === `complete:${order.id}` ? 'Completing...' : 'Mark Delivered'}
+                          {actionBusyKey === `transit:${order.id}` ? 'Updating...' : 'Mark In Transit'}
                         </button>
 
                         <button
-                          disabled
-                          className="rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground"
+                          onClick={() => completeOrder(order.id)}
+                          disabled={String(order.logistics_status).toLowerCase() !== 'in_transit' || actionBusyKey === `complete:${order.id}`}
+                          className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
                         >
-                          Escrow: {String(order.escrow_status || 'held')}
+                          {actionBusyKey === `complete:${order.id}` ? 'Completing...' : 'Mark Order Completed'}
                         </button>
                       </div>
+
+                      <p className="text-xs text-muted-foreground">Tracking ID: BC-{String(order.id).replace(/-/g, '').slice(0, 10).toUpperCase()}</p>
                     </div>
                   )
                 })}

@@ -207,6 +207,11 @@ export async function getLogisticsOrders() {
 
     const orders = (ordersResult.data || [])
       .filter((order: any) => String(order.delivery_type || '').toLowerCase() !== 'pickup')
+      .filter((order: any) => {
+        const status = String(order.status || '').toLowerCase().trim()
+        // Logistics should only receive orders after merchant packs.
+        return ['order_packed', 'order_taken_for_delivery', 'in_transit', 'completed', 'delivered'].includes(status)
+      })
       .map((order: any) => {
         const assignment = assignmentByOrderId.get(String(order.id)) || null
         const rider = assignment?.rider_id ? riderById.get(String(assignment.rider_id)) || null : null
@@ -231,7 +236,8 @@ export async function getLogisticsOrders() {
       (acc: any, order: any) => {
         const status = String(order.logistics_status || '').toLowerCase()
         const deliveryFee = Number(order.delivery_fee || 0)
-        const orderDelivered = String(order.status || '').toLowerCase() === 'delivered' || String(order.escrow_status || '').toLowerCase() === 'released'
+        const orderDelivered = ['completed', 'delivered'].includes(String(order.status || '').toLowerCase())
+          || String(order.escrow_status || '').toLowerCase() === 'released'
 
         acc.totalOrders += 1
         if (status === 'assigned') acc.assignedOrders += 1
@@ -360,6 +366,11 @@ export async function assignRiderToOrder(orderId: string, riderId: string, notes
       return { success: false, error: 'Selected rider is unavailable.' }
     }
 
+    const currentStatus = String(order.status || '').toLowerCase().trim()
+    if (!['order_packed', 'order_taken_for_delivery', 'in_transit', 'completed', 'delivered'].includes(currentStatus)) {
+      return { success: false, error: 'Order is not ready for logistics assignment yet.' }
+    }
+
     await upsertLogisticsAssignment(supabase, {
       order_id: orderId,
       rider_id: riderId,
@@ -368,12 +379,36 @@ export async function assignRiderToOrder(orderId: string, riderId: string, notes
       assigned_at: new Date().toISOString(),
     })
 
-    // Optional status transition to indicate dispatch has started.
-    await (supabase.from('orders') as any)
-      .update({ status: 'shipped', updated_at: new Date().toISOString() })
-      .eq('id', orderId)
-
     return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function markLogisticsOrderInTransit(orderId: string) {
+  try {
+    const supabase = await createClient()
+
+    const order = await readOrderForDeliveryContext(supabase, orderId)
+    if (!order) {
+      return { success: false, error: 'Order not found.' }
+    }
+
+    const status = String(order.status || '').toLowerCase().trim()
+    if (!['order_taken_for_delivery', 'in_transit'].includes(status)) {
+      return { success: false, error: 'Order must be marked "taken for delivery" by merchant first.' }
+    }
+
+    const update = await updateOrderStatus(orderId, 'in_transit')
+    if (!update.success) return update
+
+    await upsertLogisticsAssignment(supabase, {
+      order_id: orderId,
+      logistics_status: 'in_transit',
+      notes: null,
+    })
+
+    return { success: true, data: update.data }
   } catch (error: any) {
     return { success: false, error: error.message }
   }
@@ -383,9 +418,19 @@ export async function completeLogisticsOrder(orderId: string, proofOfDeliveryUrl
   try {
     const supabase = await createClient()
 
-    const release = await updateOrderStatus(orderId, 'delivered')
-    if (!release.success) {
-      return release
+    const order = await readOrderForDeliveryContext(supabase, orderId)
+    if (!order) {
+      return { success: false, error: 'Order not found.' }
+    }
+
+    const status = String(order.status || '').toLowerCase().trim()
+    if (!['in_transit', 'completed', 'delivered'].includes(status)) {
+      return { success: false, error: 'Order must be in transit before completion.' }
+    }
+
+    const complete = await updateOrderStatus(orderId, 'completed')
+    if (!complete.success) {
+      return complete
     }
 
     await upsertLogisticsAssignment(supabase, {
@@ -395,10 +440,23 @@ export async function completeLogisticsOrder(orderId: string, proofOfDeliveryUrl
       completed_at: new Date().toISOString(),
     })
 
+    // Release delivery escrow at logistics completion.
+    const releaseResult = await (supabase.from('escrow') as any)
+      .update({ status: 'released', released_at: new Date().toISOString() })
+      .eq('order_id', orderId)
+      .eq('type', 'delivery')
+
+    if (releaseResult.error) {
+      const message = String(releaseResult.error.message || '').toLowerCase()
+      if (!includesMissingTable(message, 'escrow')) {
+        throw releaseResult.error
+      }
+    }
+
     return {
       success: true,
-      data: release.data,
-      disbursement: release.disbursement,
+      data: complete.data,
+      disbursement: complete.disbursement,
     }
   } catch (error: any) {
     return { success: false, error: error.message }
