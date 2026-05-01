@@ -525,6 +525,12 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
           title: 'Order handed to logistics',
           message: `Order ${orderId} has been handed over to logistics. Tracking ID: ${trackingId}.`,
           eventKey: `order:handover:${orderId}`,
+          metadata: {
+            orderId,
+            trackingId,
+            action: 'track_package',
+            actionPath: `/track/${orderId}`,
+          },
           emailSubject: 'Order handed to logistics',
         })
       }
@@ -538,6 +544,12 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
           title: 'Delivery update',
           message: `Order ${orderId} is now in transit. Tracking ID: ${trackingId}.`,
           eventKey: `order:delivery-update:${orderId}:${normalizedStatus}`,
+          metadata: {
+            orderId,
+            trackingId,
+            action: 'track_package',
+            actionPath: `/track/${orderId}`,
+          },
           emailSubject: 'Your order is in transit',
         })
       }
@@ -551,6 +563,12 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
           title: 'Order delivered by logistics',
           message: `Order ${orderId} was delivered. Please confirm: Order Received and Satisfied to release merchant payment.`,
           eventKey: `order:logistics-completed:${orderId}`,
+          metadata: {
+            orderId,
+            trackingId,
+            action: 'track_package',
+            actionPath: `/track/${orderId}`,
+          },
           emailSubject: 'Order delivered - confirmation needed',
         })
       }

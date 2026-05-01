@@ -19,6 +19,13 @@ interface Notification {
   time: string
   read: boolean
   createdAt?: string
+  metadata?: {
+    action?: string
+    actionPath?: string
+    orderId?: string
+    trackingId?: string
+    [key: string]: any
+  }
 }
 
 interface NotificationsPanelProps {
@@ -53,6 +60,7 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
         message: String(item.message || ''),
         read: Boolean(item.read_at),
         createdAt: item.created_at || new Date().toISOString(),
+        metadata: item.metadata || undefined,
         time: item.created_at
           ? new Date(item.created_at).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })
           : 'Just now',
@@ -142,6 +150,18 @@ export function NotificationsPanel({ isOpen, onClose, onUnreadChange, onOpenOrde
     : null
 
   const getPrimaryAction = (notification: Notification) => {
+    if (notification.metadata?.action === 'track_package' && notification.metadata?.actionPath) {
+      return {
+        label: 'Track Package',
+        onClick: () => {
+          if (typeof window !== 'undefined') {
+            window.location.href = String(notification.metadata?.actionPath)
+          }
+          onClose()
+        },
+      }
+    }
+
     if (notification.type === 'order' || notification.type === 'report') {
       return {
         label: 'View Orders',
