@@ -47,6 +47,7 @@ function BuyerWalletSection({ userId }: { userId: string }) {
   const [newMethodDetails, setNewMethodDetails] = useState("")
   const [addingMethod, setAddingMethod] = useState(false)
   const [removingId, setRemovingId] = useState("")
+  const [settingDefaultId, setSettingDefaultId] = useState("")
 
   const loadData = async () => {
     if (!userId) { setLoading(false); return }
@@ -100,6 +101,28 @@ function BuyerWalletSection({ userId }: { userId: string }) {
       await loadData()
     } catch { /* ignore */ }
     finally { setRemovingId("") }
+  }
+
+  const handleSetDefaultMethod = async (methodId: string) => {
+    setSettingDefaultId(methodId)
+    setPmError("")
+    try {
+      const res = await fetch('/api/user/payment-methods', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, methodId }),
+      })
+      const result = await res.json().catch(() => ({}))
+      if (!result?.success) {
+        setPmError(result?.error || 'Failed to set default method')
+        return
+      }
+      await loadData()
+    } catch {
+      setPmError('Could not set default payment method.')
+    } finally {
+      setSettingDefaultId("")
+    }
   }
 
   if (loading) {
@@ -188,6 +211,15 @@ function BuyerWalletSection({ userId }: { userId: string }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
                   {pm.is_default && <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5">Default</span>}
+                  {!pm.is_default && (
+                    <button
+                      onClick={() => handleSetDefaultMethod(pm.id)}
+                      disabled={settingDefaultId === pm.id}
+                      className="text-[11px] font-semibold text-primary hover:underline disabled:opacity-60"
+                    >
+                      {settingDefaultId === pm.id ? 'Saving...' : 'Set default'}
+                    </button>
+                  )}
                   <button
                     onClick={() => handleRemoveMethod(pm.id)}
                     disabled={removingId === pm.id}

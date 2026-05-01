@@ -36,6 +36,15 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const [serviceBooking, setServiceBooking] = useState<any>(null)
   const savedLocation = [user?.city, user?.state].filter(Boolean).join(', ')
 
+  const mapSavedMethodToCheckoutMethod = (type?: string | null): PaymentMethod | null => {
+    const normalized = String(type || '').toLowerCase().trim()
+    if (!normalized) return null
+    if (normalized === 'card') return 'card'
+    if (normalized === 'bank' || normalized === 'bank_transfer' || normalized === 'transfer') return 'bank'
+    if (normalized === 'palmpay') return 'palmpay'
+    return null
+  }
+
   const getCheckoutPrefsKey = () => `checkout_prefs_${user?.userId || 'guest'}`
   const getSavedAddressesKey = () => `saved_addresses_${user?.userId || 'guest'}`
 
@@ -125,6 +134,25 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         setSavedAddresses(storedAddresses.slice(0, 5))
       }
     } catch {}
+  }, [user?.userId])
+
+  useEffect(() => {
+    const loadDefaultPaymentMethod = async () => {
+      const userId = String(user?.userId || '').trim()
+      if (!userId) return
+      try {
+        const res = await fetch(`/api/user/payment-methods?userId=${encodeURIComponent(userId)}`, { cache: 'no-store' })
+        const result = await res.json().catch(() => ({}))
+        const methods = Array.isArray(result?.data) ? result.data : []
+        const defaultMethod = methods.find((m: any) => Boolean(m?.is_default))
+        const mapped = mapSavedMethodToCheckoutMethod(defaultMethod?.type)
+        if (mapped) setPaymentMethod(mapped)
+      } catch {
+        // Ignore payment-method lookup failures; keep current selector value.
+      }
+    }
+
+    loadDefaultPaymentMethod()
   }, [user?.userId])
 
   useEffect(() => {
