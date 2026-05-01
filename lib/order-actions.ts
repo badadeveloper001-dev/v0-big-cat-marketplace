@@ -60,9 +60,14 @@ export async function getBuyerOrders(buyerId: string) {
 
       console.log(`[getBuyerOrders] Fetched ${orderIds.length} orders, assignments result:`, {
         hasError: !!assignmentsResult.error,
+        errorMessage: assignmentsResult.error?.message,
         count: Array.isArray(assignmentsResult.data) ? assignmentsResult.data.length : 0,
         sample: assignmentsResult.data?.[0]
       })
+
+      if (assignmentsResult.error) {
+        console.error(`[getBuyerOrders] Assignment query error:`, assignmentsResult.error)
+      }
 
       if (!assignmentsResult.error && Array.isArray(assignmentsResult.data)) {
         assignmentByOrderId = new Map(assignmentsResult.data.map((row: any) => [String(row.order_id || ''), row]))
@@ -80,9 +85,14 @@ export async function getBuyerOrders(buyerId: string) {
 
           console.log(`[getBuyerOrders] Fetched riders:`, {
             hasError: !!ridersResult.error,
+            errorMessage: ridersResult.error?.message,
             count: Array.isArray(ridersResult.data) ? ridersResult.data.length : 0,
             sample: ridersResult.data?.[0]
           })
+
+          if (ridersResult.error) {
+            console.error(`[getBuyerOrders] Riders query error:`, ridersResult.error)
+          }
 
           if (!ridersResult.error && Array.isArray(ridersResult.data)) {
             riderById = new Map(ridersResult.data.map((row: any) => [String(row.id || ''), row]))
@@ -94,6 +104,11 @@ export async function getBuyerOrders(buyerId: string) {
     const enriched = (data || []).map((order: any) => {
       const assignment = assignmentByOrderId.get(String(order.id || ''))
       const rider = assignment?.rider_id ? riderById.get(String(assignment.rider_id || '')) : null
+      
+      if (assignment && !rider && assignment.rider_id) {
+        console.log(`[getBuyerOrders] Order ${order.id}: Found assignment with rider_id ${assignment.rider_id}, but rider not found in riderById map. Keys in map:`, Array.from(riderById.keys()).slice(0, 3))
+      }
+      
       return {
         ...order,
         tracking_id: getTrackingId(String(order.id || '')),
