@@ -168,7 +168,11 @@ async function getSettledOrdersForMerchant(_supabase: any, merchantKeys: string[
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return [] as WalletOrder[]
 
-  const inList = merchantKeys.join(',')
+  // orders.merchant_id is UUID type — filter to UUID-format keys only
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const uuidKeys = merchantKeys.filter(k => uuidRe.test(k))
+  if (uuidKeys.length === 0) return [] as WalletOrder[]
+  const inList = uuidKeys.join(',')
   const qs = `select=id,merchant_id,status,grand_total,product_total,delivery_fee,created_at&merchant_id=in.(${inList})&status=in.(delivered,completed)&order=created_at.asc`
   try {
     const res = await fetch(`${url}/rest/v1/orders?${qs}`, {
@@ -190,7 +194,11 @@ async function getReleasedEscrowCreditsForMerchant(_supabase: any, merchantKeys:
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return [] as WalletTransaction[]
 
-  const inList = merchantKeys.join(',')
+  // escrow.recipient_id is UUID type — filter to UUID-format keys only
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const uuidKeys = merchantKeys.filter(k => uuidRe.test(k))
+  if (uuidKeys.length === 0) return [] as WalletTransaction[]
+  const inList = uuidKeys.join(',')
   const qs = `select=id,order_id,recipient_id,type,status,amount,released_at,created_at&recipient_id=in.(${inList})&status=eq.released&type=eq.product&order=released_at.desc&limit=500`
   let data: any[] | null = null
   try {
