@@ -70,7 +70,7 @@ export async function getBuyerOrders(buyerId: string) {
       }
 
       if (!assignmentsResult.error && Array.isArray(assignmentsResult.data)) {
-        assignmentByOrderId = new Map(assignmentsResult.data.map((row: any) => [String(row.order_id || ''), row]))
+        assignmentByOrderId = new Map(assignmentsResult.data.map((row: any) => [String(row.order_id || '').trim(), row]))
 
         const riderIds = assignmentsResult.data
           .map((row: any) => String(row?.rider_id || '').trim())
@@ -95,15 +95,15 @@ export async function getBuyerOrders(buyerId: string) {
           }
 
           if (!ridersResult.error && Array.isArray(ridersResult.data)) {
-            riderById = new Map(ridersResult.data.map((row: any) => [String(row.id || ''), row]))
+            riderById = new Map(ridersResult.data.map((row: any) => [String(row.id || '').trim(), row]))
           }
         }
       }
     }
 
     const enriched = (data || []).map((order: any) => {
-      const assignment = assignmentByOrderId.get(String(order.id || ''))
-      const rider = assignment?.rider_id ? riderById.get(String(assignment.rider_id || '')) : null
+      const assignment = assignmentByOrderId.get(String(order.id || '').trim())
+      const rider = assignment?.rider_id ? riderById.get(String(assignment.rider_id || '').trim()) : null
       
       if (assignment && !rider && assignment.rider_id) {
         console.log(`[getBuyerOrders] Order ${order.id}: Found assignment with rider_id ${assignment.rider_id}, but rider not found in riderById map. Keys in map:`, Array.from(riderById.keys()).slice(0, 3))

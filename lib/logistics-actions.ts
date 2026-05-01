@@ -223,8 +223,8 @@ export async function getLogisticsOrders() {
     const assignments = assignmentsMissing ? [] : assignmentsResult.data || []
     const riders = ridersMissing ? [] : ridersResult.data || []
 
-    const assignmentByOrderId = new Map(assignments.map((item: any) => [String(item.order_id), item]))
-    const riderById = new Map(riders.map((item: any) => [String(item.id), item]))
+    const assignmentByOrderId = new Map(assignments.map((item: any) => [String(item.order_id || '').trim(), item]))
+    const riderById = new Map(riders.map((item: any) => [String(item.id || '').trim(), item]))
 
     const orders = (ordersResult.data || [])
       .filter((order: any) => String(order.delivery_type || '').toLowerCase() !== 'pickup')
@@ -234,8 +234,8 @@ export async function getLogisticsOrders() {
         return ['order_packed', 'order_taken_for_delivery', 'in_transit', 'completed', 'delivered'].includes(status)
       })
       .map((order: any) => {
-        const assignment = assignmentByOrderId.get(String(order.id)) || null
-        const rider = assignment?.rider_id ? riderById.get(String(assignment.rider_id)) || null : null
+        const assignment = assignmentByOrderId.get(String(order.id || '').trim()) || null
+        const rider = assignment?.rider_id ? riderById.get(String(assignment.rider_id || '').trim()) || null : null
 
         const logisticsStatus = assignment?.logistics_status
           || (String(order.status || '').toLowerCase() === 'delivered' ? 'completed' : 'pending')
