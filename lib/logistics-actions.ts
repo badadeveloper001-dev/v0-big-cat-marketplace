@@ -440,19 +440,6 @@ export async function completeLogisticsOrder(orderId: string, proofOfDeliveryUrl
       completed_at: new Date().toISOString(),
     })
 
-    // Release delivery escrow at logistics completion.
-    const releaseResult = await (supabase.from('escrow') as any)
-      .update({ status: 'released', released_at: new Date().toISOString() })
-      .eq('order_id', orderId)
-      .eq('type', 'delivery')
-
-    if (releaseResult.error) {
-      const message = String(releaseResult.error.message || '').toLowerCase()
-      if (!includesMissingTable(message, 'escrow')) {
-        throw releaseResult.error
-      }
-    }
-
     return {
       success: true,
       data: complete.data,

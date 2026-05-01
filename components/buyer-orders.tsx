@@ -657,6 +657,15 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                   )}
 
                   <div className="mt-2">
+                    <a
+                      href={`/track/${order.id}`}
+                      className="w-full rounded-lg border border-indigo-200 bg-indigo-50 py-2.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 flex items-center justify-center"
+                    >
+                      Track Package
+                    </a>
+                  </div>
+
+                  <div className="mt-2">
                     <button
                       onClick={() => handleReorder(order)}
                       className="w-full rounded-lg border border-border bg-secondary py-2.5 text-sm font-medium text-foreground hover:bg-secondary/80"

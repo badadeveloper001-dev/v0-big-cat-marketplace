@@ -51,24 +51,43 @@ export async function getBuyerOrders(buyerId: string) {
 
     const orderIds = Array.isArray(data) ? data.map((order: any) => String(order.id || '')).filter(Boolean) : []
     let assignmentByOrderId = new Map<string, any>()
+    let riderById = new Map<string, any>()
 
     if (orderIds.length > 0) {
       const assignmentsResult = await (supabase.from('logistics_order_assignments') as any)
-        .select('order_id, logistics_status, rider_id, updated_at')
+        .select('order_id, logistics_status, rider_id, assigned_at, completed_at, updated_at')
         .in('order_id', orderIds)
 
       if (!assignmentsResult.error && Array.isArray(assignmentsResult.data)) {
         assignmentByOrderId = new Map(assignmentsResult.data.map((row: any) => [String(row.order_id || ''), row]))
+
+        const riderIds = assignmentsResult.data
+          .map((row: any) => String(row?.rider_id || '').trim())
+          .filter(Boolean)
+
+        if (riderIds.length > 0) {
+          const ridersResult = await (supabase.from('logistics_riders') as any)
+            .select('id, name, phone, region')
+            .in('id', riderIds)
+
+          if (!ridersResult.error && Array.isArray(ridersResult.data)) {
+            riderById = new Map(ridersResult.data.map((row: any) => [String(row.id || ''), row]))
+          }
+        }
       }
     }
 
     const enriched = (data || []).map((order: any) => {
       const assignment = assignmentByOrderId.get(String(order.id || ''))
+      const rider = assignment?.rider_id ? riderById.get(String(assignment.rider_id || '')) : null
       return {
         ...order,
         tracking_id: getTrackingId(String(order.id || '')),
         logistics_status: String(assignment?.logistics_status || ''),
         rider_id: assignment?.rider_id || null,
+        logistics_assigned_at: assignment?.assigned_at || null,
+        logistics_completed_at: assignment?.completed_at || null,
+        assigned_rider: rider || null,
       }
     })
 
