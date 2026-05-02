@@ -367,6 +367,12 @@ export async function createOrder(
         title: 'Payment confirmation',
         message: `Payment for order ${orderIdRef} has been confirmed.`,
         eventKey: `order:payment-confirmed:${orderIdRef}`,
+        metadata: {
+          orderId: orderIdRef,
+          trackingId: getTrackingId(orderIdRef),
+          action: 'track_package',
+          actionPath: `/track/${orderIdRef}`,
+        },
         emailSubject: 'Payment confirmation',
       })
 

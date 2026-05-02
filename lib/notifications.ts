@@ -86,6 +86,29 @@ function firstFiniteNumber(...values: any[]) {
   return 0
 }
 
+function extractOrderIdFromText(input: string) {
+  const text = String(input || "")
+  const uuidMatch = text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+  if (uuidMatch?.[0]) return uuidMatch[0]
+  return ""
+}
+
+function resolveOrderIdForEmail(input: DispatchNotificationInput) {
+  const fromMetadata = String(input.metadata?.orderId || "").trim()
+  if (fromMetadata) return fromMetadata
+
+  const fromMessage = extractOrderIdFromText(input.message)
+  if (fromMessage) return fromMessage
+
+  const fromTitle = extractOrderIdFromText(input.title)
+  if (fromTitle) return fromTitle
+
+  const fromEventKey = extractOrderIdFromText(input.eventKey || "")
+  if (fromEventKey) return fromEventKey
+
+  return ""
+}
+
 async function selectOrderItemsForEmail(supabase: any, orderId: string) {
   const attempts = [
     "product_id, product_name, quantity, unit_price, total_price, price",
@@ -632,12 +655,17 @@ async function maybeSendEmail(userId: string, input: DispatchNotificationInput) 
   const subject = input.emailSubject || input.title
 
   let ctx: OrderEmailContext | undefined
-  const orderId = String(input.metadata?.orderId || "").trim()
+  const orderId = resolveOrderIdForEmail(input)
   if (orderId && !input.emailHtml) {
     ctx = await fetchOrderEmailContext(orderId)
   }
 
-  const html = input.emailHtml || buildDefaultEmailHtml(input.title, input.message, input.metadata, ctx)
+  const enrichedMetadata: Record<string, any> = {
+    ...(input.metadata || {}),
+    ...(orderId ? { orderId } : {}),
+  }
+
+  const html = input.emailHtml || buildDefaultEmailHtml(input.title, input.message, enrichedMetadata, ctx)
   const text = input.emailText || `${input.title}\n\n${input.message}`
 
   const result = await sendEmail({ from, to: email, subject, html, text })
