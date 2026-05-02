@@ -370,6 +370,16 @@ export async function createOrder(
         metadata: {
           orderId: orderIdRef,
           trackingId: getTrackingId(orderIdRef),
+          orderItems: merchantItems.map((item) => ({
+            product_name: item.productName,
+            quantity: item.quantity,
+            unit_price: item.unitPrice,
+            total_price: Number(item.unitPrice) * Number(item.quantity),
+            image_url: item.imageUrl || item.image || '',
+          })),
+          subtotal: productTotal,
+          deliveryFee: allocatedDeliveryFee,
+          grandTotal: grandTotal,
           action: 'track_package',
           actionPath: `/track/${orderIdRef}`,
         },

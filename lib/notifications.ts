@@ -357,7 +357,17 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
     : ""
 
   // ── ORDER ITEMS TABLE ──
-  const items = ctx?.items || []
+  const metadataItems = Array.isArray(metadata?.orderItems)
+    ? metadata.orderItems.map((item: any) => ({
+        product_name: firstNonEmptyString(item?.product_name, item?.productName, item?.name, "Product"),
+        quantity: Number(item?.quantity || 1),
+        unit_price: firstFiniteNumber(item?.unit_price, item?.unitPrice, item?.price),
+        total_price: firstFiniteNumber(item?.total_price, item?.totalPrice),
+        image_url: firstNonEmptyString(item?.image_url, item?.imageUrl, item?.image),
+      }))
+    : []
+
+  const items = (ctx?.items && ctx.items.length > 0) ? ctx.items : metadataItems
   const itemsTable = items.length > 0
     ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
         <tr style="background:#f8fafc;">
@@ -391,9 +401,10 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
     : ""
 
   // ── PRICING BREAKDOWN ──
-  const subtotal = items.reduce((s, i) => s + Number(i.total_price || (Number(i.unit_price || 0) * Number(i.quantity || 1))), 0)
+  const subtotalFromItems = items.reduce((s, i) => s + Number(i.total_price || (Number(i.unit_price || 0) * Number(i.quantity || 1))), 0)
+  const subtotal = Number(metadata?.subtotal || subtotalFromItems || 0)
   const deliveryFee = Number(ctx?.order?.delivery_fee || metadata?.deliveryFee || 0)
-  const grandTotal = Number(ctx?.order?.grand_total || ctx?.order?.total_amount || metadata?.grandTotal || 0)
+  const grandTotal = Number(ctx?.order?.grand_total || ctx?.order?.total_amount || metadata?.grandTotal || (subtotal + deliveryFee) || 0)
   const insurance = grandTotal > 0 ? Math.round(grandTotal * 0.05 * 100) / 100 : 0
 
   const pricingTable = (items.length > 0 || grandTotal > 0)
@@ -441,9 +452,7 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
         <tr>
           <td style="padding:12px 14px;">
             <table cellpadding="0" cellspacing="0">
-              ${ctx.merchant.business_name ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;width:70px;">Business</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.merchant.business_name)}</td></tr>` : ""}
-              ${ctx.merchant.name ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;">Contact</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.merchant.name)}</td></tr>` : ""}
-              ${ctx.merchant.email ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;">Email</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.merchant.email)}</td></tr>` : ""}
+              ${(ctx.merchant.business_name || ctx.merchant.name) ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;width:70px;">Business</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(firstNonEmptyString(ctx.merchant.business_name, ctx.merchant.name))}</td></tr>` : ""}
             </table>
           </td>
         </tr>
