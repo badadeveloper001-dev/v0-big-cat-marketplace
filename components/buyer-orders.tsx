@@ -703,9 +703,11 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
 
                   {/* Cancel Order — only when no rider assigned yet */}
                   {(() => {
-                    const logisticsStatus = String(order.logistics_status || 'pending').toLowerCase()
+                    const logisticsStatus = String(order.logistics_status || '').toLowerCase().trim()
                     const orderStatus = String(order.status || '').toLowerCase()
-                    const canCancel = logisticsStatus === 'pending' && !['cancelled', 'delivered', 'completed'].includes(orderStatus)
+                    const riderAssigned = !!order.rider_id || ['assigned', 'in_transit', 'return_assigned', 'return_in_transit'].includes(logisticsStatus)
+                    const terminalStatus = ['cancelled', 'delivered', 'completed', 'in_transit'].includes(orderStatus)
+                    const canCancel = !riderAssigned && !terminalStatus
                     const feedback = cancelFeedback?.orderId === String(order.id) ? cancelFeedback : null
 
                     return (

@@ -20,7 +20,7 @@ export async function POST(
     // Load the order — verify it belongs to this buyer
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('id, status, logistics_status, buyer_id, merchant_id, grand_total, product_total, delivery_fee, payment_status')
+      .select('id, status, logistics_status, buyer_id, merchant_id, grand_total, product_total, delivery_fee, payment_status, rider_id')
       .eq('id', orderId)
       .single()
 
@@ -43,8 +43,9 @@ export async function POST(
     }
 
     // Block cancellation if a rider has already been assigned
-    const logisticsStatus = String(order.logistics_status || 'pending').toLowerCase()
-    if (logisticsStatus !== 'pending') {
+    const logisticsStatus = String(order.logistics_status || '').toLowerCase().trim()
+    const riderAssigned = order.rider_id || ['assigned', 'in_transit', 'return_assigned', 'return_in_transit'].includes(logisticsStatus)
+    if (riderAssigned) {
       return NextResponse.json(
         {
           success: false,
