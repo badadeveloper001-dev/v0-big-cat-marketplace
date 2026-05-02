@@ -7,8 +7,10 @@ import {
   CheckCircle2,
   Clock,
   Copy,
+  ExternalLink,
   Loader2,
   MapPin,
+  Navigation,
   Package,
   RefreshCw,
   ShieldCheck,
@@ -79,6 +81,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
   const [savingRider, setSavingRider] = useState(false)
   const [actionBusyKey, setActionBusyKey] = useState("")
   const [copiedRiderLink, setCopiedRiderLink] = useState(false)
+  const [activeSection, setActiveSection] = useState<'orders' | 'tracking'>('orders')
 
   useEffect(() => {
     if (bypassAccessCheck) {
@@ -185,6 +188,16 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     () => riders.filter((rider) => busyRiderIds.has(String(rider.id))).length,
     [riders, busyRiderIds],
   )
+
+  const activeDeliveries = useMemo(() => {
+    const activeStatuses = ['assigned', 'in_transit', 'return_assigned', 'return_in_transit']
+    return orders
+      .filter((o) => activeStatuses.includes(String(o.logistics_status || '').toLowerCase()))
+      .map((o) => ({
+        ...o,
+        rider: riders.find((r) => String(r.id) === String(o.rider_id)) ?? null,
+      }))
+  }, [orders, riders])
 
   const verifyAccess = () => {
     const normalized = accessCode.trim().toUpperCase()
@@ -437,6 +450,37 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
           </div>
         )}
 
+        {/* Section Tab Switcher */}
+        <div className="flex items-center gap-2 border-b border-border pb-1">
+          <button
+            onClick={() => setActiveSection('orders')}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              activeSection === 'orders'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            Dispatch Orders
+          </button>
+          <button
+            onClick={() => setActiveSection('tracking')}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              activeSection === 'tracking'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+            }`}
+          >
+            <Navigation className="w-4 h-4" />
+            Rider Tracking
+            {activeDeliveries.length > 0 && (
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                {activeDeliveries.length}
+              </span>
+            )}
+          </button>
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
           <MetricCard label="Total Dispatch Orders" value={summary.totalOrders} icon={<Package className="w-4 h-4" />} />
           <MetricCard label="Pending Dispatch" value={summary.pendingOrders} icon={<Clock className="w-4 h-4" />} />
@@ -462,7 +506,163 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
           <MetricCard label="Released to Logistics" value={formatNaira(summary.releasedEscrow)} icon={<Wallet className="w-4 h-4" />} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {activeSection === 'tracking' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-foreground">Live Rider Dispatch Board</h2>
+              <span className="text-xs text-muted-foreground">{activeDeliveries.length} active {activeDeliveries.length === 1 ? 'delivery' : 'deliveries'}</span>
+            </div>
+            {activeDeliveries.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-card p-10 text-center">
+                <Navigation className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm font-medium text-foreground">No active deliveries</p>
+                <p className="text-xs text-muted-foreground mt-1">Assign riders to orders to see them here</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {activeDeliveries.map((delivery) => {
+                  const status = String(delivery.logistics_status || '').toLowerCase()
+                  const isReturn = status.startsWith('return')
+                  const assignedAt = delivery.assigned_at ? new Date(delivery.assigned_at) : null
+                  const durationMs = assignedAt ? Date.now() - assignedAt.getTime() : 0
+                  const durationMins = Math.floor(durationMs / 60000)
+                  const durationHours = Math.floor(durationMins / 60)
+                  const durationDisplay =
+                    durationHours > 0
+                      ? `${durationHours}h ${durationMins % 60}m`
+                      : durationMins > 0
+                        ? `${durationMins}m`
+                        : 'Just assigned'
+
+                  const steps = isReturn
+                    ? [
+                        { key: 'return_requested', label: 'Return Requested' },
+                        { key: 'return_assigned', label: 'Rider Assigned' },
+                        { key: 'return_in_transit', label: 'In Transit' },
+                        { key: 'return_completed', label: 'Returned' },
+                      ]
+                    : [
+                        { key: 'pending', label: 'Pending' },
+                        { key: 'assigned', label: 'Assigned' },
+                        { key: 'in_transit', label: 'In Transit' },
+                        { key: 'completed', label: 'Delivered' },
+                      ]
+
+                  const stepOrder = steps.map((s) => s.key)
+                  const currentStepIdx = stepOrder.indexOf(status)
+
+                  const trackingId = `BC-${String(delivery.id).replace(/-/g, '').slice(0, 10).toUpperCase()}`
+                  const trackUrl = `/track/${delivery.id}`
+
+                  const riderInitials = (delivery.rider?.name || 'R')
+                    .split(' ')
+                    .map((n: string) => n[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase()
+
+                  return (
+                    <div key={delivery.id} className="rounded-2xl border border-border bg-card overflow-hidden">
+                      {/* Header stripe */}
+                      <div className={`px-4 py-2 flex items-center justify-between ${ isReturn ? 'bg-amber-500' : status === 'in_transit' ? 'bg-indigo-600' : 'bg-blue-600' }`}>
+                        <span className="text-xs font-semibold text-white uppercase tracking-wider">
+                          {isReturn ? 'Return Flow' : status === 'in_transit' ? 'In Transit' : 'Assigned'}
+                        </span>
+                        <span className="text-xs text-white/80">{durationDisplay} on delivery</span>
+                      </div>
+
+                      <div className="p-4 space-y-3">
+                        {/* Rider Info */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
+                            {riderInitials}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{delivery.rider?.name || 'Unknown Rider'}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {delivery.rider?.phone ? `📞 ${delivery.rider.phone}` : ''}
+                              {delivery.rider?.region ? ` · ${delivery.rider.region}` : ''}
+                            </p>
+                          </div>
+                          <span className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            Busy
+                          </span>
+                        </div>
+
+                        {/* Order info */}
+                        <div className="rounded-lg bg-secondary/60 px-3 py-2 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-mono font-semibold text-foreground">{trackingId}</span>
+                            <span className="text-xs text-muted-foreground">#{String(delivery.id).substring(0, 8)}</span>
+                          </div>
+                          <div className="flex items-start gap-1 text-xs text-muted-foreground">
+                            <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                            <span className="line-clamp-2">{delivery.delivery_address || 'No address'}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {(delivery.order_items || []).map((item) => `${item.product_name || 'Item'} ×${item.quantity || 1}`).join(', ') || 'No items'}
+                          </p>
+                        </div>
+
+                        {/* Status Steps */}
+                        <div className="relative">
+                          <div className="absolute top-[9px] left-0 right-0 h-0.5 bg-border" />
+                          <div className="relative flex items-start justify-between">
+                            {steps.map((step, idx) => {
+                              const done = idx <= currentStepIdx
+                              const active = idx === currentStepIdx
+                              return (
+                                <div key={step.key} className="flex flex-col items-center gap-1" style={{ flex: 1 }}>
+                                  <div className={`w-4.5 h-4.5 rounded-full border-2 z-10 ${
+                                    done
+                                      ? active
+                                        ? 'bg-primary border-primary'
+                                        : 'bg-emerald-500 border-emerald-500'
+                                      : 'bg-card border-muted-foreground/30'
+                                  }`}
+                                    style={{ width: '18px', height: '18px', flexShrink: 0 }}
+                                  >
+                                    {done && !active && (
+                                      <svg viewBox="0 0 18 18" fill="none" className="w-full h-full">
+                                        <path d="M5 9l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    )}
+                                    {active && (
+                                      <div className="w-full h-full rounded-full flex items-center justify-center">
+                                        <span className="w-2 h-2 rounded-full bg-white animate-pulse" style={{ width: '8px', height: '8px' }} />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <p className={`text-[9px] text-center leading-tight ${
+                                    active ? 'text-primary font-semibold' : done ? 'text-emerald-600' : 'text-muted-foreground'
+                                  }`}>{step.label}</p>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Action */}
+                        <button
+                          onClick={() => {
+                            if (typeof window !== 'undefined') window.open(trackUrl, '_blank')
+                          }}
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Open Live Tracking
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeSection === 'orders' && <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-card border border-border rounded-2xl overflow-hidden">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <h2 className="font-semibold text-foreground">Incoming Delivery Orders</h2>
@@ -622,7 +822,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
               )}
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   )

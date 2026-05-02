@@ -49,19 +49,149 @@ function escapeHtml(input: string) {
     .replace(/'/g, "&#39;")
 }
 
-function buildDefaultEmailHtml(title: string, message: string) {
+function buildDefaultEmailHtml(title: string, message: string, metadata?: Record<string, any>) {
   const safeTitle = escapeHtml(title)
   const safeMessage = escapeHtml(message).replace(/\n/g, "<br />")
 
-  return `
-    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;background:#f8fafc;">
-      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:24px;">
-        <h2 style="margin:0 0 12px 0;color:#0f172a;font-size:20px;">${safeTitle}</h2>
-        <p style="margin:0;color:#334155;font-size:14px;line-height:1.6;">${safeMessage}</p>
-        <p style="margin:20px 0 0;color:#64748b;font-size:12px;">BigCat Marketplace Automation</p>
-      </div>
-    </div>
-  `
+  const orderId = String(metadata?.orderId || "").trim()
+  const actionPath = String(metadata?.actionPath || "").trim()
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://v0-big-cat-marketplace.vercel.app").replace(/\/$/, "")
+  const trackingUrl = actionPath
+    ? `${appUrl}${actionPath}`
+    : orderId
+      ? `${appUrl}/track/${orderId}`
+      : ""
+  const trackingId = orderId ? `BC-${orderId.replace(/-/g, "").slice(0, 10).toUpperCase()}` : ""
+
+  const isAlert = /alert|breach|delay|incident|failed|cancel/i.test(title)
+  const isSuccess = /confirmed|completed|delivered|released|paid|assigned|approved|placed/i.test(title)
+  const accentColor = isAlert ? "#ef4444" : isSuccess ? "#22c55e" : "#f97316"
+  const badgeText = isAlert ? "IMPORTANT ALERT" : isSuccess ? "CONFIRMED" : "ORDER UPDATE"
+  const year = new Date().getFullYear()
+
+  const orderBox = orderId
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;">
+        <tr>
+          <td style="padding:14px 16px;">
+            <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#9a3412;letter-spacing:.12em;text-transform:uppercase;">Order Reference</p>
+            <p style="margin:0 0 2px;font-size:16px;font-weight:800;color:#0f172a;font-family:'Courier New',monospace;letter-spacing:.04em;">${trackingId}</p>
+            <p style="margin:0;font-size:11px;color:#78716c;">ID: ${escapeHtml(orderId)}</p>
+          </td>
+          <td style="padding:14px 16px;text-align:right;">
+            <div style="display:inline-block;background:${accentColor};border-radius:6px;padding:4px 10px;">
+              <p style="margin:0;font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:.1em;">${badgeText}</p>
+            </div>
+          </td>
+        </tr>
+      </table>`
+    : ""
+
+  const ctaButton = trackingUrl
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+        <tr>
+          <td align="center">
+            <a href="${escapeHtml(trackingUrl)}"
+               style="display:inline-block;padding:13px 32px;background:#f97316;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;letter-spacing:.02em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+              Track Your Order &rarr;
+            </a>
+          </td>
+        </tr>
+      </table>`
+    : ""
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>${safeTitle}</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;-webkit-font-smoothing:antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;width:100%;">
+
+          <!-- ── HEADER ── -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:16px 16px 0 0;padding:28px 32px;">
+              <table cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:14px;">
+                    <div style="width:46px;height:46px;background:#f97316;border-radius:12px;text-align:center;line-height:46px;font-size:26px;">&#x1F408;</div>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="margin:0;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-.03em;line-height:1.1;">BigCat</p>
+                    <p style="margin:0;font-size:10px;font-weight:600;color:#94a3b8;letter-spacing:.14em;text-transform:uppercase;">Marketplace</p>
+                  </td>
+                  <td style="vertical-align:middle;padding-left:24px;">
+                    <p style="margin:0;font-size:11px;color:#64748b;text-align:right;line-height:1.5;">Nigeria&rsquo;s Premium<br/>B2B &amp; B2C Platform</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── ACCENT STRIPE ── -->
+          <tr>
+            <td style="background:${accentColor};padding:5px 32px;">
+              <p style="margin:0;font-size:10px;font-weight:700;color:#ffffff;letter-spacing:.18em;text-transform:uppercase;">${escapeHtml(badgeText)}</p>
+            </td>
+          </tr>
+
+          <!-- ── BODY ── -->
+          <tr>
+            <td style="background:#ffffff;padding:32px 32px 28px;">
+              <h1 style="margin:0 0 14px;font-size:22px;font-weight:700;color:#0f172a;line-height:1.3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">${safeTitle}</h1>
+              <p style="margin:0;font-size:14px;color:#475569;line-height:1.75;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">${safeMessage}</p>
+              ${orderBox}
+              ${ctaButton}
+            </td>
+          </tr>
+
+          <!-- ── DIVIDER ── -->
+          <tr>
+            <td style="background:#fff7ed;border-left:1px solid #fed7aa;border-right:1px solid #fed7aa;padding:14px 32px;">
+              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
+                <tr>
+                  <td>
+                    <p style="margin:0;font-size:11px;color:#92400e;font-weight:600;">&#x1F4E6; Need help with your order?</p>
+                    <p style="margin:2px 0 0;font-size:11px;color:#b45309;">Reply to this email or visit <a href="${appUrl}/help" style="color:#f97316;text-decoration:none;">BigCat Help Centre</a></p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── FOOTER ── -->
+          <tr>
+            <td style="background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:20px 32px;">
+              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
+                <tr>
+                  <td>
+                    <p style="margin:0 0 2px;font-size:12px;font-weight:700;color:#0f172a;">BigCat Marketplace</p>
+                    <p style="margin:0 0 10px;font-size:11px;color:#94a3b8;">Nigeria&rsquo;s trusted commerce platform for buyers, merchants &amp; businesses.</p>
+                    <hr style="border:none;border-top:1px solid #e2e8f0;margin:10px 0;" />
+                    <p style="margin:0;font-size:10px;color:#94a3b8;">
+                      &copy; ${year} BigCat Marketplace. All rights reserved.
+                      &nbsp;&middot;&nbsp;
+                      <a href="${appUrl}" style="color:#f97316;text-decoration:none;">Visit Marketplace</a>
+                      &nbsp;&middot;&nbsp;
+                      <a href="${appUrl}/privacy" style="color:#f97316;text-decoration:none;">Privacy Policy</a>
+                    </p>
+                    <p style="margin:6px 0 0;font-size:10px;color:#cbd5e1;">You are receiving this email because you have an active BigCat account. If you did not request this, you can safely ignore it.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
 }
 
 async function hasProcessedEvent(eventKey: string) {
@@ -185,7 +315,7 @@ async function maybeSendEmail(userId: string, input: DispatchNotificationInput) 
 
   const from = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "BigCat Marketplace <onboarding@resend.dev>"
   const subject = input.emailSubject || input.title
-  const html = input.emailHtml || buildDefaultEmailHtml(input.title, input.message)
+  const html = input.emailHtml || buildDefaultEmailHtml(input.title, input.message, input.metadata)
   const text = input.emailText || `${input.title}\n\n${input.message}`
 
   const result = await sendEmail({ from, to: email, subject, html, text })
