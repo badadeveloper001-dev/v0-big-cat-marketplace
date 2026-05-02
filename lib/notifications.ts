@@ -49,11 +49,89 @@ function escapeHtml(input: string) {
     .replace(/'/g, "&#39;")
 }
 
-function buildDefaultEmailHtml(title: string, message: string, metadata?: Record<string, any>) {
+type OrderEmailContext = {
+  order?: {
+    id?: string
+    status?: string
+    created_at?: string
+    delivery_address?: string
+    delivery_fee?: number
+    grand_total?: number
+    total_amount?: number
+  } | null
+  items?: Array<{
+    product_name?: string
+    quantity?: number
+    unit_price?: number
+    total_price?: number
+    image_url?: string
+  }>
+  buyer?: { name?: string; email?: string; phone?: string } | null
+  merchant?: { name?: string; business_name?: string; email?: string } | null
+}
+
+async function fetchOrderEmailContext(orderId: string): Promise<OrderEmailContext> {
+  try {
+    const supabase = await createClient()
+
+    const { data: order } = await (supabase.from("orders") as any)
+      .select("id, buyer_id, merchant_id, status, delivery_address, delivery_fee, grand_total, total_amount, created_at")
+      .eq("id", orderId)
+      .maybeSingle()
+
+    if (!order) return {}
+
+    const [itemsResult, buyerResult, merchantResult] = await Promise.all([
+      (supabase.from("order_items") as any)
+        .select("product_name, quantity, unit_price, total_price, product_id")
+        .eq("order_id", orderId),
+      order.buyer_id
+        ? (supabase.from("auth_users") as any)
+            .select("name, email, phone")
+            .eq("id", order.buyer_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      order.merchant_id
+        ? (supabase.from("auth_users") as any)
+            .select("name, business_name, email")
+            .eq("id", order.merchant_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+
+    let items: any[] = itemsResult.data || []
+
+    // Try to enrich items with product images
+    const productIds = items.map((i: any) => i.product_id).filter(Boolean)
+    if (productIds.length > 0) {
+      try {
+        const { data: products } = await (supabase.from("products") as any)
+          .select("id, image_url")
+          .in("id", productIds)
+        const imgMap: Record<string, string> = {}
+        for (const p of products || []) imgMap[p.id] = p.image_url || ""
+        items = items.map((item: any) => ({ ...item, image_url: imgMap[item.product_id] || "" }))
+      } catch {
+        // images are optional
+      }
+    }
+
+    return {
+      order,
+      items,
+      buyer: buyerResult.data || null,
+      merchant: merchantResult.data || null,
+    }
+  } catch {
+    return {}
+  }
+}
+
+function buildDefaultEmailHtml(title: string, message: string, metadata?: Record<string, any>, ctx?: OrderEmailContext) {
   const safeTitle = escapeHtml(title)
   const safeMessage = escapeHtml(message).replace(/\n/g, "<br />")
 
-  const orderId = String(metadata?.orderId || "").trim()
+  const orderId = String(metadata?.orderId || ctx?.order?.id || "").trim()
   const actionPath = String(metadata?.actionPath || "").trim()
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://v0-big-cat-marketplace.vercel.app").replace(/\/$/, "")
   const trackingUrl = actionPath
@@ -69,16 +147,23 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
   const badgeText = isAlert ? "IMPORTANT ALERT" : isSuccess ? "CONFIRMED" : "ORDER UPDATE"
   const year = new Date().getFullYear()
 
+  const logoUrl = `${appUrl}/image.png`
+
+  // ── ORDER REFERENCE BOX ──
+  const orderDate = ctx?.order?.created_at
+    ? new Date(ctx.order.created_at).toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" })
+    : ""
+
   const orderBox = orderId
     ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;">
         <tr>
           <td style="padding:14px 16px;">
-            <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#9a3412;letter-spacing:.12em;text-transform:uppercase;">Order Reference</p>
-            <p style="margin:0 0 2px;font-size:16px;font-weight:800;color:#0f172a;font-family:'Courier New',monospace;letter-spacing:.04em;">${trackingId}</p>
-            <p style="margin:0;font-size:11px;color:#78716c;">ID: ${escapeHtml(orderId)}</p>
+            <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#9a3412;letter-spacing:.12em;text-transform:uppercase;">Order Reference</p>
+            <p style="margin:0 0 2px;font-size:18px;font-weight:800;color:#0f172a;font-family:'Courier New',monospace;letter-spacing:.04em;">${trackingId}</p>
+            <p style="margin:0;font-size:10px;color:#78716c;">ID: ${escapeHtml(orderId)}${orderDate ? `&nbsp;&middot;&nbsp;${escapeHtml(orderDate)}` : ""}</p>
           </td>
-          <td style="padding:14px 16px;text-align:right;">
-            <div style="display:inline-block;background:${accentColor};border-radius:6px;padding:4px 10px;">
+          <td style="padding:14px 16px;text-align:right;white-space:nowrap;">
+            <div style="display:inline-block;background:${accentColor};border-radius:6px;padding:5px 12px;">
               <p style="margin:0;font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:.1em;">${badgeText}</p>
             </div>
           </td>
@@ -86,12 +171,107 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
       </table>`
     : ""
 
+  // ── ORDER ITEMS TABLE ──
+  const items = ctx?.items || []
+  const itemsTable = items.length > 0
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <tr style="background:#f8fafc;">
+          <td colspan="3" style="padding:10px 14px;border-bottom:1px solid #e2e8f0;">
+            <p style="margin:0;font-size:10px;font-weight:700;color:#64748b;letter-spacing:.1em;text-transform:uppercase;">Items Ordered</p>
+          </td>
+        </tr>
+        ${items.map((item, idx) => {
+          const imgUrl = String(item.image_url || "").trim()
+          const productName = escapeHtml(String(item.product_name || "Product"))
+          const qty = Number(item.quantity || 1)
+          const unitPrice = Number(item.unit_price || 0)
+          const lineTotal = Number(item.total_price || unitPrice * qty)
+          const isLast = idx === items.length - 1
+          const imgCell = imgUrl
+            ? `<img src="${escapeHtml(imgUrl)}" alt="${productName}" width="52" height="52" style="width:52px;height:52px;object-fit:cover;border-radius:8px;display:block;border:1px solid #e2e8f0;" />`
+            : `<div style="width:52px;height:52px;background:#f1f5f9;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;text-align:center;line-height:52px;">&#x1F4E6;</div>`
+          return `<tr style="${isLast ? "" : "border-bottom:1px solid #f1f5f9;"}">
+            <td style="padding:12px 14px;width:68px;vertical-align:top;">${imgCell}</td>
+            <td style="padding:12px 6px;vertical-align:top;">
+              <p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#0f172a;">${productName}</p>
+              <p style="margin:0;font-size:11px;color:#64748b;">Qty: ${qty}</p>
+            </td>
+            <td style="padding:12px 14px;vertical-align:top;text-align:right;white-space:nowrap;">
+              <p style="margin:0;font-size:13px;font-weight:700;color:#0f172a;">&#x20A6;${lineTotal.toLocaleString("en-NG")}</p>
+              ${qty > 1 ? `<p style="margin:2px 0 0;font-size:10px;color:#94a3b8;">&#x20A6;${unitPrice.toLocaleString("en-NG")} each</p>` : ""}
+            </td>
+          </tr>`
+        }).join("")}
+      </table>`
+    : ""
+
+  // ── PRICING BREAKDOWN ──
+  const subtotal = items.reduce((s, i) => s + Number(i.total_price || (Number(i.unit_price || 0) * Number(i.quantity || 1))), 0)
+  const deliveryFee = Number(ctx?.order?.delivery_fee || metadata?.deliveryFee || 0)
+  const grandTotal = Number(ctx?.order?.grand_total || ctx?.order?.total_amount || metadata?.grandTotal || 0)
+  const insurance = grandTotal > 0 ? Math.round(grandTotal * 0.05 * 100) / 100 : 0
+
+  const pricingTable = (items.length > 0 || grandTotal > 0)
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <tr>
+          <td colspan="2" style="padding:10px 14px;border-bottom:1px solid #e2e8f0;">
+            <p style="margin:0;font-size:10px;font-weight:700;color:#64748b;letter-spacing:.1em;text-transform:uppercase;">Pricing Breakdown</p>
+          </td>
+        </tr>
+        ${subtotal > 0 ? `<tr><td style="padding:8px 14px;font-size:12px;color:#475569;">Subtotal</td><td style="padding:8px 14px;font-size:12px;color:#0f172a;font-weight:600;text-align:right;">&#x20A6;${subtotal.toLocaleString("en-NG")}</td></tr>` : ""}
+        ${deliveryFee > 0 ? `<tr><td style="padding:8px 14px;font-size:12px;color:#475569;">Delivery Fee</td><td style="padding:8px 14px;font-size:12px;color:#0f172a;font-weight:600;text-align:right;">&#x20A6;${deliveryFee.toLocaleString("en-NG")}</td></tr>` : ""}
+        ${insurance > 0 ? `<tr><td style="padding:8px 14px;font-size:12px;color:#475569;">Insurance (5%)</td><td style="padding:8px 14px;font-size:12px;color:#0f172a;font-weight:600;text-align:right;">&#x20A6;${insurance.toLocaleString("en-NG")}</td></tr>` : ""}
+        ${grandTotal > 0 ? `<tr style="background:#fff7ed;border-top:2px solid #fed7aa;"><td style="padding:10px 14px;font-size:13px;font-weight:700;color:#92400e;">Total</td><td style="padding:10px 14px;font-size:15px;font-weight:800;color:#c2410c;text-align:right;">&#x20A6;${grandTotal.toLocaleString("en-NG")}</td></tr>` : ""}
+      </table>`
+    : ""
+
+  // ── BUYER & MERCHANT CARDS ──
+  const buyerCard = ctx?.buyer
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <tr style="background:#f0fdf4;">
+          <td style="padding:10px 14px;border-bottom:1px solid #dcfce7;">
+            <p style="margin:0;font-size:10px;font-weight:700;color:#166534;letter-spacing:.1em;text-transform:uppercase;">&#x1F6CD; Buyer Details</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:12px 14px;">
+            <table cellpadding="0" cellspacing="0">
+              ${ctx.buyer.name ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;width:70px;">Name</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.buyer.name)}</td></tr>` : ""}
+              ${ctx.buyer.email ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;">Email</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.buyer.email)}</td></tr>` : ""}
+              ${ctx.buyer.phone ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;">Phone</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.buyer.phone)}</td></tr>` : ""}
+              ${ctx.order?.delivery_address ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;vertical-align:top;">Address</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.order.delivery_address)}</td></tr>` : ""}
+            </table>
+          </td>
+        </tr>
+      </table>`
+    : ""
+
+  const merchantCard = ctx?.merchant
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <tr style="background:#eff6ff;">
+          <td style="padding:10px 14px;border-bottom:1px solid #dbeafe;">
+            <p style="margin:0;font-size:10px;font-weight:700;color:#1e40af;letter-spacing:.1em;text-transform:uppercase;">&#x1F3EA; Seller / Merchant Details</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:12px 14px;">
+            <table cellpadding="0" cellspacing="0">
+              ${ctx.merchant.business_name ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;width:70px;">Business</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.merchant.business_name)}</td></tr>` : ""}
+              ${ctx.merchant.name ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;">Contact</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.merchant.name)}</td></tr>` : ""}
+              ${ctx.merchant.email ? `<tr><td style="padding:2px 0;font-size:11px;color:#64748b;">Email</td><td style="padding:2px 0;font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(ctx.merchant.email)}</td></tr>` : ""}
+            </table>
+          </td>
+        </tr>
+      </table>`
+    : ""
+
+  // ── CTA BUTTON ──
   const ctaButton = trackingUrl
     ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
         <tr>
           <td align="center">
             <a href="${escapeHtml(trackingUrl)}"
-               style="display:inline-block;padding:13px 32px;background:#f97316;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;letter-spacing:.02em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+               style="display:inline-block;padding:13px 36px;background:#f97316;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;letter-spacing:.02em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
               Track Your Order &rarr;
             </a>
           </td>
@@ -114,18 +294,19 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
 
           <!-- ── HEADER ── -->
           <tr>
-            <td style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:16px 16px 0 0;padding:28px 32px;">
-              <table cellpadding="0" cellspacing="0" role="presentation">
+            <td style="background:#0f172a;border-radius:16px 16px 0 0;padding:22px 32px;">
+              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
                 <tr>
-                  <td style="vertical-align:middle;padding-right:14px;">
-                    <div style="width:46px;height:46px;background:#f97316;border-radius:12px;text-align:center;line-height:46px;font-size:26px;">&#x1F408;</div>
-                  </td>
                   <td style="vertical-align:middle;">
-                    <p style="margin:0;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-.03em;line-height:1.1;">BigCat</p>
-                    <p style="margin:0;font-size:10px;font-weight:600;color:#94a3b8;letter-spacing:.14em;text-transform:uppercase;">Marketplace</p>
+                    <img src="${logoUrl}" alt="BigCat Marketplace" width="100" height="100"
+                         style="width:100px;height:100px;object-fit:contain;display:block;filter:brightness(0) invert(1);" />
                   </td>
-                  <td style="vertical-align:middle;padding-left:24px;">
-                    <p style="margin:0;font-size:11px;color:#64748b;text-align:right;line-height:1.5;">Nigeria&rsquo;s Premium<br/>B2B &amp; B2C Platform</p>
+                  <td style="vertical-align:middle;padding-left:16px;">
+                    <p style="margin:0 0 2px;font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-.04em;line-height:1;">BigCat</p>
+                    <p style="margin:0;font-size:10px;font-weight:600;color:#94a3b8;letter-spacing:.18em;text-transform:uppercase;">Marketplace</p>
+                  </td>
+                  <td style="vertical-align:middle;text-align:right;">
+                    <p style="margin:0;font-size:11px;color:#64748b;line-height:1.6;">Nigeria&rsquo;s Premium<br/>B2B &amp; B2C Platform</p>
                   </td>
                 </tr>
               </table>
@@ -134,32 +315,30 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
 
           <!-- ── ACCENT STRIPE ── -->
           <tr>
-            <td style="background:${accentColor};padding:5px 32px;">
-              <p style="margin:0;font-size:10px;font-weight:700;color:#ffffff;letter-spacing:.18em;text-transform:uppercase;">${escapeHtml(badgeText)}</p>
+            <td style="background:${accentColor};padding:6px 32px;">
+              <p style="margin:0;font-size:10px;font-weight:700;color:#ffffff;letter-spacing:.2em;text-transform:uppercase;">${escapeHtml(badgeText)}</p>
             </td>
           </tr>
 
           <!-- ── BODY ── -->
           <tr>
             <td style="background:#ffffff;padding:32px 32px 28px;">
-              <h1 style="margin:0 0 14px;font-size:22px;font-weight:700;color:#0f172a;line-height:1.3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">${safeTitle}</h1>
-              <p style="margin:0;font-size:14px;color:#475569;line-height:1.75;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">${safeMessage}</p>
+              <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#0f172a;line-height:1.3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">${safeTitle}</h1>
+              <p style="margin:0 0 6px;font-size:14px;color:#475569;line-height:1.75;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">${safeMessage}</p>
               ${orderBox}
+              ${itemsTable}
+              ${pricingTable}
+              ${buyerCard}
+              ${merchantCard}
               ${ctaButton}
             </td>
           </tr>
 
-          <!-- ── DIVIDER ── -->
+          <!-- ── HELP STRIP ── -->
           <tr>
             <td style="background:#fff7ed;border-left:1px solid #fed7aa;border-right:1px solid #fed7aa;padding:14px 32px;">
-              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
-                <tr>
-                  <td>
-                    <p style="margin:0;font-size:11px;color:#92400e;font-weight:600;">&#x1F4E6; Need help with your order?</p>
-                    <p style="margin:2px 0 0;font-size:11px;color:#b45309;">Reply to this email or visit <a href="${appUrl}/help" style="color:#f97316;text-decoration:none;">BigCat Help Centre</a></p>
-                  </td>
-                </tr>
-              </table>
+              <p style="margin:0;font-size:11px;color:#92400e;font-weight:600;">&#x1F4E6; Need help with your order?</p>
+              <p style="margin:3px 0 0;font-size:11px;color:#b45309;">Reply to this email or visit <a href="${appUrl}/help" style="color:#f97316;text-decoration:none;">BigCat Help Centre</a></p>
             </td>
           </tr>
 
@@ -315,7 +494,14 @@ async function maybeSendEmail(userId: string, input: DispatchNotificationInput) 
 
   const from = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "BigCat Marketplace <onboarding@resend.dev>"
   const subject = input.emailSubject || input.title
-  const html = input.emailHtml || buildDefaultEmailHtml(input.title, input.message, input.metadata)
+
+  let ctx: OrderEmailContext | undefined
+  const orderId = String(input.metadata?.orderId || "").trim()
+  if (orderId && !input.emailHtml) {
+    ctx = await fetchOrderEmailContext(orderId)
+  }
+
+  const html = input.emailHtml || buildDefaultEmailHtml(input.title, input.message, input.metadata, ctx)
   const text = input.emailText || `${input.title}\n\n${input.message}`
 
   const result = await sendEmail({ from, to: email, subject, html, text })
