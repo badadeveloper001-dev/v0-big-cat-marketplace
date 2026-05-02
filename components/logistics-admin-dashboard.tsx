@@ -173,6 +173,16 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     return ids
   }, [orders])
 
+  const freeRidersCount = useMemo(
+    () => riders.filter((rider) => !busyRiderIds.has(String(rider.id))).length,
+    [riders, busyRiderIds],
+  )
+
+  const busyRidersCount = useMemo(
+    () => riders.filter((rider) => busyRiderIds.has(String(rider.id))).length,
+    [riders, busyRiderIds],
+  )
+
   const verifyAccess = () => {
     const normalized = accessCode.trim().toUpperCase()
     if (!normalized) {
@@ -379,11 +389,13 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
           <MetricCard label="Total Dispatch Orders" value={summary.totalOrders} icon={<Package className="w-4 h-4" />} />
           <MetricCard label="Pending Dispatch" value={summary.pendingOrders} icon={<Clock className="w-4 h-4" />} />
           <MetricCard label="Assigned Orders" value={summary.assignedOrders} icon={<Truck className="w-4 h-4" />} />
           <MetricCard label="Completed Delivery" value={summary.completedOrders} icon={<CheckCircle2 className="w-4 h-4" />} />
+          <MetricCard label="Free Riders" value={freeRidersCount} icon={<Users className="w-4 h-4" />} />
+          <MetricCard label="Busy Riders" value={busyRidersCount} icon={<Users className="w-4 h-4" />} />
           <MetricCard label="Held Escrow" value={formatNaira(summary.heldEscrow)} icon={<Wallet className="w-4 h-4" />} />
           <MetricCard label="Released to Logistics" value={formatNaira(summary.releasedEscrow)} icon={<Wallet className="w-4 h-4" />} />
         </div>
