@@ -28,7 +28,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'How do I cancel an order?',
-        a: 'You cannot cancel an order after it has been placed. Once placed, your order moves through the fulfillment process. If you have a problem with an order, file a dispute from the order details page.',
+        a: 'You can cancel an order from My Orders as long as a rider has not yet been assigned by logistics. Once a rider is assigned, the order is in motion and cannot be cancelled. If you need help after that point, use the Report Issue option on the order.',
       },
     ],
   },

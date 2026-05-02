@@ -383,10 +383,10 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
           const lineTotal = Number(item.total_price || unitPrice * qty)
           const isLast = idx === items.length - 1
           const imgCell = imgUrl
-            ? `<img src="${escapeHtml(imgUrl)}" alt="${productName}" width="52" height="52" style="width:52px;height:52px;object-fit:cover;border-radius:8px;display:block;border:1px solid #e2e8f0;" />`
-            : `<div style="width:52px;height:52px;background:#f1f5f9;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;text-align:center;line-height:52px;">&#x1F4E6;</div>`
+            ? `<img src="${escapeHtml(imgUrl)}" alt="${productName}" width="80" height="80" style="width:80px;height:80px;max-width:80px;object-fit:cover;border-radius:10px;display:block;border:1px solid #e2e8f0;" />`
+            : `<div style="width:80px;height:80px;background:#f1f5f9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:32px;text-align:center;line-height:80px;">&#x1F4E6;</div>`
           return `<tr style="${isLast ? "" : "border-bottom:1px solid #f1f5f9;"}">
-            <td style="padding:12px 14px;width:68px;vertical-align:top;">${imgCell}</td>
+            <td style="padding:12px 14px;width:96px;vertical-align:middle;">${imgCell}</td>
             <td style="padding:12px 6px;vertical-align:top;">
               <p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#0f172a;">${productName}</p>
               <p style="margin:0;font-size:11px;color:#64748b;">Qty: ${qty}</p>

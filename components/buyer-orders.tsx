@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw, Loader2, Download, Timer, Banknote } from "lucide-react"
+import { ArrowLeft, Package, Clock, Truck, CheckCircle2, AlertCircle, RefreshCw, Loader2, Download, Timer, Banknote, XCircle } from "lucide-react"
 import { formatNaira } from "@/lib/currency-utils"
 import { useRole } from "@/lib/role-context"
 import { useCart } from "@/lib/cart-context"
@@ -69,6 +69,8 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
   const [submittingReportFor, setSubmittingReportFor] = useState<string | null>(null)
   const [reportFeedback, setReportFeedback] = useState('')
   const [issuesByOrder, setIssuesByOrder] = useState<Record<string, any>>({})
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null)
+  const [cancelFeedback, setCancelFeedback] = useState<{ orderId: string; message: string; isError: boolean } | null>(null)
 
   const badgeClass = (status: "held" | "released") =>
     status === "held"
@@ -431,6 +433,37 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
     }
   }
 
+  const handleCancelOrder = async (orderId: string) => {
+    if (!user?.userId) return
+    if (!window.confirm('Are you sure you want to cancel this order? This cannot be undone.')) return
+
+    setCancellingOrderId(orderId)
+    setCancelFeedback(null)
+
+    try {
+      const response = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyerId: user.userId }),
+      })
+      const result = await response.json()
+
+      if (!result.success) {
+        setCancelFeedback({ orderId, message: result.error || 'Failed to cancel order.', isError: true })
+        return
+      }
+
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: 'cancelled' } : o))
+      )
+      setCancelFeedback({ orderId, message: 'Order cancelled successfully.', isError: false })
+    } catch {
+      setCancelFeedback({ orderId, message: 'Failed to cancel order. Please try again.', isError: true })
+    } finally {
+      setCancellingOrderId(null)
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -664,6 +697,48 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                       Track Package
                     </a>
                   </div>
+
+                  {/* Cancel Order — only when no rider assigned yet */}
+                  {(() => {
+                    const logisticsStatus = String(order.logistics_status || 'pending').toLowerCase()
+                    const orderStatus = String(order.status || '').toLowerCase()
+                    const canCancel = logisticsStatus === 'pending' && !['cancelled', 'delivered', 'completed'].includes(orderStatus)
+                    const feedback = cancelFeedback?.orderId === String(order.id) ? cancelFeedback : null
+
+                    return (
+                      <>
+                        {feedback && (
+                          <div className={`mt-2 rounded-lg border px-3 py-2 text-sm ${feedback.isError ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+                            {feedback.message}
+                          </div>
+                        )}
+                        {canCancel && (
+                          <div className="mt-2">
+                            <button
+                              onClick={() => handleCancelOrder(String(order.id))}
+                              disabled={cancellingOrderId === String(order.id)}
+                              className="w-full rounded-lg border border-red-200 bg-red-50 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100 flex items-center justify-center gap-2 disabled:opacity-60"
+                            >
+                              {cancellingOrderId === String(order.id) ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Cancelling...
+                                </>
+                              ) : (
+                                <>
+                                  <XCircle className="w-4 h-4" />
+                                  Cancel Order
+                                </>
+                              )}
+                            </button>
+                            <p className="mt-1 text-[11px] text-muted-foreground text-center">
+                              Only available before a rider is assigned
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
 
                   <div className="mt-2">
                     <button
