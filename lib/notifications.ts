@@ -245,11 +245,15 @@ async function selectAuthUserForEmail(supabase: any, userId: string, kind: "buye
 async function selectProductsForEmail(supabase: any, productIds: string[]) {
   const attempts = [
     "id, name, image_url, product_image, images",
+    "id, name, image_url",
     "id, name, image_url, images",
     "id, name, images",
     "id, product_name, image_url, product_image, images",
+    "id, product_name, image_url",
     "id, product_name, image_url, images",
     "id, product_name, images",
+    "id, image_url",
+    "id, images",
   ]
 
   for (const selectClause of attempts) {
