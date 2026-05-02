@@ -7,7 +7,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: orderId } = await params
+    const { id } = await params
+    const orderId = decodeURIComponent(String(id || '')).trim()
     const body = await req.json().catch(() => ({}))
     const buyerId: string | undefined = body.buyerId
 
@@ -15,21 +16,42 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 })
     }
 
+    if (!buyerId) {
+      return NextResponse.json({ success: false, error: 'Buyer ID is required' }, { status: 400 })
+    }
+
     const supabase = createClient()
 
-    // Load the order — verify it belongs to this buyer
-    const { data: order, error: orderError } = await supabase
+    // Load the order directly by ID first.
+    const { data: directOrder, error: directOrderError } = await supabase
       .from('orders')
       .select('id, status, logistics_status, buyer_id, merchant_id, grand_total, product_total, delivery_fee, payment_status, rider_id')
       .eq('id', orderId)
-      .single()
+      .maybeSingle()
 
-    if (orderError || !order) {
+    let order = directOrder
+
+    // Fallback: in legacy data/envs, direct ID filters can fail (e.g. type mismatch).
+    // Recover by loading buyer-scoped orders and matching in memory.
+    if (!order) {
+      const { data: buyerOrders, error: buyerOrdersError } = await supabase
+        .from('orders')
+        .select('id, status, logistics_status, buyer_id, merchant_id, grand_total, product_total, delivery_fee, payment_status, rider_id')
+        .eq('buyer_id', buyerId)
+        .order('created_at', { ascending: false })
+        .limit(200)
+
+      if (!buyerOrdersError && Array.isArray(buyerOrders)) {
+        order = buyerOrders.find((entry: any) => String(entry?.id || '').trim() === orderId) || null
+      }
+    }
+
+    if ((!order && directOrderError) || !order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 })
     }
 
     // Verify the requester is the buyer
-    if (buyerId && order.buyer_id !== buyerId) {
+    if (order.buyer_id !== buyerId) {
       return NextResponse.json({ success: false, error: 'Unauthorised' }, { status: 403 })
     }
 

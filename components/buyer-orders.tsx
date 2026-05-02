@@ -437,11 +437,17 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
     if (!user?.userId) return
     if (!window.confirm('Are you sure you want to cancel this order? This cannot be undone.')) return
 
-    setCancellingOrderId(orderId)
+    const normalizedOrderId = String(orderId || '').trim()
+    if (!normalizedOrderId) {
+      setCancelFeedback({ orderId: String(orderId || ''), message: 'Order reference is missing. Please refresh and try again.', isError: true })
+      return
+    }
+
+    setCancellingOrderId(normalizedOrderId)
     setCancelFeedback(null)
 
     try {
-      const response = await fetch(`/api/orders/${orderId}/cancel`, {
+      const response = await fetch(`/api/orders/${encodeURIComponent(normalizedOrderId)}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ buyerId: user.userId }),
@@ -449,19 +455,19 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
       const result = await response.json()
 
       if (!result.success) {
-        setCancelFeedback({ orderId, message: result.error || 'Failed to cancel order.', isError: true })
+        setCancelFeedback({ orderId: normalizedOrderId, message: result.error || 'Failed to cancel order.', isError: true })
         return
       }
 
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: 'cancelled' } : o))
+        prev.map((o) => (o.id === normalizedOrderId ? { ...o, status: 'cancelled' } : o))
       )
       const refundMsg = result.refundAmount > 0
         ? `Order cancelled. ₦${Number(result.refundAmount).toLocaleString('en-NG')} refunded to your wallet (insurance fee is non-refundable).`
         : 'Order cancelled successfully.'
-      setCancelFeedback({ orderId, message: refundMsg, isError: false })
+      setCancelFeedback({ orderId: normalizedOrderId, message: refundMsg, isError: false })
     } catch {
-      setCancelFeedback({ orderId, message: 'Failed to cancel order. Please try again.', isError: true })
+      setCancelFeedback({ orderId: normalizedOrderId, message: 'Failed to cancel order. Please try again.', isError: true })
     } finally {
       setCancellingOrderId(null)
     }
