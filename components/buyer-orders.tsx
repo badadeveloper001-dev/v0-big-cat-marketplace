@@ -701,13 +701,11 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                     </a>
                   </div>
 
-                  {/* Cancel Order — only when no rider assigned yet */}
+                  {/* Cancel Order — hidden only for terminal/final statuses */}
                   {(() => {
-                    const logisticsStatus = String(order.logistics_status || '').toLowerCase().trim()
                     const orderStatus = String(order.status || '').toLowerCase()
-                    const riderAssigned = !!order.rider_id || ['assigned', 'in_transit', 'return_assigned', 'return_in_transit'].includes(logisticsStatus)
-                    const terminalStatus = ['cancelled', 'delivered', 'completed', 'in_transit'].includes(orderStatus)
-                    const canCancel = !riderAssigned && !terminalStatus
+                    const hiddenStatuses = ['cancelled', 'delivered', 'completed', 'in_transit', 'return_assigned', 'return_in_transit']
+                    const canCancel = !hiddenStatuses.includes(orderStatus)
                     const feedback = cancelFeedback?.orderId === String(order.id) ? cancelFeedback : null
 
                     return (
