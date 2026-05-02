@@ -12,7 +12,7 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
     const riderId = getRiderId(request)
@@ -20,13 +20,14 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
-    const orderId = String(params?.orderId || '').trim()
+    const { orderId: rawOrderId } = await params
+    const orderId = String(rawOrderId || '').trim()
     if (!orderId) {
       return NextResponse.json({ success: false, error: 'Order ID is required.' }, { status: 400 })
     }
 
     const body = await request.json()
-    const newStatus = String(body?.status || '').trim()
+    const newStatus = String(body?.status || '').trim().toLowerCase()
 
     if (!newStatus) {
       return NextResponse.json({ success: false, error: 'Status is required.' }, { status: 400 })

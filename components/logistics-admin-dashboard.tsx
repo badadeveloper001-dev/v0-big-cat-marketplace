@@ -394,8 +394,22 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
           <MetricCard label="Pending Dispatch" value={summary.pendingOrders} icon={<Clock className="w-4 h-4" />} />
           <MetricCard label="Assigned Orders" value={summary.assignedOrders} icon={<Truck className="w-4 h-4" />} />
           <MetricCard label="Completed Delivery" value={summary.completedOrders} icon={<CheckCircle2 className="w-4 h-4" />} />
-          <MetricCard label="Free Riders" value={freeRidersCount} icon={<Users className="w-4 h-4" />} />
-          <MetricCard label="Busy Riders" value={busyRidersCount} icon={<Users className="w-4 h-4" />} />
+          <MetricCard
+            label="Free Riders"
+            value={freeRidersCount}
+            icon={<Users className="w-4 h-4" />}
+            className="border-emerald-200 bg-emerald-50"
+            iconClassName="text-emerald-700"
+            valueClassName="text-emerald-700"
+          />
+          <MetricCard
+            label="Busy Riders"
+            value={busyRidersCount}
+            icon={<Users className="w-4 h-4" />}
+            className="border-amber-200 bg-amber-50"
+            iconClassName="text-amber-700"
+            valueClassName="text-amber-700"
+          />
           <MetricCard label="Held Escrow" value={formatNaira(summary.heldEscrow)} icon={<Wallet className="w-4 h-4" />} />
           <MetricCard label="Released to Logistics" value={formatNaira(summary.releasedEscrow)} icon={<Wallet className="w-4 h-4" />} />
         </div>
@@ -550,14 +564,28 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
   )
 }
 
-function MetricCard({ label, value, icon }: { label: string; value: number | string; icon: React.ReactNode }) {
+function MetricCard({
+  label,
+  value,
+  icon,
+  className = '',
+  iconClassName = 'text-primary',
+  valueClassName = 'text-foreground',
+}: {
+  label: string
+  value: number | string
+  icon: React.ReactNode
+  className?: string
+  iconClassName?: string
+  valueClassName?: string
+}) {
   return (
-    <div className="bg-card border border-border rounded-xl p-3">
+    <div className={`bg-card border border-border rounded-xl p-3 ${className}`}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="text-primary">{icon}</span>
+        <span className={iconClassName}>{icon}</span>
       </div>
-      <p className="text-lg font-bold text-foreground">{value}</p>
+      <p className={`text-lg font-bold ${valueClassName}`}>{value}</p>
     </div>
   )
 }
