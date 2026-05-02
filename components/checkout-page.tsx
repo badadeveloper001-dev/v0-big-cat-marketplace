@@ -688,6 +688,13 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
             )}
           </div>
 
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
+            <p className="font-semibold flex items-center gap-2">
+              <span>🛡️ What is the Insurance Charge?</span>
+            </p>
+            <p>The 5% insurance covers return delivery costs if your product arrives damaged or doesn't match the description. If an issue occurs, we'll arrange and cover the return shipping to ensure you get a replacement or refund.</p>
+          </div>
+
           <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground space-y-1">
             <p className="font-semibold">Why checkout is safe</p>
             {serviceBooking ? (

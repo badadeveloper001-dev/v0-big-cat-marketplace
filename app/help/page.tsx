@@ -49,6 +49,10 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
         a: 'BigCat charges 5% insurance on all goods and services to cover return delivery if there are product issues. Insurance is calculated on the product or service price (not delivery fees) and is shown in your price breakdown at checkout.',
       },
       {
+        q: 'What does the insurance charge cover?',
+        a: 'The 5% insurance charge covers return delivery costs if your product arrives damaged, defective, or doesn\'t match the description provided by the seller. If an issue occurs, BigCat will arrange and cover the cost of returning the item to the merchant and reshipment of your replacement or refund.',
+      },
+      {
         q: 'How long does a refund take?',
         a: 'Refunds for disputes resolved in your favour are processed within 3–5 business days back to your original payment method or PalmPay wallet.',
       },
