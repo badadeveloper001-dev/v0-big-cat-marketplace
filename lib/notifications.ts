@@ -86,6 +86,39 @@ function firstFiniteNumber(...values: any[]) {
   return 0
 }
 
+function extractImageUrl(value: any): string {
+  if (!value) return ""
+
+  if (typeof value === "string") {
+    const text = value.trim()
+    if (!text) return ""
+    if (text.startsWith("http://") || text.startsWith("https://") || text.startsWith("data:image/")) return text
+    if (text.startsWith("/")) return text
+    return text
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const candidate = extractImageUrl(entry)
+      if (candidate) return candidate
+    }
+    return ""
+  }
+
+  if (typeof value === "object") {
+    return firstNonEmptyString(
+      extractImageUrl(value.url),
+      extractImageUrl(value.src),
+      extractImageUrl(value.image_url),
+      extractImageUrl(value.imageUrl),
+      extractImageUrl(value.secure_url),
+      extractImageUrl(value.path),
+    )
+  }
+
+  return ""
+}
+
 function extractOrderIdFromText(input: string) {
   const text = String(input || "")
   const uuidMatch = text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
@@ -111,6 +144,13 @@ function resolveOrderIdForEmail(input: DispatchNotificationInput) {
 
 async function selectOrderItemsForEmail(supabase: any, orderId: string) {
   const attempts = [
+    "product_id, product_name, quantity, unit_price, total_price, price, image_url, product_image, images",
+    "product_id, product_name, quantity, unit_price, total_price, price, image_url",
+    "product_id, product_name, quantity, price, image_url",
+    "product_id, quantity, unit_price, total_price, price, image_url",
+    "product_id, quantity, price, image_url",
+    "product_name, quantity, unit_price, total_price, price, image_url",
+    "product_name, quantity, price, image_url",
     "product_id, product_name, quantity, unit_price, total_price, price",
     "product_id, product_name, quantity, price",
     "product_id, quantity, unit_price, total_price, price",
@@ -204,9 +244,11 @@ async function selectAuthUserForEmail(supabase: any, userId: string, kind: "buye
 
 async function selectProductsForEmail(supabase: any, productIds: string[]) {
   const attempts = [
-    "id, name, image_url",
+    "id, name, image_url, product_image, images",
+    "id, name, image_url, images",
     "id, name, images",
-    "id, product_name, image_url",
+    "id, product_name, image_url, product_image, images",
+    "id, product_name, image_url, images",
     "id, product_name, images",
   ]
 
@@ -249,7 +291,7 @@ async function fetchOrderEmailContext(orderId: string): Promise<OrderEmailContex
           quantity: Number(item?.quantity || 1),
           unit_price: firstFiniteNumber(item?.unit_price, item?.price),
           total_price: firstFiniteNumber(item?.total_price),
-          image_url: "",
+          image_url: firstNonEmptyString(item?.image_url, item?.product_image, extractImageUrl(item?.images)),
         }))
       : []
 
@@ -263,13 +305,11 @@ async function fetchOrderEmailContext(orderId: string): Promise<OrderEmailContex
           const id = String(p?.id || "").trim()
           if (!id) continue
 
-          const imageFromImages = Array.isArray(p?.images)
-            ? firstNonEmptyString(p.images[0])
-            : firstNonEmptyString(p?.images)
+          const imageFromImages = extractImageUrl(p?.images)
 
           productMap[id] = {
             name: firstNonEmptyString(p?.name, p?.product_name),
-            image_url: firstNonEmptyString(p?.image_url, imageFromImages),
+            image_url: firstNonEmptyString(p?.image_url, p?.product_image, imageFromImages),
           }
         }
 
@@ -363,7 +403,7 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
         quantity: Number(item?.quantity || 1),
         unit_price: firstFiniteNumber(item?.unit_price, item?.unitPrice, item?.price),
         total_price: firstFiniteNumber(item?.total_price, item?.totalPrice),
-        image_url: firstNonEmptyString(item?.image_url, item?.imageUrl, item?.image),
+        image_url: firstNonEmptyString(item?.image_url, item?.imageUrl, item?.image, extractImageUrl(item?.images)),
       }))
     : []
 
@@ -377,13 +417,16 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
         </tr>
         ${items.map((item, idx) => {
           const imgUrl = String(item.image_url || "").trim()
+          const normalizedImgUrl = imgUrl
+            ? (imgUrl.startsWith("/") ? `${appUrl}${imgUrl}` : imgUrl)
+            : ""
           const productName = escapeHtml(String(item.product_name || "Product"))
           const qty = Number(item.quantity || 1)
           const unitPrice = Number(item.unit_price || 0)
           const lineTotal = Number(item.total_price || unitPrice * qty)
           const isLast = idx === items.length - 1
-          const imgCell = imgUrl
-            ? `<img src="${escapeHtml(imgUrl)}" alt="${productName}" width="80" height="80" style="width:80px;height:80px;max-width:80px;object-fit:cover;border-radius:10px;display:block;border:1px solid #e2e8f0;" />`
+          const imgCell = normalizedImgUrl
+            ? `<img src="${escapeHtml(normalizedImgUrl)}" alt="${productName}" width="80" height="80" style="width:80px;height:80px;max-width:80px;object-fit:cover;border-radius:10px;display:block;border:1px solid #e2e8f0;" />`
             : `<div style="width:80px;height:80px;background:#f1f5f9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:32px;text-align:center;line-height:80px;">&#x1F4E6;</div>`
           return `<tr style="${isLast ? "" : "border-bottom:1px solid #f1f5f9;"}">
             <td style="padding:12px 14px;width:96px;vertical-align:middle;">${imgCell}</td>

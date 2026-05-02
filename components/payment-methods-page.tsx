@@ -12,6 +12,8 @@ interface PaymentMethodsPageProps {
 
 interface WalletTransactionRow {
   id: string
+  order_id?: string | null
+  buyer_id?: string | null
   type?: string | null
   amount?: number | null
   reason?: string | null
@@ -40,6 +42,9 @@ interface SavedPaymentMethod {
 function BuyerWalletSection({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true)
   const [orders, setOrders] = useState<BuyerOrder[]>([])
+  const [walletBalance, setWalletBalance] = useState(0)
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransactionRow[]>([])
+  const [walletError, setWalletError] = useState("")
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([])
   const [pmError, setPmError] = useState("")
   const [showAddCard, setShowAddCard] = useState(false)
@@ -53,16 +58,29 @@ function BuyerWalletSection({ userId }: { userId: string }) {
     if (!userId) { setLoading(false); return }
     setLoading(true)
     try {
-      const [ordRes, pmRes] = await Promise.all([
+      const [ordRes, pmRes, walletRes] = await Promise.all([
         fetch(`/api/buyer/orders?userId=${encodeURIComponent(userId)}`, { cache: "no-store" }),
         fetch(`/api/user/payment-methods?userId=${encodeURIComponent(userId)}`, { cache: "no-store" }),
+        fetch(`/api/buyer/wallet?userId=${encodeURIComponent(userId)}`, { cache: "no-store" }),
       ])
       const ordData = await ordRes.json().catch(() => ({}))
       const pmData = await pmRes.json().catch(() => ({}))
+      const walletData = await walletRes.json().catch(() => ({}))
       setOrders(Array.isArray(ordData?.data) ? ordData.data : Array.isArray(ordData?.orders) ? ordData.orders : [])
       setPaymentMethods(Array.isArray(pmData?.data) ? pmData.data : [])
+      if (walletData?.success) {
+        setWalletBalance(Number(walletData.balance || 0))
+        setWalletTransactions(Array.isArray(walletData.transactions) ? walletData.transactions : [])
+        setWalletError("")
+      } else {
+        setWalletBalance(0)
+        setWalletTransactions([])
+        setWalletError(String(walletData?.error || 'Could not load wallet activity'))
+      }
     } catch {
-      // ignore
+      setWalletBalance(0)
+      setWalletTransactions([])
+      setWalletError('Could not load wallet activity')
     } finally {
       setLoading(false)
     }
@@ -74,6 +92,12 @@ function BuyerWalletSection({ userId }: { userId: string }) {
   const escrowHeld = orders
     .filter(o => o.status && !['delivered','completed','cancelled'].includes(o.status))
     .reduce((s, o) => s + (Number(o.product_total) || Number(o.grand_total) || 0), 0)
+  const creditTypes = new Set(["wallet_credit", "refund", "payment", "escrow_release"])
+  const debitTypes = new Set(["wallet_debit", "withdrawal"])
+  const refundRows = walletTransactions.filter((tx) => {
+    const type = String(tx.type || '').toLowerCase().trim()
+    return type === 'wallet_credit' || type === 'refund'
+  })
 
   const handleAddMethod = async () => {
     if (!newMethodDetails.trim()) return
@@ -150,6 +174,56 @@ function BuyerWalletSection({ userId }: { userId: string }) {
           <p className="text-[11px] text-muted-foreground uppercase tracking-wide">In Escrow</p>
           <p className="text-base font-bold text-amber-600">{formatNaira(escrowHeld)}</p>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2"><Wallet className="w-4 h-4" /> Buyer Wallet</h3>
+          <p className="text-xs text-muted-foreground">Refund credits appear here</p>
+        </div>
+        <div className="rounded-xl border border-border bg-muted/50 p-3 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Wallet Balance</p>
+          <p className="text-base font-bold text-emerald-600">{formatNaira(walletBalance)}</p>
+        </div>
+        {walletError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{walletError}</div>
+        )}
+
+        {walletTransactions.length === 0 ? (
+          <div className="rounded-xl bg-muted/50 border border-border p-3 text-sm text-muted-foreground">
+            No wallet activity yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {walletTransactions.slice(0, 8).map((tx) => {
+              const type = String(tx.type || '').toLowerCase().trim()
+              const isDebit = debitTypes.has(type)
+              const amount = Math.max(0, Number(tx.amount || 0))
+              const isRefund = type === 'wallet_credit' || type === 'refund'
+
+              return (
+                <div key={tx.id} className="rounded-xl border border-border bg-background px-3 py-2.5 flex items-center justify-between">
+                  <div className="min-w-0 pr-3">
+                    <p className="text-sm font-medium truncate">{tx.reason || (isRefund ? 'Wallet refund credit' : tx.type || 'Wallet activity')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(tx.created_at || '').toLocaleString()} {tx.order_id ? `• Order #${String(tx.order_id).slice(0, 8).toUpperCase()}` : ''}
+                    </p>
+                  </div>
+                  <p className={`text-sm font-semibold ${isDebit ? 'text-red-600' : 'text-emerald-600'} flex items-center gap-1`}>
+                    {isDebit ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownLeft className="w-3.5 h-3.5" />}
+                    {isDebit ? '-' : '+'}{formatNaira(amount)}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {refundRows.length > 0 && (
+          <p className="text-xs text-emerald-700">
+            Refund credits received: {refundRows.length}
+          </p>
+        )}
       </section>
 
       {/* Saved payment methods */}
