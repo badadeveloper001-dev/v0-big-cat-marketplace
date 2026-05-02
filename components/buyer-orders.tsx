@@ -447,10 +447,10 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
     setCancelFeedback(null)
 
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(normalizedOrderId)}/cancel`, {
-        method: 'POST',
+      const response = await fetch('/api/orders/update-status', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ buyerId: user.userId }),
+        body: JSON.stringify({ orderId: normalizedOrderId, status: 'cancelled' }),
       })
       const result = await response.json()
 

@@ -43,6 +43,38 @@ function getTrackingId(orderId: string) {
   return `BC-${String(orderId || '').replace(/-/g, '').slice(0, 10).toUpperCase()}`
 }
 
+async function recordBuyerWalletRefund(
+  supabase: any,
+  buyerId: string,
+  orderId: string,
+  amount: number,
+  insuranceAmount: number,
+) {
+  if (!buyerId || amount <= 0) return
+
+  const payload = {
+    buyer_id: buyerId,
+    order_id: orderId,
+    type: 'wallet_credit',
+    amount,
+    reason: `Order cancellation refund (insurance non-refundable: ₦${insuranceAmount.toLocaleString('en-NG')})`,
+    status: 'completed',
+    created_at: new Date().toISOString(),
+  }
+
+  const attempts = [
+    payload,
+    { ...payload, reason: payload.reason },
+    { ...payload, buyer_id: buyerId, order_id: orderId, type: 'wallet_credit', amount },
+  ]
+
+  for (const attempt of attempts) {
+    const result = await (supabase.from('transactions') as any).insert(attempt)
+    if (!result.error) return
+    if (!isMissingResourceError(result.error)) return
+  }
+}
+
 export async function getBuyerOrders(buyerId: string) {
   try {
     const supabase = await createClient()
@@ -450,6 +482,7 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
     const buyerAllowed = new Set([
       'delivered',
       'order_received_and_satisfied',
+      'cancelled',
     ])
 
     if (actorRole === 'merchant' && !merchantAllowed.has(String(status || '').trim().toLowerCase()) && !merchantAllowed.has(normalizedStatus)) {
@@ -476,6 +509,30 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
       return { success: false, error: 'Buyer can confirm satisfaction only after logistics marks order as completed.' }
     }
 
+    if (actorRole === 'buyer' && normalizedStatus === 'cancelled') {
+      if (['cancelled', 'completed', 'delivered', 'in_transit'].includes(currentStatus)) {
+        return { success: false, error: 'This order cannot be cancelled in its current state.' }
+      }
+
+      const assignmentResult = await (supabase.from('logistics_order_assignments') as any)
+        .select('logistics_status, rider_id')
+        .eq('order_id', orderId)
+        .maybeSingle()
+
+      if (!assignmentResult.error && assignmentResult.data) {
+        const logisticsStatus = String(assignmentResult.data.logistics_status || '').toLowerCase().trim()
+        const riderAssigned = !!assignmentResult.data.rider_id
+          || ['assigned', 'in_transit', 'return_assigned', 'return_in_transit'].includes(logisticsStatus)
+
+        if (riderAssigned) {
+          return {
+            success: false,
+            error: 'A rider has already been assigned to this order. You can no longer cancel — please use Report Issue if there is a problem.',
+          }
+        }
+      }
+    }
+
     // Check for active disputes if marking as delivered
     if (normalizedStatus === 'delivered') {
       const { data: dispute, error: disputeError } = await (supabase.from('support_issues') as any)
@@ -499,6 +556,13 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
           { status: normalizedStatus, updated_at: new Date().toISOString() },
           { status: normalizedStatus },
         ]
+      : normalizedStatus === 'cancelled'
+        ? [
+            { status: normalizedStatus, payment_status: 'refunded', updated_at: new Date().toISOString() },
+            { status: normalizedStatus, payment_status: 'refunded' },
+            { status: normalizedStatus, updated_at: new Date().toISOString() },
+            { status: normalizedStatus },
+          ]
       : [
           { status: normalizedStatus, updated_at: new Date().toISOString() },
           { status: normalizedStatus },
@@ -624,13 +688,28 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
     }
 
     if (normalizedStatus === 'cancelled') {
+      const productTotal = Math.max(0, Number(data?.product_total ?? order?.product_total ?? 0))
+      const deliveryFee = Math.max(0, Number(data?.delivery_fee ?? order?.delivery_fee ?? 0))
+      const grandTotal = Math.max(0, Number(data?.grand_total ?? order?.grand_total ?? 0))
+      const insuranceAmount = Math.round(productTotal * 0.05)
+      const refundAmount = productTotal > 0
+        ? productTotal + deliveryFee
+        : Math.max(0, grandTotal - insuranceAmount)
+
+      if (buyerId && refundAmount > 0) {
+        await recordBuyerWalletRefund(supabase, buyerId, orderId, refundAmount, insuranceAmount)
+      }
+
       if (buyerId) {
         await dispatchNotification({
           userId: buyerId,
           type: 'order',
-          title: 'Order cancelled',
-          message: `Order ${orderId} has been cancelled.`,
+          title: 'Order cancelled & refund issued',
+          message: refundAmount > 0
+            ? `Order ${orderId} has been cancelled. ₦${refundAmount.toLocaleString('en-NG')} has been credited to your wallet (insurance charge of ₦${insuranceAmount.toLocaleString('en-NG')} is non-refundable).`
+            : `Order ${orderId} has been cancelled.`,
           eventKey: `order:cancelled:buyer:${orderId}`,
+          metadata: { orderId, refundAmount },
           emailSubject: 'Order cancelled',
         })
       }
@@ -644,6 +723,8 @@ export async function updateOrderStatus(orderId: string, status: string, actorId
           emailSubject: 'Order cancelled',
         })
       }
+
+      return { success: true, data, refundAmount }
     }
 
     if (normalizedStatus === 'delivered') {
