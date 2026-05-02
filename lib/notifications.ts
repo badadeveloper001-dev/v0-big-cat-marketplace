@@ -70,6 +70,112 @@ type OrderEmailContext = {
   merchant?: { name?: string; business_name?: string; email?: string } | null
 }
 
+function firstNonEmptyString(...values: any[]) {
+  for (const value of values) {
+    const text = String(value || "").trim()
+    if (text) return text
+  }
+  return ""
+}
+
+function firstFiniteNumber(...values: any[]) {
+  for (const value of values) {
+    const n = Number(value)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return 0
+}
+
+async function selectOrderItemsForEmail(supabase: any, orderId: string) {
+  const attempts = [
+    "product_id, product_name, quantity, unit_price, total_price, price",
+    "product_id, product_name, quantity, price",
+    "product_id, quantity, unit_price, total_price, price",
+    "product_id, quantity, price",
+    "product_name, quantity, unit_price, total_price, price",
+    "product_name, quantity, price",
+  ]
+
+  for (const selectClause of attempts) {
+    const result = await (supabase.from("order_items") as any)
+      .select(selectClause)
+      .eq("order_id", orderId)
+
+    if (!result.error) {
+      return Array.isArray(result.data) ? result.data : []
+    }
+
+    const message = String(result.error?.message || "").toLowerCase()
+    if (!message.includes("column") && !message.includes("schema cache")) {
+      break
+    }
+  }
+
+  return []
+}
+
+async function selectAuthUserForEmail(supabase: any, userId: string, kind: "buyer" | "merchant") {
+  const attempts = kind === "buyer"
+    ? ["name, email, phone", "full_name, email, phone_number", "name, email", "full_name, email"]
+    : ["name, business_name, email", "full_name, business_name, email", "name, email", "full_name, email"]
+
+  for (const selectClause of attempts) {
+    const result = await (supabase.from("auth_users") as any)
+      .select(selectClause)
+      .eq("id", userId)
+      .maybeSingle()
+
+    if (!result.error) {
+      const row = result.data || {}
+      if (kind === "buyer") {
+        return {
+          name: firstNonEmptyString(row.name, row.full_name),
+          email: firstNonEmptyString(row.email),
+          phone: firstNonEmptyString(row.phone, row.phone_number),
+        }
+      }
+      return {
+        name: firstNonEmptyString(row.name, row.full_name),
+        business_name: firstNonEmptyString(row.business_name),
+        email: firstNonEmptyString(row.email),
+      }
+    }
+
+    const message = String(result.error?.message || "").toLowerCase()
+    if (!message.includes("column") && !message.includes("schema cache")) {
+      break
+    }
+  }
+
+  return null
+}
+
+async function selectProductsForEmail(supabase: any, productIds: string[]) {
+  const attempts = [
+    "id, name, image_url",
+    "id, name, images",
+    "id, product_name, image_url",
+    "id, product_name, images",
+  ]
+
+  for (const selectClause of attempts) {
+    const result = await (supabase.from("products") as any)
+      .select(selectClause)
+      .in("id", productIds)
+
+    if (!result.error) {
+      return Array.isArray(result.data) ? result.data : []
+    }
+
+    const message = String(result.error?.message || "").toLowerCase()
+    if (!message.includes("column") && !message.includes("schema cache")) {
+      break
+    }
+  }
+
+  return []
+}
+
 async function fetchOrderEmailContext(orderId: string): Promise<OrderEmailContext> {
   try {
     const supabase = await createClient()
@@ -81,46 +187,76 @@ async function fetchOrderEmailContext(orderId: string): Promise<OrderEmailContex
 
     if (!order) return {}
 
-    const [itemsResult, buyerResult, merchantResult] = await Promise.all([
-      (supabase.from("order_items") as any)
-        .select("product_name, quantity, unit_price, total_price, product_id")
-        .eq("order_id", orderId),
-      order.buyer_id
-        ? (supabase.from("auth_users") as any)
-            .select("name, email, phone")
-            .eq("id", order.buyer_id)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      order.merchant_id
-        ? (supabase.from("auth_users") as any)
-            .select("name, business_name, email")
-            .eq("id", order.merchant_id)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
+    const [rawItems, buyer, merchant] = await Promise.all([
+      selectOrderItemsForEmail(supabase, orderId),
+      order.buyer_id ? selectAuthUserForEmail(supabase, String(order.buyer_id), "buyer") : Promise.resolve(null),
+      order.merchant_id ? selectAuthUserForEmail(supabase, String(order.merchant_id), "merchant") : Promise.resolve(null),
     ])
 
-    let items: any[] = itemsResult.data || []
+    let items: any[] = Array.isArray(rawItems)
+      ? rawItems.map((item: any) => ({
+          product_id: item?.product_id,
+          product_name: firstNonEmptyString(item?.product_name),
+          quantity: Number(item?.quantity || 1),
+          unit_price: firstFiniteNumber(item?.unit_price, item?.price),
+          total_price: firstFiniteNumber(item?.total_price),
+          image_url: "",
+        }))
+      : []
 
     // Try to enrich items with product images
-    const productIds = items.map((i: any) => i.product_id).filter(Boolean)
+    const productIds = items.map((i: any) => String(i.product_id || "").trim()).filter(Boolean)
     if (productIds.length > 0) {
       try {
-        const { data: products } = await (supabase.from("products") as any)
-          .select("id, image_url")
-          .in("id", productIds)
-        const imgMap: Record<string, string> = {}
-        for (const p of products || []) imgMap[p.id] = p.image_url || ""
-        items = items.map((item: any) => ({ ...item, image_url: imgMap[item.product_id] || "" }))
+        const products = await selectProductsForEmail(supabase, productIds)
+        const productMap: Record<string, { name: string; image_url: string }> = {}
+        for (const p of products || []) {
+          const id = String(p?.id || "").trim()
+          if (!id) continue
+
+          const imageFromImages = Array.isArray(p?.images)
+            ? firstNonEmptyString(p.images[0])
+            : firstNonEmptyString(p?.images)
+
+          productMap[id] = {
+            name: firstNonEmptyString(p?.name, p?.product_name),
+            image_url: firstNonEmptyString(p?.image_url, imageFromImages),
+          }
+        }
+
+        items = items.map((item: any) => {
+          const product = productMap[String(item.product_id || "").trim()]
+          const quantity = Number(item.quantity || 1)
+          const unitPrice = Number(item.unit_price || 0)
+          const totalPrice = Number(item.total_price || 0)
+          return {
+            ...item,
+            product_name: firstNonEmptyString(item.product_name, product?.name, "Product"),
+            image_url: firstNonEmptyString(item.image_url, product?.image_url),
+            total_price: totalPrice > 0 ? totalPrice : unitPrice * quantity,
+          }
+        })
       } catch {
         // images are optional
       }
+    } else {
+      items = items.map((item: any) => {
+        const quantity = Number(item.quantity || 1)
+        const unitPrice = Number(item.unit_price || 0)
+        const totalPrice = Number(item.total_price || 0)
+        return {
+          ...item,
+          product_name: firstNonEmptyString(item.product_name, "Product"),
+          total_price: totalPrice > 0 ? totalPrice : unitPrice * quantity,
+        }
+      })
     }
 
     return {
       order,
       items,
-      buyer: buyerResult.data || null,
-      merchant: merchantResult.data || null,
+      buyer,
+      merchant,
     }
   } catch {
     return {}
