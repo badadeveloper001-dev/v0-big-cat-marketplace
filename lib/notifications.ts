@@ -137,6 +137,35 @@ async function selectOrderItemsForEmail(supabase: any, orderId: string) {
   return []
 }
 
+async function selectOrderForEmail(supabase: any, orderId: string) {
+  const attempts = [
+    "id, buyer_id, merchant_id, status, delivery_address, delivery_fee, grand_total, total_amount, created_at",
+    "id, buyer_id, merchant_id, status, delivery_address, delivery_fee, total_amount, created_at",
+    "id, buyer_id, merchant_id, status, delivery_address, grand_total, created_at",
+    "id, buyer_id, merchant_id, status, delivery_address, created_at",
+    "id, buyer_id, merchant_id, delivery_address, created_at",
+    "id, buyer_id, merchant_id, created_at",
+  ]
+
+  for (const selectClause of attempts) {
+    const result = await (supabase.from("orders") as any)
+      .select(selectClause)
+      .eq("id", orderId)
+      .maybeSingle()
+
+    if (!result.error) {
+      return result.data || null
+    }
+
+    const message = String(result.error?.message || "").toLowerCase()
+    if (!message.includes("column") && !message.includes("schema cache")) {
+      break
+    }
+  }
+
+  return null
+}
+
 async function selectAuthUserForEmail(supabase: any, userId: string, kind: "buyer" | "merchant") {
   const attempts = kind === "buyer"
     ? ["name, email, phone", "full_name, email, phone_number", "name, email", "full_name, email"]
@@ -203,10 +232,7 @@ async function fetchOrderEmailContext(orderId: string): Promise<OrderEmailContex
   try {
     const supabase = await createClient()
 
-    const { data: order } = await (supabase.from("orders") as any)
-      .select("id, buyer_id, merchant_id, status, delivery_address, delivery_fee, grand_total, total_amount, created_at")
-      .eq("id", orderId)
-      .maybeSingle()
+    const order = await selectOrderForEmail(supabase, orderId)
 
     if (!order) return {}
 
