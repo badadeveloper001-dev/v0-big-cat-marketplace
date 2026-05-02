@@ -715,30 +715,28 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
                             {feedback.message}
                           </div>
                         )}
-                        {canCancel && (
-                          <div className="mt-2">
-                            <button
-                              onClick={() => handleCancelOrder(String(order.id))}
-                              disabled={cancellingOrderId === String(order.id)}
-                              className="w-full rounded-lg border border-red-200 bg-red-50 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100 flex items-center justify-center gap-2 disabled:opacity-60"
-                            >
-                              {cancellingOrderId === String(order.id) ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                  Cancelling...
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="w-4 h-4" />
-                                  Cancel Order
-                                </>
-                              )}
-                            </button>
-                            <p className="mt-1 text-[11px] text-muted-foreground text-center">
-                              Only available before a rider is assigned
-                            </p>
-                          </div>
-                        )}
+                        <div className="mt-2">
+                          <button
+                            onClick={() => canCancel ? handleCancelOrder(String(order.id)) : undefined}
+                            disabled={!canCancel || cancellingOrderId === String(order.id)}
+                            className={`w-full rounded-lg border py-2.5 text-sm font-medium flex items-center justify-center gap-2 ${canCancel ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100' : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'} disabled:opacity-50`}
+                          >
+                            {cancellingOrderId === String(order.id) ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Cancelling...
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="w-4 h-4" />
+                                {canCancel ? 'Cancel Order' : 'Cannot Cancel (Rider Assigned)'}
+                              </>
+                            )}
+                          </button>
+                          <p className="mt-1 text-[11px] text-muted-foreground text-center">
+                            {canCancel ? 'Only available before a rider is assigned' : 'A rider has been assigned to this order'}
+                          </p>
+                        </div>
                       </>
                     )
                   })()}
