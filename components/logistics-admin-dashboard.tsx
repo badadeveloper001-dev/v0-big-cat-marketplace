@@ -20,6 +20,7 @@ import {
   Wallet,
   XCircle,
 } from "lucide-react"
+  import { Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 type LogisticsOrder = {
@@ -79,6 +80,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
   const [actionBusyKey, setActionBusyKey] = useState("")
   const [gpsByOrder, setGpsByOrder] = useState<Record<string, { lat: number; lng: number; updatedAt: string }>>({})
   const [proofByOrder, setProofByOrder] = useState<Record<string, string>>({})
+    const [copiedRiderLink, setCopiedRiderLink] = useState(false)
 
   const getGpsStorageKey = () => `bigcat_logistics_gps_${accessCode || 'default'}`
   const getProofStorageKey = () => `bigcat_logistics_proof_${accessCode || 'default'}`
@@ -457,6 +459,21 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
+
+            <button
+              onClick={() => {
+                const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/rider/login`
+                navigator.clipboard.writeText(url).then(() => {
+                  setCopiedRiderLink(true)
+                  setTimeout(() => setCopiedRiderLink(false), 2500)
+                })
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm text-primary hover:bg-primary/10"
+              title="Copy rider portal login link to send to riders"
+            >
+              {copiedRiderLink ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copiedRiderLink ? "Copied!" : "Rider Portal Link"}
+            </button>
         </div>
       </div>
 
