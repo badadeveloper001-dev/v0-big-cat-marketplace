@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { formatNaira } from "@/lib/currency-utils"
-import { BrandWordmark, PoweredByMarquee } from "@/components/brand-wordmark"
+import { BrandWordmark } from "@/components/brand-wordmark"
 import {
   CheckCircle2,
   Clock,
@@ -367,9 +367,6 @@ export default function RiderDashboardPage() {
         )}
       </main>
 
-      <footer className="py-6 px-4">
-        <PoweredByMarquee />
-      </footer>
     </div>
   )
 }

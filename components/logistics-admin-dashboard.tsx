@@ -4,13 +4,11 @@ import { useEffect, useMemo, useState } from "react"
 import { formatNaira } from "@/lib/currency-utils"
 import {
   ArrowLeft,
-  Camera,
   CheckCircle2,
   Clock,
-  ExternalLink,
+  Copy,
   Loader2,
   MapPin,
-  Navigation,
   Package,
   RefreshCw,
   ShieldCheck,
@@ -20,7 +18,6 @@ import {
   Wallet,
   XCircle,
 } from "lucide-react"
-  import { Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 type LogisticsOrder = {
@@ -78,12 +75,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
   const [newRider, setNewRider] = useState({ name: "", email: "", phone: "", region: "" })
   const [savingRider, setSavingRider] = useState(false)
   const [actionBusyKey, setActionBusyKey] = useState("")
-  const [gpsByOrder, setGpsByOrder] = useState<Record<string, { lat: number; lng: number; updatedAt: string }>>({})
-  const [proofByOrder, setProofByOrder] = useState<Record<string, string>>({})
-    const [copiedRiderLink, setCopiedRiderLink] = useState(false)
-
-  const getGpsStorageKey = () => `bigcat_logistics_gps_${accessCode || 'default'}`
-  const getProofStorageKey = () => `bigcat_logistics_proof_${accessCode || 'default'}`
+  const [copiedRiderLink, setCopiedRiderLink] = useState(false)
 
   useEffect(() => {
     if (bypassAccessCheck) {
@@ -170,27 +162,16 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     loadDashboard()
   }, [authorized, accessCode])
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || !accessCode) return
-    try {
-      const gpsRaw = localStorage.getItem(getGpsStorageKey())
-      const proofRaw = localStorage.getItem(getProofStorageKey())
-      if (gpsRaw) setGpsByOrder(JSON.parse(gpsRaw))
-      if (proofRaw) setProofByOrder(JSON.parse(proofRaw))
-    } catch {
-      // ignore parse failures
+  const busyRiderIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const order of orders) {
+      const status = String(order.logistics_status || '').toLowerCase()
+      if ((status === 'assigned' || status === 'in_transit') && order.rider_id) {
+        ids.add(String(order.rider_id))
+      }
     }
-  }, [accessCode])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !accessCode) return
-    localStorage.setItem(getGpsStorageKey(), JSON.stringify(gpsByOrder))
-  }, [gpsByOrder, accessCode])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !accessCode) return
-    localStorage.setItem(getProofStorageKey(), JSON.stringify(proofByOrder))
-  }, [proofByOrder, accessCode])
+    return ids
+  }, [orders])
 
   const verifyAccess = () => {
     const normalized = accessCode.trim().toUpperCase()
@@ -217,6 +198,14 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
       return
     }
 
+    const isBusy = busyRiderIds.has(String(riderId))
+    const currentOrder = orders.find((row) => String(row.id) === String(orderId))
+    const currentRiderId = String(currentOrder?.rider_id || '')
+    if (isBusy && String(riderId) !== currentRiderId) {
+      setError("Selected rider is currently busy. Choose a free rider.")
+      return
+    }
+
     setActionBusyKey(`assign:${orderId}`)
     setError("")
 
@@ -233,109 +222,9 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
         return
       }
 
-      // Seed an initial GPS point after assignment if not set yet.
-      setGpsByOrder((prev) => {
-        if (prev[orderId]) return prev
-        return {
-          ...prev,
-          [orderId]: {
-            lat: 6.5244 + (Math.random() - 0.5) * 0.02,
-            lng: 3.3792 + (Math.random() - 0.5) * 0.02,
-            updatedAt: new Date().toISOString(),
-          },
-        }
-      })
-
       await loadDashboard()
     } catch {
       setError("Failed to assign rider")
-    } finally {
-      setActionBusyKey("")
-    }
-  }
-
-  const completeOrder = async (orderId: string) => {
-    setActionBusyKey(`complete:${orderId}`)
-    setError("")
-
-    try {
-      const response = await fetch(`/api/logistics/orders/${orderId}/complete`, {
-        method: "PUT",
-        headers: authHeaders,
-        body: JSON.stringify({ proofOfDeliveryUrl: proofByOrder[orderId] || null }),
-      })
-
-      const result = await response.json()
-      if (!result.success) {
-        setError(result.error || "Failed to complete delivery")
-        return
-      }
-
-      await loadDashboard()
-    } catch {
-      setError("Failed to complete delivery")
-    } finally {
-      setActionBusyKey("")
-    }
-  }
-
-  const markInTransit = async (orderId: string) => {
-    setActionBusyKey(`transit:${orderId}`)
-    setError("")
-
-    try {
-      const response = await fetch(`/api/logistics/orders/${orderId}/in-transit`, {
-        method: 'PUT',
-        headers: authHeaders,
-      })
-
-      const result = await response.json()
-      if (!result.success) {
-        setError(result.error || 'Failed to mark order in transit')
-        return
-      }
-
-      await loadDashboard()
-    } catch {
-      setError('Failed to mark order in transit')
-    } finally {
-      setActionBusyKey("")
-    }
-  }
-
-  const updateLiveGps = (orderId: string) => {
-    setGpsByOrder((prev) => {
-      const current = prev[orderId] || { lat: 6.5244, lng: 3.3792 }
-      const next = {
-        lat: current.lat + (Math.random() - 0.5) * 0.002,
-        lng: current.lng + (Math.random() - 0.5) * 0.002,
-        updatedAt: new Date().toISOString(),
-      }
-      return { ...prev, [orderId]: next }
-    })
-  }
-
-  const uploadProof = async (orderId: string, file?: File) => {
-    if (!file) return
-    setActionBusyKey(`proof:${orderId}`)
-    setError("")
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
-      const result = await response.json()
-      if (!response.ok || !result?.url) {
-        setError(result?.error || 'Failed to upload proof of delivery')
-        return
-      }
-
-      setProofByOrder((prev) => ({ ...prev, [orderId]: result.url }))
-    } catch {
-      setError('Failed to upload proof of delivery')
     } finally {
       setActionBusyKey("")
     }
@@ -545,89 +434,30 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
                         Items: {(order.order_items || []).map((item) => `${item.product_name || 'Item'} x${item.quantity || 1}`).join(', ') || 'No items'}
                       </div>
 
-                      {gpsByOrder[order.id] && (
-                        <div className="rounded-lg border border-border bg-secondary/30 p-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-xs text-muted-foreground">
-                              Live GPS: {gpsByOrder[order.id].lat.toFixed(5)}, {gpsByOrder[order.id].lng.toFixed(5)}
-                              <span className="ml-1">· {new Date(gpsByOrder[order.id].updatedAt).toLocaleTimeString()}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => updateLiveGps(order.id)}
-                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-secondary"
-                              >
-                                <Navigation className="w-3 h-3" />
-                                Refresh GPS
-                              </button>
-                              <a
-                                href={`https://maps.google.com/?q=${gpsByOrder[order.id].lat},${gpsByOrder[order.id].lng}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-secondary"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                Open Map
-                              </a>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="rounded-lg border border-border bg-secondary/20 p-2">
-                        <label className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
-                          <Camera className="w-3 h-3" />
-                          Proof of delivery photo
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(event) => uploadProof(order.id, event.target.files?.[0])}
-                            className="text-xs"
-                          />
-                          {proofByOrder[order.id] && (
-                            <a
-                              href={proofByOrder[order.id]}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline"
-                            >
-                              View proof
-                            </a>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
                         <select
                           value={selectedRider}
                           onChange={(event) => assignRider(order.id, event.target.value)}
-                          disabled={String(order.logistics_status).toLowerCase() === 'completed' || riders.length === 0 || actionBusyKey.startsWith('assign:')}
+                          disabled={['completed', 'in_transit'].includes(String(order.logistics_status).toLowerCase()) || riders.length === 0 || actionBusyKey.startsWith('assign:')}
                           className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
                         >
                           <option value="">Assign rider...</option>
                           {riders.map((rider) => (
-                            <option key={rider.id} value={rider.id}>
-                              {rider.name}{rider.region ? ` (${rider.region})` : ''}
+                            <option
+                              key={rider.id}
+                              value={rider.id}
+                              disabled={busyRiderIds.has(String(rider.id)) && String(rider.id) !== selectedRider}
+                            >
+                              {rider.name}{rider.region ? ` (${rider.region})` : ''} - {busyRiderIds.has(String(rider.id)) && String(rider.id) !== selectedRider ? 'Busy' : 'Free'}
                             </option>
                           ))}
                         </select>
 
                         <button
-                          onClick={() => markInTransit(order.id)}
-                          disabled={String(order.logistics_status).toLowerCase() === 'completed' || String(order.logistics_status).toLowerCase() === 'in_transit' || actionBusyKey === `transit:${order.id}`}
-                          className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                          disabled
+                          className="rounded-lg bg-muted px-3 py-2 text-sm font-medium text-muted-foreground"
                         >
-                          {actionBusyKey === `transit:${order.id}` ? 'Updating...' : 'Mark In Transit'}
-                        </button>
-
-                        <button
-                          onClick={() => completeOrder(order.id)}
-                          disabled={String(order.logistics_status).toLowerCase() !== 'in_transit' || actionBusyKey === `complete:${order.id}`}
-                          className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-                        >
-                          {actionBusyKey === `complete:${order.id}` ? 'Completing...' : 'Mark Order Completed'}
+                          Rider updates status in rider app
                         </button>
                       </div>
 
@@ -681,7 +511,12 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
                 riders.map((rider) => (
                   <div key={rider.id} className="rounded-lg border border-border px-3 py-2 flex items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-medium text-foreground">{rider.name}</p>
+                      <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                        {rider.name}
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${busyRiderIds.has(String(rider.id)) ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {busyRiderIds.has(String(rider.id)) ? 'Busy' : 'Free'}
+                        </span>
+                      </p>
                       <p className="text-xs text-muted-foreground">{rider.phone || rider.email || rider.region || 'No contact info'}</p>
                     </div>
                     <button

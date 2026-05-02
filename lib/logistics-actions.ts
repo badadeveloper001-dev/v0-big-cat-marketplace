@@ -387,6 +387,25 @@ export async function assignRiderToOrder(orderId: string, riderId: string, notes
       return { success: false, error: 'Selected rider is unavailable.' }
     }
 
+    const activeAssignmentsResult = await (supabase.from('logistics_order_assignments') as any)
+      .select('order_id, logistics_status')
+      .eq('rider_id', riderId)
+      .in('logistics_status', ['assigned', 'in_transit'])
+
+    if (activeAssignmentsResult.error) {
+      const message = String(activeAssignmentsResult.error.message || '')
+      if (!includesMissingTable(message, 'logistics_order_assignments')) {
+        throw activeAssignmentsResult.error
+      }
+    }
+
+    const activeAssignments = Array.isArray(activeAssignmentsResult.data) ? activeAssignmentsResult.data : []
+    const hasActiveAssignmentOnAnotherOrder = activeAssignments.some((row: any) => String(row.order_id || '') !== String(orderId || ''))
+
+    if (hasActiveAssignmentOnAnotherOrder) {
+      return { success: false, error: 'Selected rider is currently busy with another delivery.' }
+    }
+
     const currentStatus = String(order.status || '').toLowerCase().trim()
     if (!['order_packed', 'order_taken_for_delivery', 'in_transit', 'completed', 'delivered'].includes(currentStatus)) {
       return { success: false, error: 'Order is not ready for logistics assignment yet.' }
