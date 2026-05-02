@@ -20,7 +20,7 @@ export async function POST(
     // Load the order — verify it belongs to this buyer
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('id, status, logistics_status, buyer_id, merchant_id')
+      .select('id, status, logistics_status, buyer_id, merchant_id, grand_total, product_total, delivery_fee, payment_status')
       .eq('id', orderId)
       .single()
 
@@ -57,7 +57,11 @@ export async function POST(
     // Cancel the order
     const { data: updated, error: updateError } = await supabase
       .from('orders')
-      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .update({
+        status: 'cancelled',
+        payment_status: 'refunded',
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', orderId)
       .select()
       .single()
@@ -66,15 +70,59 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Failed to cancel order' }, { status: 500 })
     }
 
+    // Calculate refund amount — insurance (5% of product_total) is non-refundable
+    const productTotal = Math.max(0, Number(order.product_total || 0))
+    const deliveryFee = Math.max(0, Number(order.delivery_fee || 0))
+    const grandTotal = Math.max(0, Number(order.grand_total || 0))
+    // insurance was charged as 5% of product_total at checkout
+    const insuranceAmount = Math.round(productTotal * 0.05)
+    // If we can't derive it from product_total, fall back to grand_total minus best guess
+    const refundAmount = productTotal > 0
+      ? productTotal + deliveryFee
+      : Math.max(0, grandTotal - insuranceAmount)
+
+    // Record buyer refund in transactions ledger (best-effort — table may not exist yet)
+    if (refundAmount > 0 && order.buyer_id) {
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+        if (supabaseUrl && serviceKey) {
+          await fetch(`${supabaseUrl}/rest/v1/transactions`, {
+            method: 'POST',
+            headers: {
+              apikey: serviceKey,
+              Authorization: `Bearer ${serviceKey}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify({
+              buyer_id: order.buyer_id,
+              order_id: orderId,
+              type: 'wallet_credit',
+              amount: refundAmount,
+              reason: `Order cancellation refund (insurance non-refundable). Order: ${orderId.slice(0, 8).toUpperCase()}`,
+              status: 'completed',
+              created_at: new Date().toISOString(),
+            }),
+          })
+        }
+      } catch {
+        // Best-effort — do not fail the cancellation if ledger write fails
+      }
+    }
+
     // Notify buyer
     if (order.buyer_id) {
+      const refundMsg = refundAmount > 0
+        ? ` ₦${refundAmount.toLocaleString('en-NG')} has been credited back to your wallet (insurance charge of ₦${insuranceAmount.toLocaleString('en-NG')} is non-refundable).`
+        : ' A refund will be processed shortly.'
       await dispatchNotification({
         userId: order.buyer_id,
         type: 'order',
-        title: 'Order cancelled',
-        message: `Your order has been cancelled. If you paid, a refund will be processed. Ref: ${orderId.slice(0, 8).toUpperCase()}`,
+        title: 'Order cancelled & refund issued',
+        message: `Your order ${orderId.slice(0, 8).toUpperCase()} has been cancelled.${refundMsg}`,
         eventKey: `order:cancelled:buyer:${orderId}`,
-        metadata: { orderId },
+        metadata: { orderId, refundAmount },
         emailSubject: 'Your order has been cancelled',
       })
     }
@@ -92,7 +140,7 @@ export async function POST(
       })
     }
 
-    return NextResponse.json({ success: true, data: updated })
+    return NextResponse.json({ success: true, data: updated, refundAmount })
   } catch (error: any) {
     console.error('[cancel-order] Error:', error)
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 })

@@ -456,7 +456,10 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: 'cancelled' } : o))
       )
-      setCancelFeedback({ orderId, message: 'Order cancelled successfully.', isError: false })
+      const refundMsg = result.refundAmount > 0
+        ? `Order cancelled. ₦${Number(result.refundAmount).toLocaleString('en-NG')} refunded to your wallet (insurance fee is non-refundable).`
+        : 'Order cancelled successfully.'
+      setCancelFeedback({ orderId, message: refundMsg, isError: false })
     } catch {
       setCancelFeedback({ orderId, message: 'Failed to cancel order. Please try again.', isError: true })
     } finally {
