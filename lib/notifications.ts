@@ -144,18 +144,18 @@ function resolveOrderIdForEmail(input: DispatchNotificationInput) {
 
 async function selectOrderItemsForEmail(supabase: any, orderId: string) {
   const attempts = [
-    "product_id, product_name, quantity, unit_price, total_price, price, image_url, product_image, images",
-    "product_id, product_name, quantity, unit_price, total_price, price, image_url",
-    "product_id, product_name, quantity, price, image_url",
-    "product_id, quantity, unit_price, total_price, price, image_url",
-    "product_id, quantity, price, image_url",
-    "product_name, quantity, unit_price, total_price, price, image_url",
-    "product_name, quantity, price, image_url",
+    // Correct schema: unit_price + total_price (no 'price' column)
+    "product_id, product_name, quantity, unit_price, total_price",
+    "product_id, product_name, quantity, unit_price",
+    "product_id, product_name, quantity",
+    "product_id, quantity, unit_price, total_price",
+    "product_id, quantity, unit_price",
+    "product_name, quantity, unit_price, total_price",
+    "product_name, quantity, unit_price",
+    // Legacy fallbacks (in case 'price' exists on some db versions)
     "product_id, product_name, quantity, unit_price, total_price, price",
     "product_id, product_name, quantity, price",
-    "product_id, quantity, unit_price, total_price, price",
     "product_id, quantity, price",
-    "product_name, quantity, unit_price, total_price, price",
     "product_name, quantity, price",
   ]
 

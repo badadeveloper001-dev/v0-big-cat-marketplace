@@ -408,6 +408,7 @@ export async function createOrder(
             unit_price: item.unitPrice,
             total_price: Number(item.unitPrice) * Number(item.quantity),
             image_url: item.imageUrl || item.image || '',
+            product_id: item.productId,
           })),
           subtotal: productTotal,
           deliveryFee: allocatedDeliveryFee,
