@@ -211,7 +211,9 @@ export async function createOrder(
 
       const productTotal = merchantItems.reduce((sum, item) => sum + (Number(item.unitPrice) * Number(item.quantity)), 0)
       const allocatedDeliveryFee = payload.deliveryType === 'pickup' ? 0 : (createdOrders.length === 0 ? Number(payload.deliveryFee || 0) : 0)
-      const grandTotal = productTotal + allocatedDeliveryFee
+      const INSURANCE_RATE = 0.05 // Return delivery protection insurance: 5%
+      const insuranceAmount = Math.round(productTotal * INSURANCE_RATE)
+      const grandTotal = productTotal + allocatedDeliveryFee + insuranceAmount
       const orderId = crypto.randomUUID()
 
       const resolvedPaymentMethod = payload.paymentMethod || 'card'

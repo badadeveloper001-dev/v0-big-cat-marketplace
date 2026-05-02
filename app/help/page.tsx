@@ -46,7 +46,7 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'What is VAT on BigCat?',
-        a: 'BigCat charges 7.5% VAT on all goods and services in compliance with Nigeria\'s Finance Act 2019. VAT is calculated on the product or service price (not delivery fees) and is shown in your price breakdown at checkout.',
+        a: 'BigCat charges 5% insurance on all goods and services to cover return delivery if there are product issues. Insurance is calculated on the product or service price (not delivery fees) and is shown in your price breakdown at checkout.',
       },
       {
         q: 'How long does a refund take?',

@@ -80,13 +80,13 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     setDeliveryFee(fee)
   }, [deliveryType, deliveryAddress, totalWeight, fulfillmentMethod])
 
-  const VAT_RATE = 0.075 // Nigeria standard VAT 7.5%
+  const INSURANCE_RATE = 0.05 // Return delivery protection insurance: 5%
   const productTotal = getTotal()
   const serviceTotal = Number(serviceBooking?.basePrice || 0)
   const preDiscountTotal = serviceBooking ? serviceTotal : (productTotal + deliveryFee)
-  const vatBase = serviceBooking ? serviceTotal : productTotal // VAT applies to goods/services, not delivery
-  const vatAmount = Math.round(vatBase * VAT_RATE)
-  const grandTotal = preDiscountTotal + vatAmount
+  const insuranceBase = serviceBooking ? serviceTotal : productTotal // Insurance applies to goods/services, not delivery
+  const insuranceAmount = Math.round(insuranceBase * INSURANCE_RATE)
+  const grandTotal = preDiscountTotal + insuranceAmount
   const isWalletPayment = paymentMethod === 'palmpay'
   const isWalletInsufficient = isWalletPayment && (serviceBooking || deliveryAddress.trim()) && walletBalance < grandTotal
   const walletShortfall = isWalletInsufficient ? grandTotal - walletBalance : 0
@@ -652,8 +652,8 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
                   <span className="font-medium text-foreground">{formatNaira(Number(serviceBooking.basePrice || 0))}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">VAT (7.5%)</span>
-                  <span className="font-medium text-foreground">{formatNaira(vatAmount)}</span>
+                  <span className="text-muted-foreground">Insurance (5%)</span>
+                  <span className="font-medium text-foreground">{formatNaira(insuranceAmount)}</span>
                 </div>
                 <div className="h-px bg-border my-2" />
                 <div className="flex justify-between">
@@ -674,8 +674,8 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">VAT (7.5%)</span>
-                  <span className="font-medium text-foreground">{formatNaira(vatAmount)}</span>
+                  <span className="text-muted-foreground">Insurance (5%)</span>
+                  <span className="font-medium text-foreground">{formatNaira(insuranceAmount)}</span>
                 </div>
                 <div className="h-px bg-border my-2" />
                 <div className="flex justify-between">
