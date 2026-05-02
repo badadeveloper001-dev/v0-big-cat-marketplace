@@ -30,6 +30,9 @@ type LogisticsOrder = {
   delivery_fee?: number
   grand_total?: number
   created_at?: string
+  assigned_at?: string | null
+  completed_at?: string | null
+  assignment_notes?: string | null
   rider_id?: string | null
   assigned_rider?: {
     id: string
@@ -70,6 +73,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     completedOrders: 0,
     heldEscrow: 0,
     releasedEscrow: 0,
+    slaBreaches: 0,
   })
   const [schemaWarning, setSchemaWarning] = useState("")
   const [newRider, setNewRider] = useState({ name: "", email: "", phone: "", region: "" })
@@ -126,6 +130,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
           completedOrders: 0,
           heldEscrow: 0,
           releasedEscrow: 0,
+          slaBreaches: 0,
         })
         setRiders([])
         return
@@ -142,6 +147,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
         completedOrders: Number(result.data?.summary?.completedOrders || 0),
         heldEscrow: Number(result.data?.summary?.heldEscrow || 0),
         releasedEscrow: Number(result.data?.summary?.releasedEscrow || 0),
+        slaBreaches: Number(result.data?.summary?.slaBreaches || 0),
       })
 
       const warnings = result.data?.schemaWarnings || {}
@@ -166,7 +172,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     const ids = new Set<string>()
     for (const order of orders) {
       const status = String(order.logistics_status || '').toLowerCase()
-      if ((status === 'assigned' || status === 'in_transit') && order.rider_id) {
+      if ((status === 'assigned' || status === 'in_transit' || status === 'return_assigned' || status === 'return_in_transit') && order.rider_id) {
         ids.add(String(order.rider_id))
       }
     }
@@ -238,6 +244,71 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     } finally {
       setActionBusyKey("")
     }
+  }
+
+  const autoAssignRider = async (orderId: string) => {
+    setActionBusyKey(`auto:${orderId}`)
+    setError("")
+    try {
+      const response = await fetch(`/api/logistics/orders/${orderId}/auto-assign`, {
+        method: 'PUT',
+        headers: authHeaders,
+      })
+      const result = await response.json()
+      if (!result.success) {
+        setError(result.error || 'Auto-assign failed')
+        return
+      }
+      await loadDashboard()
+    } catch {
+      setError('Auto-assign failed')
+    } finally {
+      setActionBusyKey('')
+    }
+  }
+
+  const requestReturn = async (orderId: string) => {
+    setActionBusyKey(`return:${orderId}`)
+    setError("")
+    try {
+      const response = await fetch(`/api/logistics/orders/${orderId}/return-request`, {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({ reason: 'Return requested due to product issue' }),
+      })
+      const result = await response.json()
+      if (!result.success) {
+        setError(result.error || 'Failed to open return flow')
+        return
+      }
+      await loadDashboard()
+    } catch {
+      setError('Failed to open return flow')
+    } finally {
+      setActionBusyKey('')
+    }
+  }
+
+  const getSlaInfo = (order: LogisticsOrder) => {
+    const status = String(order.logistics_status || '').toLowerCase()
+    const createdAt = order.created_at ? new Date(order.created_at).getTime() : 0
+    const assignedAt = order.assigned_at ? new Date(order.assigned_at).getTime() : 0
+    const now = Date.now()
+
+    const maxAssignMs = 2 * 60 * 60 * 1000
+    const maxTransitMs = 6 * 60 * 60 * 1000
+
+    if ((status === 'pending' || status === 'return_requested') && createdAt > 0) {
+      const overdue = now - createdAt - maxAssignMs
+      return { breached: overdue > 0, text: overdue > 0 ? `Assign overdue by ${Math.ceil(overdue / (60 * 1000))}m` : 'Within assign SLA' }
+    }
+
+    if ((status === 'assigned' || status === 'in_transit' || status === 'return_assigned' || status === 'return_in_transit') && assignedAt > 0) {
+      const overdue = now - assignedAt - maxTransitMs
+      return { breached: overdue > 0, text: overdue > 0 ? `Delivery overdue by ${Math.ceil(overdue / (60 * 1000))}m` : 'Within delivery SLA' }
+    }
+
+    return { breached: false, text: 'SLA not applicable' }
   }
 
   const createRider = async () => {
@@ -410,6 +481,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
             iconClassName="text-amber-700"
             valueClassName="text-amber-700"
           />
+          <MetricCard label="SLA Breaches" value={summary.slaBreaches} icon={<Clock className="w-4 h-4" />} className="border-red-200 bg-red-50" iconClassName="text-red-700" valueClassName="text-red-700" />
           <MetricCard label="Held Escrow" value={formatNaira(summary.heldEscrow)} icon={<Wallet className="w-4 h-4" />} />
           <MetricCard label="Released to Logistics" value={formatNaira(summary.releasedEscrow)} icon={<Wallet className="w-4 h-4" />} />
         </div>
@@ -460,11 +532,20 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
                         Items: {(order.order_items || []).map((item) => `${item.product_name || 'Item'} x${item.quantity || 1}`).join(', ') || 'No items'}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                      {(() => {
+                        const sla = getSlaInfo(order)
+                        return (
+                          <div className={`rounded-lg px-2 py-1 text-xs font-medium ${sla.breached ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {sla.text}
+                          </div>
+                        )
+                      })()}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2">
                         <select
                           value={selectedRider}
                           onChange={(event) => assignRider(order.id, event.target.value)}
-                          disabled={['completed', 'in_transit'].includes(String(order.logistics_status).toLowerCase()) || riders.length === 0 || actionBusyKey.startsWith('assign:')}
+                          disabled={['completed', 'in_transit', 'return_in_transit', 'return_completed'].includes(String(order.logistics_status).toLowerCase()) || riders.length === 0 || actionBusyKey.startsWith('assign:')}
                           className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
                         >
                           <option value="">Assign rider...</option>
@@ -480,10 +561,26 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
                         </select>
 
                         <button
+                          onClick={() => autoAssignRider(order.id)}
+                          disabled={actionBusyKey === `auto:${order.id}` || ['completed', 'in_transit', 'return_in_transit', 'return_completed'].includes(String(order.logistics_status).toLowerCase())}
+                          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                          {actionBusyKey === `auto:${order.id}` ? 'Assigning...' : 'Auto Assign'}
+                        </button>
+
+                        <button
+                          onClick={() => requestReturn(order.id)}
+                          disabled={actionBusyKey === `return:${order.id}` || !['completed', 'delivered', 'return_requested', 'return_assigned', 'return_in_transit'].includes(String(order.status || '').toLowerCase())}
+                          className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                          {actionBusyKey === `return:${order.id}` ? 'Opening...' : 'Open Return'}
+                        </button>
+
+                        <button
                           disabled
                           className="rounded-lg bg-muted px-3 py-2 text-sm font-medium text-muted-foreground"
                         >
-                          Rider updates status in rider app
+                          Rider updates status
                         </button>
                       </div>
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { formatNaira } from "@/lib/currency-utils"
 import { BrandWordmark } from "@/components/brand-wordmark"
 import {
+  AlertTriangle,
   CheckCircle2,
   Clock,
   Loader2,
@@ -39,11 +40,23 @@ type RiderOrder = {
   created_at: string
 }
 
+type RiderEarnings = {
+  totalEarned: number
+  totalPaidOut: number
+  availableBalance: number
+  completedDeliveries: number
+  payoutHistory: Array<{ id: string; amount: number; status: string; created_at: string; paid_at?: string | null; reference?: string | null }>
+}
+
 const statusLabels: Record<string, string> = {
   assigned: "Ready to Pick Up",
   in_transit: "In Transit",
   completed: "Delivered",
   pending: "Pending",
+  return_requested: "Return Requested",
+  return_assigned: "Return Pickup Assigned",
+  return_in_transit: "Return In Transit",
+  return_completed: "Return Completed",
 }
 
 const statusColors: Record<string, string> = {
@@ -51,6 +64,10 @@ const statusColors: Record<string, string> = {
   in_transit: "bg-indigo-100 text-indigo-700",
   completed: "bg-green-100 text-green-700",
   pending: "bg-amber-100 text-amber-700",
+  return_requested: "bg-orange-100 text-orange-700",
+  return_assigned: "bg-orange-100 text-orange-700",
+  return_in_transit: "bg-rose-100 text-rose-700",
+  return_completed: "bg-emerald-100 text-emerald-700",
 }
 
 function formatDate(iso: string | null) {
@@ -70,6 +87,9 @@ export default function RiderDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [busyOrder, setBusyOrder] = useState("")
+  const [earnings, setEarnings] = useState<RiderEarnings | null>(null)
+  const [incidentTypeByOrder, setIncidentTypeByOrder] = useState<Record<string, string>>({})
+  const [incidentNoteByOrder, setIncidentNoteByOrder] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -107,8 +127,26 @@ export default function RiderDashboardPage() {
     }
   }
 
+  const loadEarnings = async (riderId: string) => {
+    try {
+      const res = await fetch('/api/rider/earnings', {
+        headers: { 'x-rider-id': riderId },
+        cache: 'no-store',
+      })
+      const result = await res.json()
+      if (result?.success) {
+        setEarnings(result.data || null)
+      }
+    } catch {
+      // silent fallback
+    }
+  }
+
   useEffect(() => {
-    if (rider?.id) loadOrders(rider.id)
+    if (rider?.id) {
+      loadOrders(rider.id)
+      loadEarnings(rider.id)
+    }
   }, [rider?.id])
 
   const updateStatus = async (orderId: string, newStatus: string) => {
@@ -161,17 +199,78 @@ export default function RiderDashboardPage() {
   )
 
   const totalEarnings = useMemo(
-    () => completedOrders.reduce((sum, o) => sum + o.delivery_fee, 0),
-    [completedOrders]
+    () => Number(earnings?.totalEarned || completedOrders.reduce((sum, o) => sum + o.delivery_fee, 0)),
+    [earnings?.totalEarned, completedOrders]
   )
 
   const todayEarnings = useMemo(
     () =>
       todayOrders
-        .filter((o) => o.logistics_status === "completed")
+        .filter((o) => ["completed", "return_completed"].includes(o.logistics_status))
         .reduce((sum, o) => sum + o.delivery_fee, 0),
     [todayOrders]
   )
+
+  const requestPayout = async () => {
+    if (!rider?.id) return
+    const available = Number(earnings?.availableBalance || 0)
+    if (available <= 0) {
+      setError('No available balance for payout request.')
+      return
+    }
+
+    try {
+      const res = await fetch('/api/rider/earnings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-rider-id': rider.id,
+        },
+        body: JSON.stringify({ amount: available }),
+      })
+      const result = await res.json()
+      if (!result.success) {
+        setError(result.error || 'Failed to submit payout request.')
+        return
+      }
+      await loadEarnings(rider.id)
+    } catch {
+      setError('Network error while requesting payout.')
+    }
+  }
+
+  const reportIncident = async (orderId: string) => {
+    if (!rider?.id) return
+    const incidentType = String(incidentTypeByOrder[orderId] || '').trim()
+    const note = String(incidentNoteByOrder[orderId] || '').trim()
+
+    if (!incidentType) {
+      setError('Select an incident type before submitting.')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/rider/orders/${orderId}/incident`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-rider-id': rider.id,
+        },
+        body: JSON.stringify({ incidentType, note }),
+      })
+      const result = await res.json()
+      if (!result.success) {
+        setError(result.error || 'Failed to report incident.')
+        return
+      }
+
+      setIncidentTypeByOrder((prev) => ({ ...prev, [orderId]: '' }))
+      setIncidentNoteByOrder((prev) => ({ ...prev, [orderId]: '' }))
+      await loadOrders(rider.id)
+    } catch {
+      setError('Network error while reporting incident.')
+    }
+  }
 
   if (!rider) {
     return (
@@ -238,7 +337,39 @@ export default function RiderDashboardPage() {
               <p className="text-xs text-muted-foreground">Across all deliveries</p>
             </div>
           </div>
-          <p className="text-lg font-bold text-primary">{formatNaira(totalEarnings)}</p>
+          <div className="text-right">
+            <p className="text-lg font-bold text-primary">{formatNaira(totalEarnings)}</p>
+            <p className="text-[11px] text-muted-foreground">Available: {formatNaira(Number(earnings?.availableBalance || 0))}</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Payout Wallet</h3>
+            <button
+              onClick={requestPayout}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              disabled={Number(earnings?.availableBalance || 0) <= 0}
+            >
+              Request Payout
+            </button>
+          </div>
+          <div className="text-xs text-muted-foreground grid grid-cols-3 gap-2">
+            <div>Total: <span className="font-semibold text-foreground">{formatNaira(Number(earnings?.totalEarned || 0))}</span></div>
+            <div>Paid: <span className="font-semibold text-foreground">{formatNaira(Number(earnings?.totalPaidOut || 0))}</span></div>
+            <div>Balance: <span className="font-semibold text-primary">{formatNaira(Number(earnings?.availableBalance || 0))}</span></div>
+          </div>
+          {Array.isArray(earnings?.payoutHistory) && earnings!.payoutHistory.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-foreground">Recent Payout Requests</p>
+              {earnings!.payoutHistory.slice(0, 4).map((row) => (
+                <div key={row.id} className="flex items-center justify-between text-xs rounded-lg border border-border px-2 py-1.5">
+                  <span className="text-muted-foreground">{formatNaira(Number(row.amount || 0))} · {String(row.status || 'pending')}</span>
+                  <span className="text-muted-foreground">{row.created_at ? new Date(row.created_at).toLocaleDateString() : ''}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Refresh + error */}
@@ -277,6 +408,8 @@ export default function RiderDashboardPage() {
               const isBusy = busyOrder === order.order_id
               const canMarkTransit = status === "assigned"
               const canMarkDelivered = status === "in_transit"
+              const canMarkReturnTransit = status === 'return_assigned'
+              const canMarkReturnCompleted = status === 'return_in_transit'
 
               return (
                 <div key={order.order_id} className="rounded-2xl border border-border bg-card p-4 space-y-3">
@@ -335,9 +468,41 @@ export default function RiderDashboardPage() {
                     </div>
                   )}
 
+                  {/* Rider incident reporting */}
+                  {status !== 'completed' && status !== 'return_completed' && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-amber-800 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Report Incident</p>
+                      <select
+                        value={incidentTypeByOrder[order.order_id] || ''}
+                        onChange={(event) => setIncidentTypeByOrder((prev) => ({ ...prev, [order.order_id]: event.target.value }))}
+                        className="w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs"
+                      >
+                        <option value="">Select issue...</option>
+                        <option value="customer_unavailable">Customer unavailable</option>
+                        <option value="address_issue">Address issue</option>
+                        <option value="product_damaged">Product damaged</option>
+                        <option value="vehicle_breakdown">Vehicle breakdown</option>
+                        <option value="security_concern">Security concern</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <input
+                        value={incidentNoteByOrder[order.order_id] || ''}
+                        onChange={(event) => setIncidentNoteByOrder((prev) => ({ ...prev, [order.order_id]: event.target.value }))}
+                        placeholder="Short note (optional)"
+                        className="w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs"
+                      />
+                      <button
+                        onClick={() => reportIncident(order.order_id)}
+                        className="rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-xs font-semibold text-amber-800"
+                      >
+                        Submit Incident
+                      </button>
+                    </div>
+                  )}
+
                   {/* Action buttons */}
-                  {(canMarkTransit || canMarkDelivered) && (
-                    <div className="pt-1">
+                  {(canMarkTransit || canMarkDelivered || canMarkReturnTransit || canMarkReturnCompleted) && (
+                    <div className="pt-1 space-y-2">
                       {canMarkTransit && (
                         <button
                           onClick={() => updateStatus(order.order_id, "in_transit")}
@@ -356,6 +521,26 @@ export default function RiderDashboardPage() {
                         >
                           {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                           {isBusy ? "Updating…" : "Mark as Delivered"}
+                        </button>
+                      )}
+                      {canMarkReturnTransit && (
+                        <button
+                          onClick={() => updateStatus(order.order_id, 'return_in_transit')}
+                          disabled={isBusy}
+                          className="w-full rounded-xl bg-rose-600 text-white py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+                        >
+                          {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+                          {isBusy ? 'Updating…' : 'Mark Return In Transit'}
+                        </button>
+                      )}
+                      {canMarkReturnCompleted && (
+                        <button
+                          onClick={() => updateStatus(order.order_id, 'return_completed')}
+                          disabled={isBusy}
+                          className="w-full rounded-xl bg-emerald-600 text-white py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+                        >
+                          {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                          {isBusy ? 'Updating…' : 'Mark Return Completed'}
                         </button>
                       )}
                     </div>

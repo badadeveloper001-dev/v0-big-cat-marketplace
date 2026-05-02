@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { updateOrderStatus } from '@/lib/order-actions'
+import { dispatchNotification } from '@/lib/notifications'
 
 export interface LogisticsOrderPayload {
   order_id: string
@@ -23,6 +24,77 @@ function includesMissingTable(errorMessage: string, tableName: string) {
 
 function isMissingColumn(errorMessage: string) {
   return String(errorMessage || '').toLowerCase().includes('column')
+}
+
+function safeJsonParse(input: any) {
+  if (!input) return null
+  if (typeof input === 'object') return input
+  try {
+    return JSON.parse(String(input))
+  } catch {
+    return null
+  }
+}
+
+function containsAnyText(haystack: string, needles: string[]) {
+  const text = String(haystack || '').toLowerCase()
+  return needles.some((needle) => text.includes(String(needle || '').toLowerCase()))
+}
+
+async function getOrderParties(supabase: any, orderId: string) {
+  const result = await (supabase.from('orders') as any)
+    .select('id, buyer_id, merchant_id, delivery_address')
+    .eq('id', orderId)
+    .maybeSingle()
+
+  return result.data || null
+}
+
+async function notifyOrderActors(
+  supabase: any,
+  orderId: string,
+  payload: {
+    buyerTitle?: string
+    buyerMessage?: string
+    buyerEventKey?: string
+    merchantTitle?: string
+    merchantMessage?: string
+    merchantEventKey?: string
+  },
+) {
+  const order = await getOrderParties(supabase, orderId)
+  if (!order) return
+
+  const buyerId = String(order.buyer_id || '')
+  const merchantId = String(order.merchant_id || '')
+
+  if (buyerId && payload.buyerTitle && payload.buyerMessage) {
+    await dispatchNotification({
+      userId: buyerId,
+      type: 'order',
+      title: payload.buyerTitle,
+      message: payload.buyerMessage,
+      eventKey: payload.buyerEventKey,
+      metadata: {
+        orderId,
+        action: 'track_package',
+        actionPath: `/track/${orderId}`,
+      },
+    })
+  }
+
+  if (merchantId && payload.merchantTitle && payload.merchantMessage) {
+    await dispatchNotification({
+      userId: merchantId,
+      type: 'order',
+      title: payload.merchantTitle,
+      message: payload.merchantMessage,
+      eventKey: payload.merchantEventKey,
+      metadata: {
+        orderId,
+      },
+    })
+  }
 }
 
 async function selectOrdersWithCompatibility(supabase: any, scope: 'single' | 'list', orderId?: string) {
@@ -260,10 +332,30 @@ export async function getLogisticsOrders() {
         const orderDelivered = ['completed', 'delivered'].includes(String(order.status || '').toLowerCase())
           || String(order.escrow_status || '').toLowerCase() === 'released'
 
+        const isSlaBreach = (() => {
+          const createdAt = order?.created_at ? new Date(order.created_at).getTime() : 0
+          const assignedAt = order?.assigned_at ? new Date(order.assigned_at).getTime() : 0
+          const now = Date.now()
+          const maxAssignMs = 2 * 60 * 60 * 1000 // 2 hours
+          const maxTransitMs = 6 * 60 * 60 * 1000 // 6 hours
+
+          if ((status === 'pending' || status === 'return_requested') && createdAt > 0) {
+            return now - createdAt > maxAssignMs
+          }
+          if ((status === 'assigned' || status === 'return_assigned') && assignedAt > 0) {
+            return now - assignedAt > maxTransitMs
+          }
+          if ((status === 'in_transit' || status === 'return_in_transit') && assignedAt > 0) {
+            return now - assignedAt > maxTransitMs
+          }
+          return false
+        })()
+
         acc.totalOrders += 1
         if (status === 'assigned') acc.assignedOrders += 1
         if (status === 'completed') acc.completedOrders += 1
         if (status === 'pending') acc.pendingOrders += 1
+        if (isSlaBreach) acc.slaBreaches += 1
 
         if (orderDelivered) {
           acc.releasedEscrow += deliveryFee
@@ -280,6 +372,7 @@ export async function getLogisticsOrders() {
         completedOrders: 0,
         heldEscrow: 0,
         releasedEscrow: 0,
+        slaBreaches: 0,
       },
     )
 
@@ -390,7 +483,7 @@ export async function assignRiderToOrder(orderId: string, riderId: string, notes
     const activeAssignmentsResult = await (supabase.from('logistics_order_assignments') as any)
       .select('order_id, logistics_status')
       .eq('rider_id', riderId)
-      .in('logistics_status', ['assigned', 'in_transit'])
+      .in('logistics_status', ['assigned', 'in_transit', 'return_assigned', 'return_in_transit'])
 
     if (activeAssignmentsResult.error) {
       const message = String(activeAssignmentsResult.error.message || '')
@@ -411,13 +504,48 @@ export async function assignRiderToOrder(orderId: string, riderId: string, notes
       return { success: false, error: 'Order is not ready for logistics assignment yet.' }
     }
 
+    const existingAssignment = await (supabase.from('logistics_order_assignments') as any)
+      .select('logistics_status')
+      .eq('order_id', orderId)
+      .maybeSingle()
+
+    const currentLogisticsStatus = String(existingAssignment.data?.logistics_status || '').toLowerCase()
+    const isReturnFlow = currentLogisticsStatus === 'return_requested' || currentLogisticsStatus.startsWith('return_')
+
     await upsertLogisticsAssignment(supabase, {
       order_id: orderId,
       rider_id: riderId,
-      logistics_status: 'assigned',
+      logistics_status: isReturnFlow ? 'return_assigned' : 'assigned',
       notes: notes || null,
       assigned_at: new Date().toISOString(),
     })
+
+    await notifyOrderActors(supabase, orderId, {
+      buyerTitle: isReturnFlow ? 'Return rider assigned' : 'Delivery rider assigned',
+      buyerMessage: isReturnFlow
+        ? `A rider has been assigned for your return on order ${orderId}.`
+        : `A rider has been assigned for order ${orderId}.`,
+      buyerEventKey: `logistics:rider-assigned:buyer:${orderId}:${riderId}`,
+      merchantTitle: isReturnFlow ? 'Return pickup assigned' : 'Order dispatch assigned',
+      merchantMessage: isReturnFlow
+        ? `A rider has been assigned to pick up returned item for order ${orderId}.`
+        : `A rider has been assigned for order ${orderId}.`,
+      merchantEventKey: `logistics:rider-assigned:merchant:${orderId}:${riderId}`,
+    })
+
+    const createdAt = order?.created_at ? new Date(order.created_at).getTime() : 0
+    const now = Date.now()
+    const assignThresholdMs = 2 * 60 * 60 * 1000
+    if (!isReturnFlow && createdAt > 0 && now - createdAt > assignThresholdMs) {
+      await notifyOrderActors(supabase, orderId, {
+        buyerTitle: 'Delivery delay alert',
+        buyerMessage: `Order ${orderId} had a dispatch delay. A rider has now been assigned and delivery is in progress.`,
+        buyerEventKey: `sla:assign-delay:buyer:${orderId}`,
+        merchantTitle: 'Dispatch SLA breach',
+        merchantMessage: `Order ${orderId} exceeded dispatch SLA before rider assignment.`,
+        merchantEventKey: `sla:assign-delay:merchant:${orderId}`,
+      })
+    }
 
     return { success: true }
   } catch (error: any) {
@@ -485,6 +613,240 @@ export async function completeLogisticsOrder(orderId: string, proofOfDeliveryUrl
       data: complete.data,
       disbursement: complete.disbursement,
     }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function autoAssignRiderToOrder(orderId: string) {
+  try {
+    const supabase = await createClient()
+    const order = await readOrderForDeliveryContext(supabase, orderId)
+    if (!order) return { success: false, error: 'Order not found.' }
+
+    const ridersResult = await (supabase.from('logistics_riders') as any)
+      .select('id, name, region, is_active')
+      .eq('is_active', true)
+
+    if (ridersResult.error) {
+      return { success: false, error: ridersResult.error.message }
+    }
+
+    const activeAssignmentsResult = await (supabase.from('logistics_order_assignments') as any)
+      .select('order_id, rider_id, logistics_status')
+      .in('logistics_status', ['assigned', 'in_transit', 'return_assigned', 'return_in_transit'])
+
+    if (activeAssignmentsResult.error && !includesMissingTable(String(activeAssignmentsResult.error.message || ''), 'logistics_order_assignments')) {
+      return { success: false, error: activeAssignmentsResult.error.message }
+    }
+
+    const busyRiderIds = new Set(
+      (activeAssignmentsResult.data || [])
+        .map((row: any) => String(row?.rider_id || '').trim())
+        .filter(Boolean),
+    )
+
+    const freeRiders = (ridersResult.data || []).filter((rider: any) => !busyRiderIds.has(String(rider.id || '').trim()))
+
+    if (freeRiders.length === 0) {
+      return { success: false, error: 'No free riders available for auto assignment.' }
+    }
+
+    const deliveryAddress = String(order.delivery_address || '').toLowerCase()
+    const regionMatched = freeRiders.find((rider: any) => {
+      const region = String(rider.region || '').toLowerCase().trim()
+      return region && containsAnyText(deliveryAddress, [region])
+    })
+
+    const selected = regionMatched || freeRiders[0]
+    return await assignRiderToOrder(orderId, String(selected.id || ''), 'Auto-assigned by system')
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function requestOrderReturn(orderId: string, reason: string, requestedBy: 'admin' | 'buyer' = 'admin') {
+  try {
+    const supabase = await createClient()
+    const order = await readOrderForDeliveryContext(supabase, orderId)
+    if (!order) return { success: false, error: 'Order not found.' }
+
+    const normalizedOrderStatus = String(order.status || '').toLowerCase().trim()
+    if (!['completed', 'delivered'].includes(normalizedOrderStatus)) {
+      return { success: false, error: 'Return can only be requested after delivery.' }
+    }
+
+    const returnMeta = {
+      type: 'return',
+      requestedBy,
+      reason: String(reason || '').trim() || 'Buyer reported issue with delivered product.',
+      requestedAt: new Date().toISOString(),
+    }
+
+    await upsertLogisticsAssignment(supabase, {
+      order_id: orderId,
+      logistics_status: 'return_requested',
+      notes: JSON.stringify(returnMeta),
+    })
+
+    await notifyOrderActors(supabase, orderId, {
+      buyerTitle: 'Return request opened',
+      buyerMessage: `Your return request for order ${orderId} has been received and logistics will assign a rider shortly.`,
+      buyerEventKey: `return:requested:buyer:${orderId}`,
+      merchantTitle: 'Return request on order',
+      merchantMessage: `A return request was opened for order ${orderId}. Logistics will coordinate pickup.`,
+      merchantEventKey: `return:requested:merchant:${orderId}`,
+    })
+
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function reportRiderIncident(orderId: string, riderId: string, incidentType: string, note?: string) {
+  try {
+    const supabase = await createClient()
+
+    const assignmentResult = await (supabase.from('logistics_order_assignments') as any)
+      .select('order_id, rider_id, logistics_status, notes')
+      .eq('order_id', orderId)
+      .eq('rider_id', riderId)
+      .maybeSingle()
+
+    if (assignmentResult.error || !assignmentResult.data) {
+      return { success: false, error: 'Order not found or not assigned to this rider.' }
+    }
+
+    const existingNotes = safeJsonParse(assignmentResult.data.notes) || {}
+    const existingIncidents = Array.isArray(existingNotes.incidents) ? existingNotes.incidents : []
+    const incident = {
+      type: String(incidentType || '').trim() || 'general_issue',
+      note: String(note || '').trim(),
+      reportedAt: new Date().toISOString(),
+      riderId,
+    }
+
+    const nextNotes = {
+      ...existingNotes,
+      incidents: [...existingIncidents, incident],
+      lastIncident: incident,
+    }
+
+    await upsertLogisticsAssignment(supabase, {
+      order_id: orderId,
+      notes: JSON.stringify(nextNotes),
+    })
+
+    await notifyOrderActors(supabase, orderId, {
+      buyerTitle: 'Delivery incident reported',
+      buyerMessage: `A delivery incident was reported for order ${orderId}. Logistics team is resolving it.`,
+      buyerEventKey: `incident:buyer:${orderId}:${incident.type}`,
+      merchantTitle: 'Rider incident on order',
+      merchantMessage: `Rider reported "${incident.type}" on order ${orderId}.`,
+      merchantEventKey: `incident:merchant:${orderId}:${incident.type}`,
+    })
+
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function getRiderEarnings(riderId: string) {
+  try {
+    const supabase = await createClient()
+
+    const completedAssignmentsResult = await (supabase.from('logistics_order_assignments') as any)
+      .select('order_id, completed_at, logistics_status')
+      .eq('rider_id', riderId)
+      .in('logistics_status', ['completed', 'return_completed'])
+
+    if (completedAssignmentsResult.error) {
+      return { success: false, error: completedAssignmentsResult.error.message }
+    }
+
+    const assignments = completedAssignmentsResult.data || []
+    const orderIds = assignments.map((row: any) => String(row.order_id || '')).filter(Boolean)
+
+    let orders: any[] = []
+    if (orderIds.length > 0) {
+      const ordersResult = await (supabase.from('orders') as any)
+        .select('id, delivery_fee, created_at')
+        .in('id', orderIds)
+
+      orders = ordersResult.data || []
+    }
+
+    const feeByOrderId = new Map(orders.map((row: any) => [String(row.id || ''), Number(row.delivery_fee || 0)]))
+    const totalEarned = assignments.reduce((sum: number, row: any) => sum + Number(feeByOrderId.get(String(row.order_id || '')) || 0), 0)
+
+    // Optional payout history table (graceful fallback if table doesn't exist)
+    let payoutHistory: any[] = []
+    let totalPaidOut = 0
+    const payoutResult = await (supabase.from('logistics_rider_payouts') as any)
+      .select('id, amount, status, created_at, paid_at, reference')
+      .eq('rider_id', riderId)
+      .order('created_at', { ascending: false })
+
+    if (!payoutResult.error && Array.isArray(payoutResult.data)) {
+      payoutHistory = payoutResult.data
+      totalPaidOut = payoutHistory
+        .filter((row: any) => String(row.status || '').toLowerCase() === 'paid')
+        .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0)
+    }
+
+    const availableBalance = Math.max(0, totalEarned - totalPaidOut)
+
+    return {
+      success: true,
+      data: {
+        totalEarned,
+        totalPaidOut,
+        availableBalance,
+        completedDeliveries: assignments.length,
+        payoutHistory,
+      },
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function requestRiderPayout(riderId: string, amount: number) {
+  try {
+    const supabase = await createClient()
+    const earnings = await getRiderEarnings(riderId)
+    if (!earnings.success) return earnings
+
+    const available = Number(earnings.data?.availableBalance || 0)
+    const requested = Number(amount || 0)
+    if (requested <= 0) {
+      return { success: false, error: 'Invalid payout amount.' }
+    }
+    if (requested > available) {
+      return { success: false, error: 'Requested amount exceeds available rider balance.' }
+    }
+
+    const insertResult = await (supabase.from('logistics_rider_payouts') as any)
+      .insert({
+        rider_id: riderId,
+        amount: requested,
+        status: 'pending',
+        reference: `RPO-${Date.now()}`,
+      })
+      .select('id, amount, status, created_at, reference')
+      .single()
+
+    if (insertResult.error) {
+      const message = String(insertResult.error.message || '')
+      if (includesMissingTable(message, 'logistics_rider_payouts')) {
+        return { success: false, error: 'Payout table is missing. Run latest logistics migration to enable payouts.' }
+      }
+      return { success: false, error: insertResult.error.message }
+    }
+
+    return { success: true, data: insertResult.data }
   } catch (error: any) {
     return { success: false, error: error.message }
   }

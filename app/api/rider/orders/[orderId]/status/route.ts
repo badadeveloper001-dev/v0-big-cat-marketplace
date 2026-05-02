@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { dispatchNotification } from '@/lib/notifications'
 
 function getRiderId(request: NextRequest) {
   return String(request.headers.get('x-rider-id') || '').trim()
@@ -8,6 +9,8 @@ function getRiderId(request: NextRequest) {
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   assigned: ['in_transit'],
   in_transit: ['completed'],
+  return_assigned: ['return_in_transit'],
+  return_in_transit: ['return_completed'],
 }
 
 export async function PUT(
@@ -76,18 +79,56 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Failed to update status.' }, { status: 500 })
     }
 
-    // Also update main order status if going in_transit or completed
-    if (newStatus === 'in_transit') {
+    // Keep orders table in sync for normal (non-return) delivery flow.
+    if (newStatus === 'in_transit' || newStatus === 'completed') {
       await (supabase.from('orders') as any)
-        .update({ status: 'in_transit' })
-        .eq('id', orderId)
-    } else if (newStatus === 'completed') {
-      await (supabase.from('orders') as any)
-        .update({ status: 'completed' })
+        .update({ status: newStatus })
         .eq('id', orderId)
     }
 
-    return NextResponse.json({ success: true })
+    const orderResult = await (supabase.from('orders') as any)
+      .select('id, buyer_id, merchant_id')
+      .eq('id', orderId)
+      .maybeSingle()
+
+    const buyerId = String(orderResult.data?.buyer_id || '')
+    const merchantId = String(orderResult.data?.merchant_id || '')
+
+    if (newStatus === 'in_transit' && buyerId) {
+      await dispatchNotification({
+        userId: buyerId,
+        type: 'order',
+        title: 'Delivery update',
+        message: `Order ${orderId} is now in transit.`,
+        eventKey: `rider:status:buyer:${orderId}:in_transit`,
+        metadata: { orderId, action: 'track_package', actionPath: `/track/${orderId}` },
+      })
+    }
+
+    if (newStatus === 'completed' && buyerId) {
+      await dispatchNotification({
+        userId: buyerId,
+        type: 'order',
+        title: 'Order delivered by rider',
+        message: `Order ${orderId} has been delivered. Please confirm satisfaction to release payout.`,
+        eventKey: `rider:status:buyer:${orderId}:completed`,
+        metadata: { orderId, action: 'track_package', actionPath: `/track/${orderId}` },
+      })
+    }
+
+    if ((newStatus === 'return_in_transit' || newStatus === 'return_completed') && merchantId) {
+      await dispatchNotification({
+        userId: merchantId,
+        type: 'order',
+        title: newStatus === 'return_completed' ? 'Return completed' : 'Return in transit',
+        message: newStatus === 'return_completed'
+          ? `Return flow for order ${orderId} has been completed.`
+          : `Returned item for order ${orderId} is now in transit back to merchant.`,
+        eventKey: `rider:return:merchant:${orderId}:${newStatus}`,
+      })
+    }
+
+    return NextResponse.json({ success: true, data: { status: newStatus } })
   } catch (error) {
     console.error('Rider order update error:', error)
     return NextResponse.json({ success: false, error: 'Internal server error.' }, { status: 500 })
