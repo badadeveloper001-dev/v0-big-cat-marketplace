@@ -73,7 +73,6 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     completedOrders: 0,
     heldEscrow: 0,
     releasedEscrow: 0,
-    slaBreaches: 0,
   })
   const [schemaWarning, setSchemaWarning] = useState("")
   const [newRider, setNewRider] = useState({ name: "", email: "", phone: "", region: "" })
@@ -130,7 +129,6 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
           completedOrders: 0,
           heldEscrow: 0,
           releasedEscrow: 0,
-          slaBreaches: 0,
         })
         setRiders([])
         return
@@ -147,7 +145,6 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
         completedOrders: Number(result.data?.summary?.completedOrders || 0),
         heldEscrow: Number(result.data?.summary?.heldEscrow || 0),
         releasedEscrow: Number(result.data?.summary?.releasedEscrow || 0),
-        slaBreaches: Number(result.data?.summary?.slaBreaches || 0),
       })
 
       const warnings = result.data?.schemaWarnings || {}
@@ -289,27 +286,7 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
     }
   }
 
-  const getSlaInfo = (order: LogisticsOrder) => {
-    const status = String(order.logistics_status || '').toLowerCase()
-    const createdAt = order.created_at ? new Date(order.created_at).getTime() : 0
-    const assignedAt = order.assigned_at ? new Date(order.assigned_at).getTime() : 0
-    const now = Date.now()
 
-    const maxAssignMs = 2 * 60 * 60 * 1000
-    const maxTransitMs = 6 * 60 * 60 * 1000
-
-    if ((status === 'pending' || status === 'return_requested') && createdAt > 0) {
-      const overdue = now - createdAt - maxAssignMs
-      return { breached: overdue > 0, text: overdue > 0 ? `Assign overdue by ${Math.ceil(overdue / (60 * 1000))}m` : 'Within assign SLA' }
-    }
-
-    if ((status === 'assigned' || status === 'in_transit' || status === 'return_assigned' || status === 'return_in_transit') && assignedAt > 0) {
-      const overdue = now - assignedAt - maxTransitMs
-      return { breached: overdue > 0, text: overdue > 0 ? `Delivery overdue by ${Math.ceil(overdue / (60 * 1000))}m` : 'Within delivery SLA' }
-    }
-
-    return { breached: false, text: 'SLA not applicable' }
-  }
 
   const createRider = async () => {
     if (!newRider.name.trim()) {
@@ -481,7 +458,6 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
             iconClassName="text-amber-700"
             valueClassName="text-amber-700"
           />
-          <MetricCard label="SLA Breaches" value={summary.slaBreaches} icon={<Clock className="w-4 h-4" />} className="border-red-200 bg-red-50" iconClassName="text-red-700" valueClassName="text-red-700" />
           <MetricCard label="Held Escrow" value={formatNaira(summary.heldEscrow)} icon={<Wallet className="w-4 h-4" />} />
           <MetricCard label="Released to Logistics" value={formatNaira(summary.releasedEscrow)} icon={<Wallet className="w-4 h-4" />} />
         </div>
@@ -531,15 +507,6 @@ export function LogisticsAdminDashboard({ bypassAccessCheck = false, embedded = 
                       <div className="text-xs text-muted-foreground">
                         Items: {(order.order_items || []).map((item) => `${item.product_name || 'Item'} x${item.quantity || 1}`).join(', ') || 'No items'}
                       </div>
-
-                      {(() => {
-                        const sla = getSlaInfo(order)
-                        return (
-                          <div className={`rounded-lg px-2 py-1 text-xs font-medium ${sla.breached ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                            {sla.text}
-                          </div>
-                        )
-                      })()}
 
                       <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2">
                         <select

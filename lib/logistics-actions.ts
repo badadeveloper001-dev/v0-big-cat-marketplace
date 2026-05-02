@@ -332,30 +332,10 @@ export async function getLogisticsOrders() {
         const orderDelivered = ['completed', 'delivered'].includes(String(order.status || '').toLowerCase())
           || String(order.escrow_status || '').toLowerCase() === 'released'
 
-        const isSlaBreach = (() => {
-          const createdAt = order?.created_at ? new Date(order.created_at).getTime() : 0
-          const assignedAt = order?.assigned_at ? new Date(order.assigned_at).getTime() : 0
-          const now = Date.now()
-          const maxAssignMs = 2 * 60 * 60 * 1000 // 2 hours
-          const maxTransitMs = 6 * 60 * 60 * 1000 // 6 hours
-
-          if ((status === 'pending' || status === 'return_requested') && createdAt > 0) {
-            return now - createdAt > maxAssignMs
-          }
-          if ((status === 'assigned' || status === 'return_assigned') && assignedAt > 0) {
-            return now - assignedAt > maxTransitMs
-          }
-          if ((status === 'in_transit' || status === 'return_in_transit') && assignedAt > 0) {
-            return now - assignedAt > maxTransitMs
-          }
-          return false
-        })()
-
         acc.totalOrders += 1
         if (status === 'assigned') acc.assignedOrders += 1
         if (status === 'completed') acc.completedOrders += 1
         if (status === 'pending') acc.pendingOrders += 1
-        if (isSlaBreach) acc.slaBreaches += 1
 
         if (orderDelivered) {
           acc.releasedEscrow += deliveryFee
@@ -372,7 +352,6 @@ export async function getLogisticsOrders() {
         completedOrders: 0,
         heldEscrow: 0,
         releasedEscrow: 0,
-        slaBreaches: 0,
       },
     )
 
@@ -533,19 +512,7 @@ export async function assignRiderToOrder(orderId: string, riderId: string, notes
       merchantEventKey: `logistics:rider-assigned:merchant:${orderId}:${riderId}`,
     })
 
-    const createdAt = order?.created_at ? new Date(order.created_at).getTime() : 0
-    const now = Date.now()
-    const assignThresholdMs = 2 * 60 * 60 * 1000
-    if (!isReturnFlow && createdAt > 0 && now - createdAt > assignThresholdMs) {
-      await notifyOrderActors(supabase, orderId, {
-        buyerTitle: 'Delivery delay alert',
-        buyerMessage: `Order ${orderId} had a dispatch delay. A rider has now been assigned and delivery is in progress.`,
-        buyerEventKey: `sla:assign-delay:buyer:${orderId}`,
-        merchantTitle: 'Dispatch SLA breach',
-        merchantMessage: `Order ${orderId} exceeded dispatch SLA before rider assignment.`,
-        merchantEventKey: `sla:assign-delay:merchant:${orderId}`,
-      })
-    }
+
 
     return { success: true }
   } catch (error: any) {
