@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowLeft, Loader2, Wallet, Landmark, RefreshCw, ArrowDownLeft, ArrowUpRight, Plus, Trash2, CreditCard, ShoppingBag } from "lucide-react"
+import { ArrowLeft, Loader2, Wallet, Landmark, RefreshCw, ArrowDownLeft, ArrowUpRight, Plus, Trash2, CreditCard, ShoppingBag, Eye, EyeOff, Copy, Check, Building2, Send, X } from "lucide-react"
 import { useRole } from "@/lib/role-context"
 import { formatNaira } from "@/lib/currency-utils"
 import { MerchantWithdrawal } from "@/components/merchant-withdrawal"
@@ -39,6 +39,19 @@ interface SavedPaymentMethod {
   created_at?: string | null
 }
 
+const QUICK_AMOUNTS = [500, 1000, 2000, 5000, 10000]
+
+// Derive a stable pseudo-account number from userId
+function deriveVirtualAccount(userId: string): string {
+  let hash = 0
+  for (let i = 0; i < userId.length; i++) {
+    hash = ((hash << 5) - hash) + userId.charCodeAt(i)
+    hash |= 0
+  }
+  const base = Math.abs(hash % 900_000_000) + 100_000_000
+  return String(base)
+}
+
 function BuyerWalletSection({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true)
   const [orders, setOrders] = useState<BuyerOrder[]>([])
@@ -53,6 +66,24 @@ function BuyerWalletSection({ userId }: { userId: string }) {
   const [addingMethod, setAddingMethod] = useState(false)
   const [removingId, setRemovingId] = useState("")
   const [settingDefaultId, setSettingDefaultId] = useState("")
+  const [showFundWallet, setShowFundWallet] = useState(false)
+  const [fundAmount, setFundAmount] = useState("5000")
+  const [funding, setFunding] = useState(false)
+  const [fundError, setFundError] = useState("")
+  const [fundSuccess, setFundSuccess] = useState("")
+  const [showAllTx, setShowAllTx] = useState(false)
+  const [balanceVisible, setBalanceVisible] = useState(true)
+  const [showBankModal, setShowBankModal] = useState(false)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [fundRef] = useState(() => `BCW-${Math.random().toString(36).slice(2, 10).toUpperCase()}`)
+
+  const virtualAccount = deriveVirtualAccount(userId)
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopiedField(field)
+    setTimeout(() => setCopiedField(null), 2000)
+  }
 
   const loadData = async () => {
     if (!userId) { setLoading(false); return }
@@ -88,6 +119,37 @@ function BuyerWalletSection({ userId }: { userId: string }) {
 
   useEffect(() => { loadData() }, [userId])
 
+  const handleFundWallet = async () => {
+    const amount = Number(fundAmount || 0)
+    if (!Number.isFinite(amount) || amount < 100) {
+      setFundError('Minimum top-up is ₦100')
+      return
+    }
+    setFunding(true)
+    setFundError("")
+    setFundSuccess("")
+    try {
+      const res = await fetch('/api/buyer/wallet/fund', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyerId: userId, amount, reason: `Wallet top-up – ${formatNaira(amount)}` }),
+      })
+      const result = await res.json()
+      if (!result?.success) {
+        setFundError(result?.error || 'Failed to fund wallet')
+        return
+      }
+      setFundSuccess(`₦${amount.toLocaleString('en-NG')} added to your wallet!`)
+      setFundAmount("5000")
+      setShowFundWallet(false)
+      await loadData()
+    } catch {
+      setFundError('Could not fund wallet. Please try again.')
+    } finally {
+      setFunding(false)
+    }
+  }
+
   const totalSpent = orders.reduce((s, o) => s + (Number(o.grand_total) || 0), 0)
   const escrowHeld = orders
     .filter(o => o.status && !['delivered','completed','cancelled'].includes(o.status))
@@ -98,6 +160,17 @@ function BuyerWalletSection({ userId }: { userId: string }) {
     const type = String(tx.type || '').toLowerCase().trim()
     return type === 'wallet_credit' || type === 'refund'
   })
+  const totalIn = walletTransactions.reduce((sum, tx) => {
+    const type = String(tx.type || '').toLowerCase().trim()
+    const amt = Math.max(0, Number(tx.amount || 0))
+    return creditTypes.has(type) ? sum + amt : sum
+  }, 0)
+  const totalOut = walletTransactions.reduce((sum, tx) => {
+    const type = String(tx.type || '').toLowerCase().trim()
+    const amt = Math.max(0, Number(tx.amount || 0))
+    return debitTypes.has(type) ? sum + amt : sum
+  }, 0)
+  const visibleTx = showAllTx ? walletTransactions : walletTransactions.slice(0, 5)
 
   const handleAddMethod = async () => {
     if (!newMethodDetails.trim()) return
@@ -160,7 +233,167 @@ function BuyerWalletSection({ userId }: { userId: string }) {
 
   return (
     <>
-      {/* Summary cards */}
+      {/* ── Wallet card ── */}
+      {/* ── Bank Transfer Modal ── */}
+      {showBankModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4 sm:pb-0">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base">Fund Your Wallet</h3>
+              <button onClick={() => setShowBankModal(false)} className="p-1.5 rounded-full hover:bg-muted transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 p-4 space-y-3">
+              <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium uppercase tracking-wide">Transfer to this account</p>
+
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Bank Name</p>
+                    <p className="text-sm font-semibold">Wema Bank</p>
+                  </div>
+                  <Building2 className="w-5 h-5 text-emerald-600" />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Account Number</p>
+                    <p className="text-lg font-bold tracking-widest">{virtualAccount}</p>
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(virtualAccount, 'account')}
+                    className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900 text-emerald-700 hover:bg-emerald-200 transition-colors"
+                  >
+                    {copiedField === 'account' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Account Name</p>
+                    <p className="text-sm font-semibold">BIGCAT MARKETPLACE / {userId.slice(0, 8).toUpperCase()}</p>
+                  </div>
+                </div>
+
+                <div className="h-px bg-emerald-200 dark:bg-emerald-800" />
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Payment Reference</p>
+                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{fundRef}</p>
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(fundRef, 'ref')}
+                    className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900 text-emerald-700 hover:bg-emerald-200 transition-colors"
+                  >
+                    {copiedField === 'ref' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Transfer any amount to the account above. Your wallet will be credited within <strong>5 minutes</strong> of receiving the transfer. Always use your payment reference so we can identify your payment.
+            </p>
+
+            {/* Quick manual top-up for demo / testing */}
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quick top-up (demo)</p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {QUICK_AMOUNTS.map(amt => (
+                  <button
+                    key={amt}
+                    onClick={() => setFundAmount(String(amt))}
+                    className={`rounded-xl border py-2 text-xs font-semibold transition-colors ${
+                      fundAmount === String(amt)
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'border-border text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {amt >= 1000 ? `₦${amt / 1000}k` : `₦${amt}`}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">₦</span>
+                  <input
+                    type="number" min="100" max="1000000"
+                    value={fundAmount}
+                    onChange={e => setFundAmount(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-background pl-8 pr-3 py-2.5 text-sm outline-none focus:border-emerald-500"
+                    placeholder="Custom amount"
+                  />
+                </div>
+                <button
+                  onClick={async () => { await handleFundWallet(); setShowBankModal(false) }}
+                  disabled={funding}
+                  className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+                >
+                  {funding ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                </button>
+              </div>
+              {fundError && <p className="text-xs text-red-600">{fundError}</p>}
+              {fundSuccess && <p className="text-xs text-emerald-600 font-medium">{fundSuccess}</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Wallet card ── */}
+      <section className="rounded-3xl p-5 text-white shadow-xl bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-500 relative overflow-hidden">
+        {/* decorative circles */}
+        <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
+        <div className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full bg-white/10 pointer-events-none" />
+        {/* card chip */}
+        <div className="absolute top-5 right-16 w-8 h-6 rounded bg-yellow-400/60 border border-yellow-300/40 pointer-events-none" />
+
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-emerald-100" />
+              <span className="text-sm font-semibold text-emerald-100 tracking-wide uppercase">BigCat Wallet</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setBalanceVisible(v => !v)}
+                className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
+              >
+                {balanceVisible ? <EyeOff className="w-3.5 h-3.5 text-white" /> : <Eye className="w-3.5 h-3.5 text-white" />}
+              </button>
+              <button
+                onClick={loadData}
+                className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                aria-label="Refresh wallet"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-white" />
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs text-emerald-200 mb-1">Available Balance</p>
+          <h2 className="text-4xl font-extrabold tracking-tight">
+            {balanceVisible ? formatNaira(walletBalance) : '₦ ••••••'}
+          </h2>
+          <p className="text-[11px] text-emerald-300 mt-1">{virtualAccount.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3')} · Wema Bank</p>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 text-center">
+            <div className="rounded-2xl bg-white/15 py-2 px-3">
+              <p className="text-[11px] text-emerald-200 uppercase tracking-wide">Money In</p>
+              <p className="text-sm font-bold">{balanceVisible ? formatNaira(totalIn) : '••••'}</p>
+            </div>
+            <div className="rounded-2xl bg-white/15 py-2 px-3">
+              <p className="text-[11px] text-emerald-200 uppercase tracking-wide">Money Out</p>
+              <p className="text-sm font-bold">{balanceVisible ? formatNaira(totalOut) : '••••'}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Quick stats ── */}
       <section className="grid grid-cols-3 gap-3">
         <div className="rounded-2xl border border-border bg-card p-3 flex flex-col gap-1">
           <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Total Spent</p>
@@ -176,43 +409,146 @@ function BuyerWalletSection({ userId }: { userId: string }) {
         </div>
       </section>
 
+      {/* ── Quick Actions ── */}
+      <section className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => { setShowBankModal(true); setFundError(""); setFundSuccess("") }}
+          className="flex flex-col items-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/40 dark:border-emerald-900 p-4 hover:bg-emerald-100 dark:hover:bg-emerald-950/70 transition-colors"
+        >
+          <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center">
+            <ArrowDownLeft className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Add Money</span>
+        </button>
+        <button
+          onClick={() => {}}
+          className="flex flex-col items-center gap-1.5 rounded-2xl border border-border bg-muted/40 p-4 hover:bg-muted transition-colors opacity-50 cursor-not-allowed"
+          title="Coming soon"
+        >
+          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+            <Send className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <span className="text-xs font-semibold text-muted-foreground">Send Money</span>
+        </button>
+      </section>
+
+      {/* ── Fund wallet (legacy inline — hidden, replaced by modal) ── */}
+      <section className="hidden rounded-2xl border border-border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2"><ArrowDownLeft className="w-4 h-4 text-emerald-600" /> Add Money</h3>
+          <button
+            onClick={() => { setShowFundWallet(v => !v); setFundError(""); setFundSuccess("") }}
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            {showFundWallet ? 'Cancel' : 'Top Up'}
+          </button>
+        </div>
+
+        {fundSuccess && (
+          <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700 font-medium">
+            {fundSuccess}
+          </div>
+        )}
+
+        {showFundWallet && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-5 gap-1.5">
+              {QUICK_AMOUNTS.map(amt => (
+                <button
+                  key={amt}
+                  onClick={() => setFundAmount(String(amt))}
+                  className={`rounded-xl border py-2 text-xs font-semibold transition-colors ${
+                    fundAmount === String(amt)
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : 'border-border text-foreground hover:bg-muted'
+                  }`}
+                >
+                  {amt >= 1000 ? `₦${amt / 1000}k` : `₦${amt}`}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">₦</span>
+                <input
+                  type="number"
+                  min="100"
+                  max="1000000"
+                  value={fundAmount}
+                  onChange={e => setFundAmount(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-background pl-8 pr-3 py-2.5 text-sm outline-none focus:border-emerald-500"
+                  placeholder="Custom amount"
+                />
+              </div>
+              <button
+                onClick={handleFundWallet}
+                disabled={funding}
+                className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+              >
+                {funding ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+              </button>
+            </div>
+            {fundError && <p className="text-xs text-red-600">{fundError}</p>}
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <Landmark className="w-3 h-3" />
+              Funds are available instantly for checkout payments and refunds.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* ── Transaction history ── */}
       <section className="rounded-2xl border border-border bg-card p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold flex items-center gap-2"><Wallet className="w-4 h-4" /> Buyer Wallet</h3>
-          <p className="text-xs text-muted-foreground">Refund credits appear here</p>
+          <h3 className="font-semibold">Transaction History</h3>
+          {walletTransactions.length > 5 && (
+            <button onClick={() => setShowAllTx(v => !v)} className="text-xs font-semibold text-primary hover:underline">
+              {showAllTx ? 'Show less' : `See all (${walletTransactions.length})`}
+            </button>
+          )}
         </div>
-        <div className="rounded-xl border border-border bg-muted/50 p-3 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">Wallet Balance</p>
-          <p className="text-base font-bold text-emerald-600">{formatNaira(walletBalance)}</p>
-        </div>
+
         {walletError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{walletError}</div>
         )}
 
         {walletTransactions.length === 0 ? (
-          <div className="rounded-xl bg-muted/50 border border-border p-3 text-sm text-muted-foreground">
-            No wallet activity yet.
+          <div className="rounded-xl bg-muted/50 border border-border p-4 text-sm text-muted-foreground text-center">
+            <Wallet className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p>No transactions yet.</p>
+            <p className="text-xs mt-1">Top up your wallet or place an order to get started.</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {walletTransactions.slice(0, 8).map((tx) => {
+            {visibleTx.map((tx) => {
               const type = String(tx.type || '').toLowerCase().trim()
               const isDebit = debitTypes.has(type)
               const amount = Math.max(0, Number(tx.amount || 0))
-              const isRefund = type === 'wallet_credit' || type === 'refund'
+              const label = tx.reason || (type === 'wallet_credit' ? 'Wallet top-up' : type === 'refund' ? 'Refund credit' : type === 'wallet_debit' ? 'Wallet payment' : 'Wallet activity')
+              const txDate = tx.created_at ? new Date(tx.created_at) : null
 
               return (
-                <div key={tx.id} className="rounded-xl border border-border bg-background px-3 py-2.5 flex items-center justify-between">
-                  <div className="min-w-0 pr-3">
-                    <p className="text-sm font-medium truncate">{tx.reason || (isRefund ? 'Wallet refund credit' : tx.type || 'Wallet activity')}</p>
+                <div key={tx.id} className="rounded-xl border border-border bg-background px-3 py-3 flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isDebit ? 'bg-red-100' : 'bg-emerald-100'}`}>
+                    {isDebit
+                      ? <ArrowUpRight className="w-4 h-4 text-red-600" />
+                      : <ArrowDownLeft className="w-4 h-4 text-emerald-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{label}</p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(tx.created_at || '').toLocaleString()} {tx.order_id ? `• Order #${String(tx.order_id).slice(0, 8).toUpperCase()}` : ''}
+                      {txDate ? txDate.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                      {tx.order_id ? ` · #${String(tx.order_id).slice(0, 8).toUpperCase()}` : ''}
                     </p>
                   </div>
-                  <p className={`text-sm font-semibold ${isDebit ? 'text-red-600' : 'text-emerald-600'} flex items-center gap-1`}>
-                    {isDebit ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownLeft className="w-3.5 h-3.5" />}
-                    {isDebit ? '-' : '+'}{formatNaira(amount)}
-                  </p>
+                  <div className="text-right shrink-0">
+                    <p className={`text-sm font-bold ${isDebit ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {isDebit ? '−' : '+'}{formatNaira(amount)}
+                    </p>
+                    <p className={`text-[10px] font-medium uppercase ${tx.status === 'completed' ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                      {tx.status || 'completed'}
+                    </p>
+                  </div>
                 </div>
               )
             })}
@@ -220,13 +556,14 @@ function BuyerWalletSection({ userId }: { userId: string }) {
         )}
 
         {refundRows.length > 0 && (
-          <p className="text-xs text-emerald-700">
-            Refund credits received: {refundRows.length}
+          <p className="text-xs text-emerald-700 flex items-center gap-1">
+            <ArrowDownLeft className="w-3 h-3" />
+            {refundRows.length} refund credit{refundRows.length !== 1 ? 's' : ''} received
           </p>
         )}
       </section>
 
-      {/* Saved payment methods */}
+      {/* ── Saved payment methods ── */}
       <section className="rounded-2xl border border-border bg-card p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold flex items-center gap-2"><CreditCard className="w-4 h-4" /> Saved Payment Methods</h3>
@@ -308,7 +645,7 @@ function BuyerWalletSection({ userId }: { userId: string }) {
         )}
       </section>
 
-      {/* Recent orders */}
+      {/* ── Order history ── */}
       <section className="rounded-2xl border border-border bg-card p-4 space-y-3">
         <div className="flex items-center gap-2">
           <ShoppingBag className="w-4 h-4" />
