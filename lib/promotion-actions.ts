@@ -778,7 +778,13 @@ export async function getPromotionPercentOffForProduct(merchantId: string, produ
     if (!merchantId || !productId || unitPrice <= 0) return 0
 
     const supabase = await createClient()
-    await syncPromotionAndCouponStatuses(supabase, merchantId)
+    // Public product reads may not have permission to run status sync updates.
+    // Ignore sync failures so discount lookup still works for storefront clients.
+    try {
+      await syncPromotionAndCouponStatuses(supabase, merchantId)
+    } catch {
+      // no-op
+    }
 
     const nowIso = new Date().toISOString()
     const todayStartIso = getTodayStartIso()
