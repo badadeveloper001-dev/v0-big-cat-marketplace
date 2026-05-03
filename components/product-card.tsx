@@ -73,6 +73,10 @@ export function ProductCard({
   const savedToWishlist = isInWishlist(id)
   const availableStock = Math.max(0, Number(stock || 0))
   const isOutOfStock = availableStock <= 0
+  const normalizedPromotionPercent = Math.max(0, Math.min(100, Number(promotionPercentOff || 0)))
+  const discountedPrice = normalizedPromotionPercent > 0
+    ? Math.max(0, Number(price || 0) * (1 - normalizedPromotionPercent / 100))
+    : Number(price || 0)
   const distanceLabel = Number.isFinite(Number(merchant.distance_km))
     ? `${Number(merchant.distance_km) < 1 ? '<1' : Number(merchant.distance_km).toFixed(1)} km away`
     : null
@@ -104,9 +108,9 @@ export function ProductCard({
     >
       {/* Product Image */}
       <div className="aspect-[4/3] bg-gradient-to-br from-secondary to-secondary/50 flex items-center justify-center overflow-hidden relative">
-        {promotionPercentOff > 0 && (
+        {normalizedPromotionPercent > 0 && (
           <div className="absolute left-2 top-2 z-10 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
-            {promotionPercentOff}% OFF
+            {normalizedPromotionPercent}% OFF
           </div>
         )}
         <button
@@ -157,13 +161,16 @@ export function ProductCard({
             {name}
           </h3>
           <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-            <p className="text-lg font-bold text-foreground">
-              {formatNaira(price)}
-            </p>
-            {promotionPercentOff > 0 && (
-              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">
-                {promotionPercentOff}% OFF
-              </span>
+            <p className="text-lg font-bold text-foreground">{formatNaira(discountedPrice)}</p>
+            {normalizedPromotionPercent > 0 && (
+              <>
+                <p className="text-xs font-medium text-muted-foreground line-through decoration-2">
+                  {formatNaira(price)}
+                </p>
+                <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                  {normalizedPromotionPercent}% OFF
+                </span>
+              </>
             )}
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isOutOfStock ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
               {isOutOfStock ? 'Out of stock' : `${availableStock} in stock`}
