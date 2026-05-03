@@ -27,6 +27,10 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
         a: 'Yes. Go to your Orders tab in the buyer dashboard. Each order shows its current status: Pending, Confirmed, Shipped, Delivered, or Completed.',
       },
       {
+        q: 'Can I follow a merchant to get updates?',
+        a: 'Yes. Open the merchant profile or mini website and tap Follow. You will receive in-app notifications when that merchant adds a new product or starts a new promotion.',
+      },
+      {
         q: 'What if I receive a wrong or damaged item?',
         a: 'Do NOT mark the order as delivered. Instead, open a dispute from the order details page within 48 hours of delivery. Our support team will investigate and resolve it. Funds are automatically released to the merchant only after you mark the order as delivered.',
       },
@@ -93,6 +97,10 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       {
         q: 'Can I offer both products and services?',
         a: 'Yes. BigCat supports both physical/digital product listings and service bookings. You can manage both from your merchant dashboard.',
+      },
+      {
+        q: 'Will I be notified when someone follows my store?',
+        a: 'Yes. Merchants receive an in-app notification whenever a new buyer follows their store. This helps you track audience growth and engagement.',
       },
     ],
   },

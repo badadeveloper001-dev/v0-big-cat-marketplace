@@ -22,6 +22,9 @@ import {
   ShoppingCart,
   Globe,
   ExternalLink,
+  UserPlus,
+  UserCheck,
+  Users,
 } from "lucide-react"
 import Image from "next/image"
 import { formatNaira } from "@/lib/currency-utils"
@@ -68,6 +71,9 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   const [isSuspended, setIsSuspended] = useState(false)
   const [policyNotice, setPolicyNotice] = useState("")
   const [saved, setSaved] = useState(false)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followerCount, setFollowerCount] = useState(0)
+  const [followLoading, setFollowLoading] = useState(false)
 
   useEffect(() => {
     loadProducts()
@@ -76,6 +82,59 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
   useEffect(() => {
     setIsSuspended(isUserSuspended(user?.userId))
   }, [user?.userId])
+
+  useEffect(() => {
+    loadFollowSummary()
+  }, [vendor?.id, user?.userId])
+
+  const loadFollowSummary = async () => {
+    const merchantId = String(vendor?.id || '').trim()
+    if (!merchantId) return
+
+    try {
+      const buyerQuery = user?.userId ? `&buyerId=${encodeURIComponent(user.userId)}` : ''
+      const response = await fetch(`/api/merchant/follow?merchantId=${encodeURIComponent(merchantId)}${buyerQuery}`, { cache: 'no-store' })
+      const result = await response.json().catch(() => ({}))
+      if (result?.success && result?.data) {
+        setIsFollowing(Boolean(result.data.isFollowing))
+        setFollowerCount(Number(result.data.followerCount || 0))
+      }
+    } catch {
+      // ignore follow summary errors
+    }
+  }
+
+  const handleToggleFollow = async () => {
+    if (!user?.userId) {
+      setPolicyNotice('Please sign in as a buyer to follow this merchant.')
+      return
+    }
+
+    const merchantId = String(vendor?.id || '').trim()
+    if (!merchantId) return
+
+    setFollowLoading(true)
+    try {
+      const response = await fetch('/api/merchant/follow', {
+        method: isFollowing ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyerId: user.userId, merchantId }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!result?.success) {
+        setPolicyNotice(String(result?.error || 'Could not update follow status right now.'))
+        return
+      }
+
+      setIsFollowing(Boolean(result?.data?.isFollowing))
+      setFollowerCount(Number(result?.data?.followerCount || 0))
+      setPolicyNotice(isFollowing ? 'You unfollowed this merchant.' : 'You are now following this merchant.')
+    } catch {
+      setPolicyNotice('Could not update follow status right now.')
+    } finally {
+      setFollowLoading(false)
+    }
+  }
 
   const loadProducts = async () => {
     const merchantId = String(vendor?.id || '').trim()
@@ -353,7 +412,7 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2 items-center">
               <a
                 href={merchantWebsitePath}
                 target="_blank"
@@ -364,6 +423,28 @@ export function VendorPage({ vendor, onBack, onChatVendor, onBrowseMore, onViewP
                 Visit Website
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
+              <button
+                onClick={handleToggleFollow}
+                disabled={followLoading}
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                  isFollowing
+                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                    : 'bg-secondary text-foreground hover:bg-secondary/80'
+                }`}
+              >
+                {followLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : isFollowing ? (
+                  <UserCheck className="w-4 h-4" />
+                ) : (
+                  <UserPlus className="w-4 h-4" />
+                )}
+                {isFollowing ? 'Following' : 'Follow'}
+              </button>
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Users className="w-3.5 h-3.5" />
+                {followerCount.toLocaleString('en-NG')} follower{followerCount === 1 ? '' : 's'}
+              </span>
             </div>
 
             {/* Trust Indicators */}

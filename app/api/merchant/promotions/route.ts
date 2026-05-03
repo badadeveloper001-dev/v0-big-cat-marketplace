@@ -6,6 +6,7 @@ import {
   getMerchantPromotions,
   PromotionInput,
 } from '@/lib/promotion-actions'
+import { notifyFollowersAboutMerchantUpdate } from '@/lib/merchant-follow-actions'
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,6 +49,13 @@ export async function POST(request: NextRequest) {
     if (!success) {
       return NextResponse.json({ success: false, error }, { status: 400 })
     }
+
+    await notifyFollowersAboutMerchantUpdate({
+      merchantId: userId,
+      updateType: 'promotion',
+      itemName: String(data?.name || input?.name || 'New promotion'),
+      itemId: String(data?.id || ''),
+    }).catch(() => null)
 
     return NextResponse.json({ success: true, data })
   } catch (error: any) {

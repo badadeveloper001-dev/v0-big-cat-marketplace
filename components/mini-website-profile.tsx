@@ -1,6 +1,7 @@
 "use client"
 
-import { Store, MapPin, Tag, Share2, Edit2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Store, MapPin, Tag, Share2, Edit2, UserPlus, UserCheck, Loader2, Users } from "lucide-react"
 
 interface MerchantProfile {
   id: string
@@ -18,10 +19,63 @@ interface MerchantProfile {
 interface MiniWebsiteProfileProps {
   profile: MerchantProfile
   isOwner?: boolean
+  buyerId?: string
   onEdit?: () => void
 }
 
-export function MiniWebsiteProfile({ profile, isOwner = false, onEdit }: MiniWebsiteProfileProps) {
+export function MiniWebsiteProfile({ profile, isOwner = false, buyerId, onEdit }: MiniWebsiteProfileProps) {
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followerCount, setFollowerCount] = useState(0)
+  const [followLoading, setFollowLoading] = useState(false)
+  const [followNotice, setFollowNotice] = useState("")
+
+  useEffect(() => {
+    const merchantId = String(profile?.user_id || profile?.id || '').trim()
+    if (!merchantId) return
+    const buyerQuery = buyerId ? `&buyerId=${encodeURIComponent(buyerId)}` : ''
+    fetch(`/api/merchant/follow?merchantId=${encodeURIComponent(merchantId)}${buyerQuery}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((result) => {
+        if (result?.success && result?.data) {
+          setIsFollowing(Boolean(result.data.isFollowing))
+          setFollowerCount(Number(result.data.followerCount || 0))
+        }
+      })
+      .catch(() => null)
+  }, [profile?.user_id, profile?.id, buyerId])
+
+  const handleToggleFollow = async () => {
+    if (!buyerId) {
+      setFollowNotice('Please sign in as a buyer to follow this merchant.')
+      setTimeout(() => setFollowNotice(''), 3000)
+      return
+    }
+    const merchantId = String(profile?.user_id || profile?.id || '').trim()
+    if (!merchantId) return
+    setFollowLoading(true)
+    try {
+      const response = await fetch('/api/merchant/follow', {
+        method: isFollowing ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyerId, merchantId }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!result?.success) {
+        setFollowNotice(String(result?.error || 'Could not update follow status right now.'))
+        setTimeout(() => setFollowNotice(''), 3000)
+        return
+      }
+      setIsFollowing(Boolean(result?.data?.isFollowing))
+      setFollowerCount(Number(result?.data?.followerCount || 0))
+      setFollowNotice(isFollowing ? 'You unfollowed this store.' : 'You are now following this store!')
+      setTimeout(() => setFollowNotice(''), 3000)
+    } catch {
+      setFollowNotice('Could not update follow status right now.')
+      setTimeout(() => setFollowNotice(''), 3000)
+    } finally {
+      setFollowLoading(false)
+    }
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30">
       {/* Header with Cover */}
@@ -89,12 +143,32 @@ export function MiniWebsiteProfile({ profile, isOwner = false, onEdit }: MiniWeb
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 items-center">
+                  {!isOwner && (
+                    <button
+                      onClick={handleToggleFollow}
+                      disabled={followLoading}
+                      className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
+                        isFollowing
+                          ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                          : 'bg-primary text-primary-foreground hover:shadow-lg hover:shadow-primary/30'
+                      }`}
+                    >
+                      {followLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : isFollowing ? (
+                        <UserCheck className="w-4 h-4" />
+                      ) : (
+                        <UserPlus className="w-4 h-4" />
+                      )}
+                      {isFollowing ? 'Following' : 'Follow'}
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       window.location.href = `mailto:support@bigcat.ng?subject=Inquiry%20for%20${encodeURIComponent(profile.business_name || 'store')}`
                     }}
-                    className="flex-1 py-2 px-4 bg-primary text-primary-foreground rounded-lg font-semibold hover:shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
+                    className={`${isOwner ? 'flex-1' : ''} py-2 px-4 bg-secondary border border-border rounded-lg text-foreground hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2`}
                   >
                     <span>Contact Store</span>
                   </button>
@@ -117,6 +191,16 @@ export function MiniWebsiteProfile({ profile, isOwner = false, onEdit }: MiniWeb
                     <Share2 className="w-4 h-4" />
                     <span className="hidden sm:inline">Share</span>
                   </button>
+                </div>
+                {/* Follower count + notice */}
+                <div className="mt-3 flex flex-col gap-1">
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Users className="w-3.5 h-3.5" />
+                    {followerCount.toLocaleString('en-NG')} follower{followerCount === 1 ? '' : 's'}
+                  </span>
+                  {followNotice && (
+                    <p className="text-xs text-primary font-medium">{followNotice}</p>
+                  )}
                 </div>
               </div>
             </div>

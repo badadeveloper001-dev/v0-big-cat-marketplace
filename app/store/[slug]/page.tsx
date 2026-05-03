@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { Loader2, MapPin, Share2, Store, Tag, ShoppingBag, ExternalLink, ShoppingCart, CheckCircle2, Heart } from 'lucide-react'
+import { Loader2, MapPin, Share2, Store, Tag, ShoppingBag, ExternalLink, ShoppingCart, CheckCircle2, Heart, UserPlus, UserCheck, Users } from 'lucide-react'
+import { useRole } from '@/lib/role-context'
 import { formatNaira } from '@/lib/currency-utils'
 import { extractMerchantIdFromSlug, normalizeWebsiteBannerConfig, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
 import { useCart } from '@/lib/cart-context'
@@ -71,6 +72,11 @@ export default function MerchantMiniWebsitePage() {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [addedProduct, setAddedProduct] = useState<any | null>(null)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followerCount, setFollowerCount] = useState(0)
+  const [followLoading, setFollowLoading] = useState(false)
+  const [followMessage, setFollowMessage] = useState('')
+  const { user } = useRole()
   const { addItem, getItemCount, getTotal } = useCart()
   const { toggleItem, isInWishlist } = useWishlist()
 
@@ -171,6 +177,57 @@ export default function MerchantMiniWebsitePage() {
     }).catch(() => null)
   }, [merchantId, banner.abTestEnabled])
 
+  useEffect(() => {
+    const loadFollowSummary = async () => {
+      if (!merchantId) return
+
+      try {
+        const buyerQuery = user?.userId ? `&buyerId=${encodeURIComponent(user.userId)}` : ''
+        const response = await fetch(`/api/merchant/follow?merchantId=${encodeURIComponent(merchantId)}${buyerQuery}`, { cache: 'no-store' })
+        const result = await response.json().catch(() => ({}))
+        if (result?.success && result?.data) {
+          setIsFollowing(Boolean(result.data.isFollowing))
+          setFollowerCount(Number(result.data.followerCount || 0))
+        }
+      } catch {
+        // ignore follow summary errors
+      }
+    }
+
+    loadFollowSummary()
+  }, [merchantId, user?.userId])
+
+  const handleToggleFollow = async () => {
+    if (!user?.userId) {
+      setFollowMessage('Please sign in as a buyer to follow this merchant.')
+      return
+    }
+
+    if (!merchantId) return
+
+    setFollowLoading(true)
+    try {
+      const response = await fetch('/api/merchant/follow', {
+        method: isFollowing ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyerId: user.userId, merchantId }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!result?.success) {
+        setFollowMessage(String(result?.error || 'Could not update follow status right now.'))
+        return
+      }
+
+      setIsFollowing(Boolean(result?.data?.isFollowing))
+      setFollowerCount(Number(result?.data?.followerCount || 0))
+      setFollowMessage(isFollowing ? 'You unfollowed this merchant.' : 'You are now following this merchant.')
+    } catch {
+      setFollowMessage('Could not update follow status right now.')
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
   const handleShare = async () => {
     const currentUrl = typeof window !== 'undefined' ? window.location.href : ''
     const shareData = {
@@ -260,11 +317,27 @@ export default function MerchantMiniWebsitePage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 min-w-[140px]">
+            <div className="flex flex-col gap-2 min-w-[160px]">
               <button onClick={handleShare} className="rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold backdrop-blur hover:bg-white/25 transition-colors flex items-center justify-center gap-2">
                 <Share2 className="w-4 h-4" />
                 Share
               </button>
+              <button
+                onClick={handleToggleFollow}
+                disabled={followLoading}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                  isFollowing
+                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                    : 'bg-white/20 text-white hover:bg-white/30'
+                }`}
+              >
+                {followLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isFollowing ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                {isFollowing ? 'Following' : 'Follow'}
+              </button>
+              <span className="text-xs text-white/90 inline-flex items-center justify-center gap-1">
+                <Users className="w-3.5 h-3.5" />
+                {followerCount.toLocaleString('en-NG')} follower{followerCount === 1 ? '' : 's'}
+              </span>
               <Link href="/marketplace" className={`rounded-xl ${themeStyle.button} px-4 py-2 text-sm font-semibold text-center transition-colors flex items-center justify-center gap-2`}>
                 <ShoppingBag className="w-4 h-4" />
                 Shop on BigCat
@@ -309,6 +382,11 @@ export default function MerchantMiniWebsitePage() {
       )}
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {followMessage && (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-2 text-sm text-foreground">
+            {followMessage}
+          </div>
+        )}
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
