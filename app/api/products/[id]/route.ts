@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getProductById } from '@/lib/product-actions'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,7 +21,11 @@ export async function GET(
     }
 
     const result = await getProductById(productId)
-    return NextResponse.json(result)
+    return NextResponse.json(result, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    })
   } catch (error) {
     console.error('Get product by ID API error:', error)
     return NextResponse.json(

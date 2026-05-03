@@ -87,7 +87,7 @@ export function ProductDetailsPage({ productId, onBack, onViewProduct, onViewMer
   const loadProduct = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/products/${productId}`)
+      const response = await fetch(`/api/products/${productId}`, { cache: 'no-store' })
       const result = await response.json()
       if (result.success) {
         setProduct(result.data)
