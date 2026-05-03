@@ -14,6 +14,7 @@ interface ProductCardProps {
   category: string
   image?: string | null
   stock?: number
+  promotionPercentOff?: number
   merchant: {
     id: string
     business_name: string
@@ -48,6 +49,7 @@ export function ProductCard({
   category,
   image,
   stock = 0,
+  promotionPercentOff = 0,
   merchant,
   onClick,
   onAddToCart,
@@ -101,6 +103,11 @@ export function ProductCard({
     >
       {/* Product Image */}
       <div className="aspect-[4/3] bg-gradient-to-br from-secondary to-secondary/50 flex items-center justify-center overflow-hidden relative">
+        {promotionPercentOff > 0 && (
+          <div className="absolute left-2 top-2 z-10 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+            {promotionPercentOff}% OFF
+          </div>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation()

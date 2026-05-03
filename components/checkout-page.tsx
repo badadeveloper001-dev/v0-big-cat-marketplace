@@ -27,6 +27,11 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [couponCode, setCouponCode] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null)
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
+  const [promotionDiscount, setPromotionDiscount] = useState(0)
+  const [promotionNames, setPromotionNames] = useState<string[]>([])
   const [deliveryFee, setDeliveryFee] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
   const [suspended, setSuspended] = useState(false)
@@ -83,10 +88,13 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const INSURANCE_RATE = 0.05 // Return delivery protection insurance: 5%
   const productTotal = getTotal()
   const serviceTotal = Number(serviceBooking?.basePrice || 0)
-  const preDiscountTotal = serviceBooking ? serviceTotal : (productTotal + deliveryFee)
-  const insuranceBase = serviceBooking ? serviceTotal : productTotal // Insurance applies to goods/services, not delivery
+  const effectivePromotionDiscount = serviceBooking ? 0 : Math.min(promotionDiscount, productTotal)
+  const discountedProductTotal = serviceBooking ? serviceTotal : Math.max(0, productTotal - effectivePromotionDiscount)
+  const insuranceBase = serviceBooking ? serviceTotal : discountedProductTotal // Insurance applies to goods/services, not delivery
   const insuranceAmount = Math.round(insuranceBase * INSURANCE_RATE)
-  const grandTotal = preDiscountTotal + insuranceAmount
+  const subtotalAfterPromotion = serviceBooking ? serviceTotal : (discountedProductTotal + deliveryFee)
+  const effectiveCouponDiscount = serviceBooking ? 0 : Math.min(Number(appliedCoupon?.discount || 0), subtotalAfterPromotion + insuranceAmount)
+  const grandTotal = Math.max(0, subtotalAfterPromotion + insuranceAmount - effectiveCouponDiscount)
   const isWalletPayment = paymentMethod === 'palmpay'
   const isWalletInsufficient = isWalletPayment && (serviceBooking || deliveryAddress.trim()) && walletBalance < grandTotal
   const walletShortfall = isWalletInsufficient ? grandTotal - walletBalance : 0
@@ -117,6 +125,45 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       setDeliveryAddress(savedLocation)
     }
   }, [savedLocation])
+
+  useEffect(() => {
+    const previewPromotions = async () => {
+      if (serviceBooking || items.length === 0) {
+        setPromotionDiscount(0)
+        setPromotionNames([])
+        return
+      }
+
+      try {
+        const response = await fetch('/api/promotions/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: items.map((item) => ({
+              merchantId: item.merchantId,
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPrice: item.price,
+            })),
+          }),
+        })
+        const result = await response.json()
+        if (result?.success) {
+          const total = Number(result?.data?.totalDiscount || 0)
+          setPromotionDiscount(Number.isFinite(total) ? total : 0)
+          const names = Array.isArray(result?.data?.promotions)
+            ? result.data.promotions.map((p: any) => String(p?.promotionName || '')).filter(Boolean)
+            : []
+          setPromotionNames(Array.from(new Set(names)))
+        }
+      } catch {
+        setPromotionDiscount(0)
+        setPromotionNames([])
+      }
+    }
+
+    previewPromotions()
+  }, [items, serviceBooking])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -302,6 +349,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       deliveryAddress: deliveryAddress.trim(),
       paymentMethod,
       deliveryFee,
+      appliedCoupon: appliedCoupon || null,
     })
 
     setIsSubmitting(false)
@@ -644,6 +692,75 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         {/* Price Breakdown */}
         <section className="p-4">
           <h2 className="font-semibold text-foreground mb-3">Price Details</h2>
+          {!serviceBooking && (
+            <div className="mb-4 rounded-xl border border-border bg-card p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Coupon Code</p>
+              {!appliedCoupon ? (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Enter coupon"
+                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={validatingCoupon || !couponCode.trim() || !user?.userId}
+                    onClick={async () => {
+                      if (!couponCode.trim() || !user?.userId) return
+                      setValidatingCoupon(true)
+                      try {
+                        const validateRes = await fetch('/api/merchant/coupons', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            action: 'validate',
+                            couponCode: couponCode.trim().toUpperCase(),
+                            buyerId: user.userId,
+                            cartTotal: subtotalAfterPromotion + insuranceAmount,
+                          }),
+                        })
+                        const validateData = await validateRes.json()
+                        if (validateData?.success) {
+                          setAppliedCoupon({
+                            code: String(validateData?.coupon?.code || couponCode.trim().toUpperCase()),
+                            discount: Number(validateData?.discount || 0),
+                          })
+                          setError('')
+                        } else {
+                          setAppliedCoupon(null)
+                          setError(String(validateData?.error || 'Coupon is not valid'))
+                        }
+                      } catch {
+                        setAppliedCoupon(null)
+                        setError('Failed to validate coupon')
+                      } finally {
+                        setValidatingCoupon(false)
+                      }
+                    }}
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  >
+                    {validatingCoupon ? 'Checking...' : 'Apply'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                  <p className="text-sm font-semibold text-emerald-700">{appliedCoupon.code} applied</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppliedCoupon(null)
+                      setCouponCode('')
+                    }}
+                    className="text-xs font-medium text-emerald-700"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <div className="space-y-2">
             {serviceBooking ? (
               <>
@@ -667,6 +784,12 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
                   <span className="text-muted-foreground">Product Total</span>
                   <span className="font-medium text-foreground">{formatNaira(productTotal)}</span>
                 </div>
+                {effectivePromotionDiscount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-emerald-700">Promotion Discount{promotionNames.length ? ` (${promotionNames[0]}${promotionNames.length > 1 ? ' +' + (promotionNames.length - 1) : ''})` : ''}</span>
+                    <span className="font-medium text-emerald-700">-{formatNaira(effectivePromotionDiscount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{fulfillmentMethod === 'pickup' ? 'Pickup Fee' : 'Delivery Fee'}</span>
                   <span className="font-medium text-foreground">
@@ -677,6 +800,12 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
                   <span className="text-muted-foreground">Insurance (5%)</span>
                   <span className="font-medium text-foreground">{formatNaira(insuranceAmount)}</span>
                 </div>
+                {effectiveCouponDiscount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-emerald-700">Coupon Discount ({appliedCoupon?.code})</span>
+                    <span className="font-medium text-emerald-700">-{formatNaira(effectiveCouponDiscount)}</span>
+                  </div>
+                )}
                 <div className="h-px bg-border my-2" />
                 <div className="flex justify-between">
                   <span className="font-semibold text-foreground">Grand Total</span>

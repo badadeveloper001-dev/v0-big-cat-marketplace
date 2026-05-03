@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Shield, Clock, Truck, MapPin, Loader2, CheckCircle2, AlertCircle, X, Minus, Plus } from "lucide-react"
 import {
   Drawer,
@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
+import { useRole } from "@/lib/role-context"
 
 interface Product {
   id: number
@@ -43,6 +44,7 @@ type PaymentStatus = "idle" | "processing" | "success" | "error"
 type DeliveryMethod = "platform" | "vendor" | "pickup"
 
 export function CheckoutDrawer({ open, onOpenChange, product, vendor }: CheckoutDrawerProps) {
+  const { user } = useRole()
   const [quantity, setQuantity] = useState(1)
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("platform")
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle")
@@ -50,11 +52,51 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
   const [couponCode, setCouponCode] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null)
   const [validatingCoupon, setValidatingCoupon] = useState(false)
+  const [promotionDiscount, setPromotionDiscount] = useState(0)
+  const [promotionName, setPromotionName] = useState<string | null>(null)
 
   const deliveryFee = deliveryMethod === "platform" ? 10 : deliveryMethod === "vendor" ? 5 : 0
   const subtotal = product.price * quantity
+  const discountedSubtotal = Math.max(0, subtotal - promotionDiscount)
   const couponDiscount = appliedCoupon?.discount || 0
-  const total = Math.max(0, subtotal + deliveryFee - couponDiscount)
+  const total = Math.max(0, discountedSubtotal + deliveryFee - couponDiscount)
+
+  useEffect(() => {
+    const previewPromotion = async () => {
+      try {
+        const response = await fetch('/api/promotions/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: [
+              {
+                merchantId: String(vendor.id),
+                productId: String(product.id),
+                quantity,
+                unitPrice: Number(product.price),
+              },
+            ],
+          }),
+        })
+
+        const result = await response.json()
+        if (result?.success) {
+          const totalDiscount = Number(result?.data?.totalDiscount || 0)
+          setPromotionDiscount(Math.max(0, Math.min(totalDiscount, subtotal)))
+          const firstPromotion = Array.isArray(result?.data?.promotions) ? result.data.promotions[0] : null
+          setPromotionName(firstPromotion?.promotionName ? String(firstPromotion.promotionName) : null)
+        } else {
+          setPromotionDiscount(0)
+          setPromotionName(null)
+        }
+      } catch {
+        setPromotionDiscount(0)
+        setPromotionName(null)
+      }
+    }
+
+    previewPromotion()
+  }, [vendor.id, product.id, product.price, quantity, subtotal])
 
   const deliveryEstimates = {
     platform: { time: "2-3 days", icon: Truck },
@@ -207,6 +249,12 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
                       <span className="text-muted-foreground">Delivery Fee</span>
                       <span className="text-foreground">${deliveryFee.toFixed(2)}</span>
                     </div>
+                    {promotionDiscount > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-green-600">Promotion{promotionName ? ` (${promotionName})` : ''}</span>
+                        <span className="text-green-600 font-semibold">-${promotionDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
                     {couponDiscount > 0 && (
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-green-600">Coupon Discount</span>
@@ -236,6 +284,10 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
                     <button
                       onClick={async () => {
                         if (!couponCode.trim()) return
+                        if (!user?.userId) {
+                          setError('Please sign in to apply coupon')
+                          return
+                        }
                         setValidatingCoupon(true)
                         try {
                           const res = await fetch('/api/merchant/coupons', {
@@ -244,8 +296,8 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
                             body: JSON.stringify({
                               action: 'validate',
                               couponCode: couponCode.toUpperCase(),
-                              buyerId: 'buyer-id',
-                              cartTotal: subtotal + deliveryFee,
+                              buyerId: String(user?.userId || ''),
+                              cartTotal: discountedSubtotal + deliveryFee,
                             }),
                           })
                           const data = await res.json()

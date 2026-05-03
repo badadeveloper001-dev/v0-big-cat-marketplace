@@ -30,15 +30,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id')
-    if (!userId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { action, input, couponCode, buyerId, cartTotal } = await request.json()
+    const userId = request.headers.get('x-user-id')
 
     // Create new coupon
     if (action === 'create') {
+      if (!userId) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+      }
       const couponInput: CouponInput = input
       if (!couponInput.code || !couponInput.discount_value) {
         return NextResponse.json(

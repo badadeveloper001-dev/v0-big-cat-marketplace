@@ -476,6 +476,7 @@ export function ProductsMarketplace({
             category: p.category,
             image: p.images?.[0] || null,
             stock: Number(p.stock || 0),
+            promotionPercentOff: Number(p.promotion_percent_off || 0),
             merchant: {
               id: p.merchant_profiles?.id || '',
               business_name: p.merchant_profiles?.business_name || 'Unknown',
