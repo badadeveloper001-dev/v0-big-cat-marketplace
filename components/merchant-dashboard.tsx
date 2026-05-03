@@ -8,6 +8,7 @@ import { MerchantProducts } from "@/components/merchant-products"
 import { MerchantOrders } from "@/components/merchant-orders"
 import { MerchantServices } from "@/components/merchant-services"
 import { MerchantPromotions } from "@/components/merchant-promotions"
+import { MerchantStoreSettings } from "@/components/merchant-store-settings"
 import { ProfilePage } from "@/components/profile-page"
 import { MerchantProfilePage } from "@/components/merchant-profile-page"
 import { SettingsPage } from "@/components/settings-page"
@@ -1472,6 +1473,16 @@ export function MerchantDashboard() {
         >
             AI
         </button>
+        <button
+          onClick={() => setActiveTab("store")}
+          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "store"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+            Store
+        </button>
       </div>
 
       {/* Main Content */}
@@ -1955,6 +1966,8 @@ export function MerchantDashboard() {
           <div className="px-4 py-6">
             <MerchantPromotions />
           </div>
+        ) : activeTab === "store" ? (
+          <MerchantStoreSettings onComplete={() => {}} />
         ) : activeTab === "ai" ? (
           <div className="h-full" style={{ minHeight: "calc(100vh - 180px)" }}>
             <NigeriaAiAssistant
