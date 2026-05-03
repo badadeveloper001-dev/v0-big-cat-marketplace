@@ -5,6 +5,7 @@ import { holdFundsInEscrow, releaseFundsFromEscrow } from '@/lib/escrow-actions'
 import { getUserSafetyStatus } from '@/lib/server-trust-safety'
 import { registerOrderForLogistics } from '@/lib/logistics-actions'
 import { dispatchNotification } from '@/lib/notifications'
+import { applyCoupon } from '@/lib/promotion-actions'
 
 function isMissingColumnError(error: any) {
   const message = String(error?.message || '').toLowerCase()
@@ -185,6 +186,10 @@ type CreateOrderInput = {
   deliveryAddress: string
   paymentMethod?: string
   deliveryFee?: number
+  appliedCoupon?: {
+    code: string
+    discount: number
+  } | null
 }
 
 export async function createOrder(
@@ -245,7 +250,11 @@ export async function createOrder(
       const allocatedDeliveryFee = payload.deliveryType === 'pickup' ? 0 : (createdOrders.length === 0 ? Number(payload.deliveryFee || 0) : 0)
       const INSURANCE_RATE = 0.05 // Return delivery protection insurance: 5%
       const insuranceAmount = Math.round(productTotal * INSURANCE_RATE)
-      const grandTotal = productTotal + allocatedDeliveryFee + insuranceAmount
+      const subtotal = productTotal + allocatedDeliveryFee + insuranceAmount
+      
+      // Apply coupon discount (only on first order for multi-merchant orders)
+      const couponDiscount = createdOrders.length === 0 && payload.appliedCoupon ? Number(payload.appliedCoupon.discount) || 0 : 0
+      const grandTotal = Math.max(0, subtotal - couponDiscount)
       const orderId = crypto.randomUUID()
 
       const resolvedPaymentMethod = payload.paymentMethod || 'card'
@@ -254,6 +263,9 @@ export async function createOrder(
         {
           id: orderId,
           buyer_id: payload.buyerId,
+          applied_coupon_code: payload.appliedCoupon?.code || null,
+          coupon_discount: couponDiscount,
+          final_total: grandTotal,
           merchant_id: normalizedMerchantId,
           status: 'paid',
           grand_total: grandTotal,
@@ -412,12 +424,24 @@ export async function createOrder(
           })),
           subtotal: productTotal,
           deliveryFee: allocatedDeliveryFee,
+          couponCode: payload.appliedCoupon?.code || null,
+          couponDiscount: couponDiscount,
           grandTotal: grandTotal,
+          finalTotal: grandTotal,
           action: 'track_package',
           actionPath: `/track/${orderIdRef}`,
         },
         emailSubject: 'Payment confirmation',
       })
+
+      // Apply coupon usage tracking if one was used
+      if (payload.appliedCoupon?.code && createdOrders.length === 0) {
+        try {
+          await applyCoupon(payload.appliedCoupon.code, payload.buyerId)
+        } catch (couponError) {
+          console.error('Failed to apply coupon usage tracking:', couponError)
+        }
+      }
 
       const logisticsRegisteredAt: string | null = null
 

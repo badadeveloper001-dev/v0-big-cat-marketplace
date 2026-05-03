@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
       totalAmount,
       deliveryMethod,
       deliveryFee,
+      appliedCoupon,
     } = body
 
     console.log("[v0] Order initiation request:", {
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
       unitPrice,
       totalAmount,
       deliveryMethod,
+      appliedCoupon,
     })
 
     // Validate required fields
@@ -68,6 +70,9 @@ export async function POST(request: NextRequest) {
         delivery_method: deliveryMethod,
         status: "pending",
         payment_status: "pending",
+        applied_coupon_code: appliedCoupon?.code || null,
+        coupon_discount: appliedCoupon?.discount || 0,
+        final_total: totalAmount - (appliedCoupon?.discount || 0),
       },
       {
         product_id: productId,
@@ -82,6 +87,9 @@ export async function POST(request: NextRequest) {
         delivery_method: deliveryMethod,
         status: "pending",
         payment_status: "pending",
+        applied_coupon_code: appliedCoupon?.code || null,
+        coupon_discount: appliedCoupon?.discount || 0,
+        final_total: totalAmount - (appliedCoupon?.discount || 0),
       },
       {
         product_id: productId,
@@ -95,6 +103,9 @@ export async function POST(request: NextRequest) {
         total_amount: totalAmount,
         delivery_method: deliveryMethod,
         status: "pending",
+        applied_coupon_code: appliedCoupon?.code || null,
+        coupon_discount: appliedCoupon?.discount || 0,
+        final_total: totalAmount - (appliedCoupon?.discount || 0),
       },
     ]
 

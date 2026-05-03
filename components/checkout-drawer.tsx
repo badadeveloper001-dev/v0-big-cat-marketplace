@@ -47,10 +47,14 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("platform")
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle")
   const [error, setError] = useState<string | null>(null)
+  const [couponCode, setCouponCode] = useState("")
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null)
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
 
   const deliveryFee = deliveryMethod === "platform" ? 10 : deliveryMethod === "vendor" ? 5 : 0
   const subtotal = product.price * quantity
-  const total = subtotal + deliveryFee
+  const couponDiscount = appliedCoupon?.discount || 0
+  const total = Math.max(0, subtotal + deliveryFee - couponDiscount)
 
   const deliveryEstimates = {
     platform: { time: "2-3 days", icon: Truck },
@@ -88,6 +92,7 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
           totalAmount: total,
           deliveryMethod,
           deliveryFee,
+          appliedCoupon: appliedCoupon || undefined,
         }),
       })
 
@@ -202,6 +207,12 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
                       <span className="text-muted-foreground">Delivery Fee</span>
                       <span className="text-foreground">${deliveryFee.toFixed(2)}</span>
                     </div>
+                    {couponDiscount > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-green-600">Coupon Discount</span>
+                        <span className="text-green-600 font-semibold">-${couponDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <span className="font-semibold text-foreground">Total</span>
                       <span className="font-bold text-foreground text-lg">${total.toFixed(2)}</span>
@@ -209,6 +220,75 @@ export function CheckoutDrawer({ open, onOpenChange, product, vendor }: Checkout
                   </div>
                 </div>
               </section>
+
+              {/* Coupon Section */}
+              {!appliedCoupon && (
+                <section className="mb-6">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter coupon code"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      disabled={validatingCoupon}
+                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!couponCode.trim()) return
+                        setValidatingCoupon(true)
+                        try {
+                          const res = await fetch('/api/merchant/coupons', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              action: 'validate',
+                              couponCode: couponCode.toUpperCase(),
+                              buyerId: 'buyer-id',
+                              cartTotal: subtotal + deliveryFee,
+                            }),
+                          })
+                          const data = await res.json()
+                          if (data.success) {
+                            setAppliedCoupon({ code: data.coupon.code, discount: data.discount })
+                            setError(null)
+                          } else {
+                            setError(data.error)
+                          }
+                        } catch (err: any) {
+                          setError(err.message)
+                        } finally {
+                          setValidatingCoupon(false)
+                        }
+                      }}
+                      disabled={validatingCoupon || !couponCode.trim()}
+                      className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {validatingCoupon ? "Checking..." : "Apply"}
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {appliedCoupon && (
+                <section className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-green-900">{appliedCoupon.code}</p>
+                      <p className="text-sm text-green-700">Save ${appliedCoupon.discount.toFixed(2)}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setAppliedCoupon(null)
+                        setCouponCode("")
+                      }}
+                      className="text-sm text-green-700 hover:text-green-900"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </section>
+              )}
 
               {/* Delivery Section */}
               <section className="mb-6">

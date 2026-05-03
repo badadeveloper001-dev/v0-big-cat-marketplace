@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
       deliveryAddress,
       paymentMethod,
       deliveryFee,
+      appliedCoupon,
     } = body
 
     if (!buyerId || !Array.isArray(items) || items.length === 0 || !deliveryType || !deliveryAddress) {
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       deliveryAddress,
       paymentMethod,
       deliveryFee: Number(deliveryFee || 0),
+      appliedCoupon: appliedCoupon || null,
     })
 
     return NextResponse.json(result)

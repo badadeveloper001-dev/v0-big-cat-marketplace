@@ -451,7 +451,9 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
   const subtotalFromItems = items.reduce((s, i) => s + Number(i.total_price || (Number(i.unit_price || 0) * Number(i.quantity || 1))), 0)
   const subtotal = Number(metadata?.subtotal || subtotalFromItems || 0)
   const deliveryFee = Number(ctx?.order?.delivery_fee || metadata?.deliveryFee || 0)
+  const couponDiscount = Number(metadata?.couponDiscount || ctx?.order?.coupon_discount || 0)
   const grandTotal = Number(ctx?.order?.grand_total || ctx?.order?.total_amount || metadata?.grandTotal || (subtotal + deliveryFee) || 0)
+  const finalTotal = Number(metadata?.finalTotal || ctx?.order?.final_total || (grandTotal - couponDiscount))
   const insurance = grandTotal > 0 ? Math.round(grandTotal * 0.05 * 100) / 100 : 0
 
   const pricingTable = (items.length > 0 || grandTotal > 0)
@@ -464,7 +466,8 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
         ${subtotal > 0 ? `<tr><td style="padding:8px 14px;font-size:12px;color:#475569;">Subtotal</td><td style="padding:8px 14px;font-size:12px;color:#0f172a;font-weight:600;text-align:right;">&#x20A6;${subtotal.toLocaleString("en-NG")}</td></tr>` : ""}
         ${deliveryFee > 0 ? `<tr><td style="padding:8px 14px;font-size:12px;color:#475569;">Delivery Fee</td><td style="padding:8px 14px;font-size:12px;color:#0f172a;font-weight:600;text-align:right;">&#x20A6;${deliveryFee.toLocaleString("en-NG")}</td></tr>` : ""}
         ${insurance > 0 ? `<tr><td style="padding:8px 14px;font-size:12px;color:#475569;">Insurance (5%)</td><td style="padding:8px 14px;font-size:12px;color:#0f172a;font-weight:600;text-align:right;">&#x20A6;${insurance.toLocaleString("en-NG")}</td></tr>` : ""}
-        ${grandTotal > 0 ? `<tr style="background:#fff7ed;border-top:2px solid #fed7aa;"><td style="padding:10px 14px;font-size:13px;font-weight:700;color:#92400e;">Total</td><td style="padding:10px 14px;font-size:15px;font-weight:800;color:#c2410c;text-align:right;">&#x20A6;${grandTotal.toLocaleString("en-NG")}</td></tr>` : ""}
+        ${couponDiscount > 0 ? `<tr><td style="padding:8px 14px;font-size:12px;color:#059669;">Coupon Discount ${metadata?.couponCode ? `(${metadata.couponCode})` : ""}</td><td style="padding:8px 14px;font-size:12px;color:#059669;font-weight:600;text-align:right;">-&#x20A6;${couponDiscount.toLocaleString("en-NG")}</td></tr>` : ""}
+        ${finalTotal > 0 ? `<tr style="background:#fff7ed;border-top:2px solid #fed7aa;"><td style="padding:10px 14px;font-size:13px;font-weight:700;color:#92400e;">Final Total</td><td style="padding:10px 14px;font-size:15px;font-weight:800;color:#c2410c;text-align:right;">&#x20A6;${finalTotal.toLocaleString("en-NG")}</td></tr>` : ""}
       </table>`
     : ""
 
