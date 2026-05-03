@@ -197,17 +197,44 @@ async function syncPromotionAndCouponStatuses(supabase: any, merchantId?: string
   const nowIso = new Date().toISOString()
   const todayStartIso = getTodayStartIso()
 
-  const promoBase = (supabase.from('promotions') as any)
-  const couponBase = (supabase.from('coupons') as any)
-
-  const promoScoped = merchantId ? promoBase.eq('merchant_id', merchantId) : promoBase
-  const couponScoped = merchantId ? couponBase.eq('merchant_id', merchantId) : couponBase
-
-  await promoScoped.update({ is_active: false, updated_at: nowIso }).lt('end_date', todayStartIso).eq('is_active', true)
-  await promoScoped.update({ is_active: true, updated_at: nowIso }).lte('start_date', nowIso).gte('end_date', todayStartIso).eq('is_active', false)
-
-  await couponScoped.update({ is_active: false, updated_at: nowIso }).lt('end_date', todayStartIso).eq('is_active', true)
-  await couponScoped.update({ is_active: true, updated_at: nowIso }).lte('start_date', nowIso).gte('end_date', todayStartIso).eq('is_active', false)
+  // Deactivate expired promotions
+  {
+    let q = (supabase.from('promotions') as any)
+      .update({ is_active: false, updated_at: nowIso })
+      .lt('end_date', todayStartIso)
+      .eq('is_active', true)
+    if (merchantId) q = q.eq('merchant_id', merchantId)
+    await q
+  }
+  // Activate current promotions
+  {
+    let q = (supabase.from('promotions') as any)
+      .update({ is_active: true, updated_at: nowIso })
+      .lte('start_date', nowIso)
+      .gte('end_date', todayStartIso)
+      .eq('is_active', false)
+    if (merchantId) q = q.eq('merchant_id', merchantId)
+    await q
+  }
+  // Deactivate expired coupons
+  {
+    let q = (supabase.from('coupons') as any)
+      .update({ is_active: false, updated_at: nowIso })
+      .lt('end_date', todayStartIso)
+      .eq('is_active', true)
+    if (merchantId) q = q.eq('merchant_id', merchantId)
+    await q
+  }
+  // Activate current coupons
+  {
+    let q = (supabase.from('coupons') as any)
+      .update({ is_active: true, updated_at: nowIso })
+      .lte('start_date', nowIso)
+      .gte('end_date', todayStartIso)
+      .eq('is_active', false)
+    if (merchantId) q = q.eq('merchant_id', merchantId)
+    await q
+  }
 }
 
 async function enforcePromotionMarginGuard(
