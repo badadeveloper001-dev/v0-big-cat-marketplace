@@ -33,11 +33,20 @@ export async function GET(request: NextRequest) {
         return { ...product, promotion_percent_off: 0 }
       }
 
+      const productMerchantId = String(product?.merchant_id || product?.merchant_profiles?.id || '').trim()
+      const productId = String(product?.id || '').trim()
+
       const eligiblePromos = promoList.filter((promo: any) => {
-        if (String(promo.merchant_id || '') !== String(product?.merchant_id || '')) return false
-        const scopedProductIds = Array.isArray(promo.product_ids) ? promo.product_ids : []
-        if (scopedProductIds.length > 0 && !scopedProductIds.includes(product?.id)) return false
-        if (Number(promo.min_purchase_amount || 0) > price) return false
+        const promoMerchantId = String(promo?.merchant_id || '').trim()
+        if (!promoMerchantId || !productMerchantId || promoMerchantId !== productMerchantId) return false
+
+        const scopedProductIds = Array.isArray(promo.product_ids)
+          ? promo.product_ids.map((id: unknown) => String(id || '').trim()).filter(Boolean)
+          : []
+
+        // If product scope is set, product must be explicitly included.
+        if (scopedProductIds.length > 0 && !scopedProductIds.includes(productId)) return false
+
         return true
       })
 
