@@ -173,6 +173,11 @@ export function ProductDetailsPage({ productId, onBack, onViewProduct, onViewMer
   const savedToWishlist = isInWishlist(String(product.id))
   const availableStock = Math.max(0, Number(product.stock || 0))
   const isOutOfStock = availableStock <= 0
+  const promotionPercentOff = Math.max(0, Number(product.promotion_percent_off || 0))
+  const currentPrice = Math.max(0, Number(product.price || 0))
+  const discountedPrice = promotionPercentOff > 0
+    ? currentPrice * (1 - promotionPercentOff / 100)
+    : currentPrice
 
   const wishlistItem = {
     id: String(product.id),
@@ -289,12 +294,28 @@ export function ProductDetailsPage({ productId, onBack, onViewProduct, onViewMer
             </button>
           </div>
 
-          <div className="flex items-center gap-4">
-            <p className="text-2xl font-bold text-foreground">{formatNaira(product.price)}</p>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <p className="text-2xl font-bold text-foreground">{formatNaira(discountedPrice)}</p>
+              {promotionPercentOff > 0 && (
+                <>
+                  <p className="text-sm text-muted-foreground line-through">{formatNaira(currentPrice)}</p>
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                    {promotionPercentOff}% OFF
+                  </span>
+                </>
+              )}
+            </div>
             {product.average_rating > 0 && (
               <StarRating rating={product.average_rating} reviews={product.review_count} />
             )}
           </div>
+
+          {promotionPercentOff > 0 && (
+            <p className="text-xs text-emerald-700">
+              Promo discount is estimated. Final discount applies at checkout.
+            </p>
+          )}
         </div>
 
         {/* Price Drop Alert */}

@@ -88,28 +88,57 @@ async function decrementStockLevels(
   }
 
   for (const [productId, quantity] of qtyByProduct.entries()) {
-    const stockResult = await (supabase.from('products') as any)
-      .select('id, stock')
-      .eq('id', productId)
-      .eq('merchant_id', merchantId)
-      .single()
+    let updated = false
 
-    if (stockResult.error) {
-      if (isMissingResourceError(stockResult.error)) continue
-      throw stockResult.error
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const stockResult = await (supabase.from('products') as any)
+        .select('id, stock')
+        .eq('id', productId)
+        .eq('merchant_id', merchantId)
+        .single()
+
+      if (stockResult.error) {
+        if (isMissingResourceError(stockResult.error)) {
+          updated = true
+          break
+        }
+        throw stockResult.error
+      }
+
+      const currentStock = Math.max(0, Number(stockResult.data?.stock || 0))
+      if (currentStock < quantity) {
+        throw new Error('Item went out of stock during checkout. Please refresh and try again.')
+      }
+
+      const nextStock = currentStock - quantity
+      const updateResult = await (supabase.from('products') as any)
+        .update({ stock: nextStock })
+        .eq('id', productId)
+        .eq('merchant_id', merchantId)
+        .eq('stock', currentStock)
+        .select('id')
+
+      if (updateResult.error) {
+        if (isMissingResourceError(updateResult.error)) {
+          updated = true
+          break
+        }
+        throw updateResult.error
+      }
+
+      if (Array.isArray(updateResult.data)) {
+        if (updateResult.data.length > 0) {
+          updated = true
+          break
+        }
+      } else {
+        updated = true
+        break
+      }
     }
 
-    const currentStock = Math.max(0, Number(stockResult.data?.stock || 0))
-    const nextStock = Math.max(0, currentStock - quantity)
-
-    const updateResult = await (supabase.from('products') as any)
-      .update({ stock: nextStock })
-      .eq('id', productId)
-      .eq('merchant_id', merchantId)
-
-    if (updateResult.error) {
-      if (isMissingResourceError(updateResult.error)) continue
-      throw updateResult.error
+    if (!updated) {
+      throw new Error('Could not safely update stock due to concurrent purchases. Please retry.')
     }
   }
 }

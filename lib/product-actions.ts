@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { buildLocationQuery, geocodeLocation, haversineDistanceKm } from '@/lib/location-utils'
+import { getPromotionPercentOffForProduct } from '@/lib/promotion-actions'
 
 interface ProductInput {
   name: string
@@ -326,7 +327,19 @@ export async function getProductById(productId: string) {
       return { success: false, error: 'Product not found' }
     }
 
-    return { success: true, data: sanitizeProductForPublic(normalized) }
+    const promotionPercentOff = await getPromotionPercentOffForProduct(
+      String(normalized.merchant_id || normalized.merchant_profiles?.id || ''),
+      String(normalized.id || ''),
+      Number(normalized.price || 0),
+    )
+
+    return {
+      success: true,
+      data: {
+        ...sanitizeProductForPublic(normalized),
+        promotion_percent_off: promotionPercentOff,
+      },
+    }
   } catch (error: any) {
     return { success: false, error: error.message }
   }

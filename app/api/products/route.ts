@@ -19,12 +19,15 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient()
     const nowIso = new Date().toISOString()
+    const todayStart = new Date()
+    todayStart.setUTCHours(0, 0, 0, 0)
+    const todayStartIso = todayStart.toISOString()
     const { data: promotions } = await supabase
       .from('promotions')
       .select('merchant_id, discount_type, discount_value, min_purchase_amount, product_ids, is_active, start_date, end_date')
       .eq('is_active', true)
       .lte('start_date', nowIso)
-      .gte('end_date', nowIso)
+      .gte('end_date', todayStartIso)
 
     const promoList = Array.isArray(promotions) ? promotions : []
     const enrichedProducts = result.data.map((product: any) => {

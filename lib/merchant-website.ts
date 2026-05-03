@@ -2,13 +2,18 @@ export type WebsiteTheme = 'emerald' | 'midnight' | 'sunset'
 export type WebsiteLayout = 'classic' | 'minimal' | 'bold'
 export type WebsiteBannerTemplate = 'discount' | 'promo' | 'product'
 
-export interface WebsiteBannerConfig {
-  enabled: boolean
-  template: WebsiteBannerTemplate
+export interface WebsiteBannerVariantConfig {
   badge: string
   headline: string
   subheadline: string
   ctaText: string
+}
+
+export interface WebsiteBannerConfig extends WebsiteBannerVariantConfig {
+  enabled: boolean
+  template: WebsiteBannerTemplate
+  abTestEnabled?: boolean
+  variantB?: WebsiteBannerVariantConfig
 }
 
 export const WEBSITE_THEMES: Array<{ id: WebsiteTheme; label: string }> = [
@@ -27,7 +32,7 @@ export const WEBSITE_BANNER_TEMPLATES: Array<{
   id: WebsiteBannerTemplate
   label: string
   description: string
-  defaults: Omit<WebsiteBannerConfig, 'enabled' | 'template'>
+  defaults: WebsiteBannerVariantConfig
 }> = [
   {
     id: 'discount',
@@ -77,6 +82,13 @@ export function getDefaultWebsiteBannerConfig(template: WebsiteBannerTemplate = 
     headline: preset.defaults.headline,
     subheadline: preset.defaults.subheadline,
     ctaText: preset.defaults.ctaText,
+    abTestEnabled: false,
+    variantB: {
+      badge: `${preset.defaults.badge} B`,
+      headline: preset.defaults.headline,
+      subheadline: preset.defaults.subheadline,
+      ctaText: preset.defaults.ctaText,
+    },
   }
 }
 
@@ -108,6 +120,22 @@ export function normalizeWebsiteBannerConfig(value: unknown): WebsiteBannerConfi
     ? candidate.ctaText.trim().slice(0, 28)
     : preset.defaults.ctaText
 
+  const variantBCandidate = candidate.variantB || {}
+  const variantB: WebsiteBannerVariantConfig = {
+    badge: typeof variantBCandidate.badge === 'string' && variantBCandidate.badge.trim()
+      ? variantBCandidate.badge.trim().slice(0, 40)
+      : `${preset.defaults.badge} B`,
+    headline: typeof variantBCandidate.headline === 'string' && variantBCandidate.headline.trim()
+      ? variantBCandidate.headline.trim().slice(0, 90)
+      : preset.defaults.headline,
+    subheadline: typeof variantBCandidate.subheadline === 'string' && variantBCandidate.subheadline.trim()
+      ? variantBCandidate.subheadline.trim().slice(0, 180)
+      : preset.defaults.subheadline,
+    ctaText: typeof variantBCandidate.ctaText === 'string' && variantBCandidate.ctaText.trim()
+      ? variantBCandidate.ctaText.trim().slice(0, 28)
+      : preset.defaults.ctaText,
+  }
+
   return {
     enabled: Boolean(candidate.enabled),
     template: preset.id,
@@ -115,6 +143,8 @@ export function normalizeWebsiteBannerConfig(value: unknown): WebsiteBannerConfi
     headline,
     subheadline,
     ctaText,
+    abTestEnabled: Boolean(candidate.abTestEnabled),
+    variantB,
   }
 }
 

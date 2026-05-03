@@ -155,19 +155,41 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Order created successfully:", order)
 
     try {
-      const stockResult = await supabase
-        .from('products')
-        .select('id, stock')
-        .eq('id', productId)
-        .single()
+      const requestedQty = Math.max(1, Number(quantity || 0))
+      let stockUpdated = false
 
-      if (!stockResult.error && stockResult.data) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const stockResult = await supabase
+          .from('products')
+          .select('id, stock')
+          .eq('id', productId)
+          .single()
+
+        if (stockResult.error || !stockResult.data) {
+          break
+        }
+
         const currentStock = Math.max(0, Number(stockResult.data.stock || 0))
-        const nextStock = Math.max(0, currentStock - Number(quantity || 0))
-        await supabase
+        if (currentStock < requestedQty) {
+          break
+        }
+
+        const nextStock = currentStock - requestedQty
+        const updateResult = await supabase
           .from('products')
           .update({ stock: nextStock })
           .eq('id', productId)
+          .eq('stock', currentStock)
+          .select('id')
+
+        if (!updateResult.error && Array.isArray(updateResult.data) && updateResult.data.length > 0) {
+          stockUpdated = true
+          break
+        }
+      }
+
+      if (!stockUpdated) {
+        console.warn('[v0] Stock CAS update did not complete for order', order?.[0]?.id)
       }
     } catch (stockError) {
       console.error('[v0] Stock update failed:', stockError)

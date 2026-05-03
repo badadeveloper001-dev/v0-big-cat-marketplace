@@ -86,7 +86,21 @@ export default function MerchantMiniWebsitePage() {
 
   const themeStyle = themeMap[theme] || themeMap.emerald
   const banner = normalizeWebsiteBannerConfig(profile?.website_banner)
+  const [bannerVariant, setBannerVariant] = useState<'A' | 'B'>('A')
   const bannerStyles = getBannerStyles(banner.template)
+  const activeBanner = bannerVariant === 'B' && banner.abTestEnabled && banner.variantB
+    ? {
+        badge: banner.variantB.badge,
+        headline: banner.variantB.headline,
+        subheadline: banner.variantB.subheadline,
+        ctaText: banner.variantB.ctaText,
+      }
+    : {
+        badge: banner.badge,
+        headline: banner.headline,
+        subheadline: banner.subheadline,
+        ctaText: banner.ctaText,
+      }
   const cartCount = getItemCount()
   const cartTotal = getTotal()
   const marketplaceCheckoutPath = '/marketplace?view=cart'
@@ -127,6 +141,35 @@ export default function MerchantMiniWebsitePage() {
 
     loadStorefront()
   }, [merchantId])
+
+  useEffect(() => {
+    if (!merchantId || !banner.abTestEnabled) {
+      setBannerVariant('A')
+      return
+    }
+
+    const bucketKey = `merchant-banner-ab:${merchantId}`
+    const existing = typeof window !== 'undefined' ? localStorage.getItem(bucketKey) : null
+    const selected = existing === 'B' || existing === 'A'
+      ? existing
+      : (Math.random() < 0.5 ? 'A' : 'B')
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(bucketKey, selected)
+    }
+
+    setBannerVariant(selected)
+
+    void fetch('/api/merchant/banner-ab/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        merchantId,
+        variant: selected,
+        eventType: 'view',
+      }),
+    }).catch(() => null)
+  }, [merchantId, banner.abTestEnabled])
 
   const handleShare = async () => {
     const currentUrl = typeof window !== 'undefined' ? window.location.href : ''
@@ -237,16 +280,28 @@ export default function MerchantMiniWebsitePage() {
             <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
               <div className="max-w-2xl">
                 <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${bannerStyles.badge}`}>
-                  {banner.badge}
+                  {activeBanner.badge}
                 </div>
-                <h2 className="mt-3 text-2xl font-bold leading-tight md:text-3xl">{banner.headline}</h2>
-                <p className="mt-2 text-sm text-white/85 md:text-base">{banner.subheadline}</p>
+                <h2 className="mt-3 text-2xl font-bold leading-tight md:text-3xl">{activeBanner.headline}</h2>
+                <p className="mt-2 text-sm text-white/85 md:text-base">{activeBanner.subheadline}</p>
               </div>
               <Link
                 href="#store-items"
+                onClick={() => {
+                  if (!merchantId || !banner.abTestEnabled) return
+                  void fetch('/api/merchant/banner-ab/track', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      merchantId,
+                      variant: bannerVariant,
+                      eventType: 'click',
+                    }),
+                  }).catch(() => null)
+                }}
                 className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition-colors ${bannerStyles.button}`}
               >
-                {banner.ctaText}
+                {activeBanner.ctaText}
               </Link>
             </div>
           </div>

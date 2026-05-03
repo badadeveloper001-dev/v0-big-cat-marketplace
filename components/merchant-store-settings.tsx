@@ -194,12 +194,25 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
     }))
   }
 
-  const handleBannerFieldChange = (field: keyof Omit<WebsiteBannerConfig, 'enabled' | 'template'>, value: string) => {
+  const handleBannerFieldChange = (field: 'badge' | 'headline' | 'subheadline' | 'ctaText', value: string) => {
     setStoreSettings((prev) => ({
       ...prev,
       websiteBanner: {
         ...prev.websiteBanner,
         [field]: value,
+      },
+    }))
+  }
+
+  const handleBannerVariantBFieldChange = (field: 'badge' | 'headline' | 'subheadline' | 'ctaText', value: string) => {
+    setStoreSettings((prev) => ({
+      ...prev,
+      websiteBanner: {
+        ...prev.websiteBanner,
+        variantB: {
+          ...(prev.websiteBanner.variantB || getDefaultWebsiteBannerConfig(prev.websiteBanner.template).variantB),
+          [field]: value,
+        },
       },
     }))
   }
@@ -593,6 +606,76 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
                   className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary resize-none h-24"
                   placeholder="Highlight your offer, promo code, or hero product in one short message."
                 />
+              </div>
+
+              <div className="rounded-xl border border-border bg-background p-4 space-y-3">
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(storeSettings.websiteBanner.abTestEnabled)}
+                    onChange={(e) =>
+                      setStoreSettings((prev) => ({
+                        ...prev,
+                        websiteBanner: {
+                          ...prev.websiteBanner,
+                          abTestEnabled: e.target.checked,
+                          variantB: prev.websiteBanner.variantB || getDefaultWebsiteBannerConfig(prev.websiteBanner.template).variantB,
+                        },
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Enable A/B test for this banner
+                </label>
+                <p className="text-xs text-muted-foreground">Visitors will be split between variant A (current copy) and variant B below.</p>
+
+                {storeSettings.websiteBanner.abTestEnabled && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Variant B Badge</label>
+                      <input
+                        type="text"
+                        value={storeSettings.websiteBanner.variantB?.badge || ''}
+                        onChange={(e) => handleBannerVariantBFieldChange('badge', e.target.value)}
+                        maxLength={40}
+                        className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
+                        placeholder="Limited Offer B"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Variant B Headline</label>
+                      <input
+                        type="text"
+                        value={storeSettings.websiteBanner.variantB?.headline || ''}
+                        onChange={(e) => handleBannerVariantBFieldChange('headline', e.target.value)}
+                        maxLength={90}
+                        className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
+                        placeholder="Alternative headline for testing"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Variant B Supporting Text</label>
+                      <textarea
+                        value={storeSettings.websiteBanner.variantB?.subheadline || ''}
+                        onChange={(e) => handleBannerVariantBFieldChange('subheadline', e.target.value)}
+                        maxLength={180}
+                        className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary resize-none h-20"
+                        placeholder="Alternative campaign message"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Variant B Button Label</label>
+                      <input
+                        type="text"
+                        value={storeSettings.websiteBanner.variantB?.ctaText || ''}
+                        onChange={(e) => handleBannerVariantBFieldChange('ctaText', e.target.value)}
+                        maxLength={28}
+                        className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
+                        placeholder="Explore now"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

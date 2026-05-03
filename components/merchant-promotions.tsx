@@ -9,15 +9,15 @@ import {
   Plus,
   Edit2,
   Trash2,
-  Eye,
   Copy,
   CheckCircle,
   AlertCircle,
   TrendingUp,
-  Calendar,
   Tag,
 } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
+
+type PromotionRuleType = 'standard' | 'spend_x_save_y' | 'buy_x_get_y' | 'nth_item_discount'
 
 interface Promotion {
   id: string
@@ -34,7 +34,30 @@ interface Promotion {
   end_date: string
   is_active: boolean
   product_ids: string[]
+  rule_type?: PromotionRuleType
+  spend_threshold?: number
+  buy_quantity?: number
+  get_quantity?: number
+  nth_item?: number
   created_at: string
+}
+
+interface PromotionAnalyticsOverview {
+  promotionsTotal: number
+  promotionsActive: number
+  couponsTotal: number
+  couponsActive: number
+  totalPromotionUses: number
+  totalCouponUses: number
+  totalUses: number
+  totalRevenueImpact: number
+  topPromotions: Array<{
+    id: string
+    name: string
+    uses: number
+    maxUses: number | null
+    active: boolean
+  }>
 }
 
 interface Coupon {
@@ -68,6 +91,7 @@ export function MerchantPromotions() {
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [merchantProducts, setMerchantProducts] = useState<MerchantProductOption[]>([])
+  const [analytics, setAnalytics] = useState<PromotionAnalyticsOverview | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     type: 'discount' as const,
@@ -76,6 +100,11 @@ export function MerchantPromotions() {
     min_purchase_amount: 0,
     max_uses: undefined as number | undefined,
     product_ids: [] as string[],
+    rule_type: 'standard' as PromotionRuleType,
+    spend_threshold: undefined as number | undefined,
+    buy_quantity: undefined as number | undefined,
+    get_quantity: undefined as number | undefined,
+    nth_item: undefined as number | undefined,
     start_date: new Date().toISOString().split('T')[0],
     end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
   })
@@ -132,6 +161,11 @@ export function MerchantPromotions() {
         if (!res.ok) throw new Error('Failed to load coupons')
         const data = await res.json()
         setCoupons(data.data || [])
+      } else if (tab === 'analytics') {
+        const res = await fetch('/api/merchant/promotions/analytics', { headers })
+        if (!res.ok) throw new Error('Failed to load analytics')
+        const data = await res.json()
+        setAnalytics(data.data || null)
       }
     } catch (err: any) {
       setError(err.message)
@@ -166,6 +200,11 @@ export function MerchantPromotions() {
         min_purchase_amount: 0,
         max_uses: undefined,
         product_ids: [],
+        rule_type: 'standard',
+        spend_threshold: undefined,
+        buy_quantity: undefined,
+        get_quantity: undefined,
+        nth_item: undefined,
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       })
@@ -255,6 +294,22 @@ export function MerchantPromotions() {
     return `${names[0]}, ${names[1]} +${names.length - 2} more`
   }
 
+  const promotionRuleLabel = (promo: Promotion) => {
+    if (promo.rule_type === 'spend_x_save_y') {
+      return `Spend ₦${formatNaira(Number(promo.spend_threshold || 0))}, save ₦${formatNaira(Number(promo.discount_value || 0))}`
+    }
+
+    if (promo.rule_type === 'buy_x_get_y') {
+      return `Buy ${Number(promo.buy_quantity || 0)}, get ${Number(promo.get_quantity || 0)}`
+    }
+
+    if (promo.rule_type === 'nth_item_discount') {
+      return `Every ${Number(promo.nth_item || 0)}th item: ${Number(promo.discount_value || 0)}% off`
+    }
+
+    return formatDiscount(promo)
+  }
+
   const isActive = (startDate: string, endDate: string) => {
     const now = new Date()
     return new Date(startDate) <= now && now <= new Date(endDate)
@@ -335,6 +390,7 @@ export function MerchantPromotions() {
                       setFormData({ ...formData, discount_type: e.target.value as any })
                     }
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mt-1"
+                    disabled={formData.rule_type !== 'standard'}
                   >
                     <option value="percentage">Percentage (%)</option>
                     <option value="fixed">Fixed Amount (₦)</option>
@@ -352,6 +408,100 @@ export function MerchantPromotions() {
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="text-xs font-medium">Promotion Rule</label>
+                <select
+                  value={formData.rule_type}
+                  onChange={(e) => setFormData({ ...formData, rule_type: e.target.value as PromotionRuleType })}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mt-1"
+                >
+                  <option value="standard">Standard Discount</option>
+                  <option value="spend_x_save_y">Spend X, Save Y</option>
+                  <option value="buy_x_get_y">Buy X, Get Y</option>
+                  <option value="nth_item_discount">Nth Item Discount</option>
+                </select>
+              </div>
+
+              {formData.rule_type === 'spend_x_save_y' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium">Spend Threshold (₦)</label>
+                    <input
+                      type="number"
+                      value={formData.spend_threshold ?? ''}
+                      onChange={(e) => setFormData({ ...formData, spend_threshold: Number(e.target.value) || undefined })}
+                      required
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Save Amount (₦)</label>
+                    <input
+                      type="number"
+                      value={formData.discount_value}
+                      onChange={(e) => setFormData({ ...formData, discount_value: Number(e.target.value) })}
+                      required
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mt-1"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {formData.rule_type === 'buy_x_get_y' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium">Buy Quantity (X)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={formData.buy_quantity ?? ''}
+                      onChange={(e) => setFormData({ ...formData, buy_quantity: Number(e.target.value) || undefined })}
+                      required
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Get Quantity (Y)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={formData.get_quantity ?? ''}
+                      onChange={(e) => setFormData({ ...formData, get_quantity: Number(e.target.value) || undefined })}
+                      required
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mt-1"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {formData.rule_type === 'nth_item_discount' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium">Apply To Every Nth Item</label>
+                    <input
+                      type="number"
+                      min={2}
+                      value={formData.nth_item ?? ''}
+                      onChange={(e) => setFormData({ ...formData, nth_item: Number(e.target.value) || undefined })}
+                      required
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Nth Item Discount (%)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={formData.discount_value}
+                      onChange={(e) => setFormData({ ...formData, discount_value: Number(e.target.value) })}
+                      required
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mt-1"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -468,8 +618,8 @@ export function MerchantPromotions() {
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
                       <div>
-                        <p className="text-muted-foreground text-xs">Discount</p>
-                        <p className="font-semibold">{formatDiscount(promo)}</p>
+                        <p className="text-muted-foreground text-xs">Rule</p>
+                        <p className="font-semibold">{promotionRuleLabel(promo)}</p>
                       </div>
                       <div>
                         <p className="text-muted-foreground text-xs">Uses</p>
@@ -665,12 +815,56 @@ export function MerchantPromotions() {
 
       {/* Analytics Tab */}
       {tab === 'analytics' && (
-        <div className="rounded-lg border border-border bg-card p-8 text-center">
-          <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p className="text-muted-foreground mb-2">Analytics coming soon!</p>
-          <p className="text-sm text-muted-foreground">
-            Track promotion performance, customer engagement, and revenue impact.
-          </p>
+        <div className="space-y-4">
+          {!analytics ? (
+            <div className="rounded-lg border border-border bg-card p-8 text-center">
+              <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p className="text-muted-foreground">No analytics data yet.</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <p className="text-xs text-muted-foreground">Active Promotions</p>
+                  <p className="text-2xl font-bold mt-1">{analytics.promotionsActive}/{analytics.promotionsTotal}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <p className="text-xs text-muted-foreground">Active Coupons</p>
+                  <p className="text-2xl font-bold mt-1">{analytics.couponsActive}/{analytics.couponsTotal}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <p className="text-xs text-muted-foreground">Total Uses</p>
+                  <p className="text-2xl font-bold mt-1">{analytics.totalUses}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <p className="text-xs text-muted-foreground">Revenue Impact</p>
+                  <p className="text-2xl font-bold mt-1">₦{formatNaira(analytics.totalRevenueImpact)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-card p-4">
+                <h4 className="font-semibold mb-3">Top Promotions</h4>
+                {analytics.topPromotions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No promotion usage yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {analytics.topPromotions.map((promo) => (
+                      <div key={promo.id} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium">{promo.name}</p>
+                          <p className="text-xs text-muted-foreground">{promo.active ? 'Active' : 'Inactive'}</p>
+                        </div>
+                        <p className="text-sm font-semibold">
+                          {promo.uses}
+                          {promo.maxUses ? `/${promo.maxUses}` : ''}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
