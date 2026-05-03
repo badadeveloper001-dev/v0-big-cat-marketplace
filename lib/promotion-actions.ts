@@ -42,6 +42,18 @@ export interface CouponInput {
   end_date: string
 }
 
+type PromotionPricingItem = {
+  productId: string
+  quantity: number
+  unitPrice: number
+}
+
+export type AppliedPromotionResult = {
+  promotionId: string
+  promotionName: string
+  discountAmount: number
+}
+
 export async function createPromotion(merchantId: string, input: PromotionInput) {
   try {
     const supabase = await createClient()
@@ -347,5 +359,99 @@ export async function getPromotionAnalytics(merchantId: string, promotionId: str
     return { success: true, data: data || [] }
   } catch (error: any) {
     return { success: false, error: formatPromotionError(error), data: [] }
+  }
+}
+
+export async function getBestPromotionDiscountForItems(
+  merchantId: string,
+  items: PromotionPricingItem[],
+): Promise<AppliedPromotionResult | null> {
+  try {
+    if (!merchantId || !Array.isArray(items) || items.length === 0) return null
+
+    const supabase = await createClient()
+    const nowIso = new Date().toISOString()
+
+    const { data: promotions, error } = await supabase
+      .from('promotions')
+      .select('*')
+      .eq('merchant_id', merchantId)
+      .eq('is_active', true)
+      .lte('start_date', nowIso)
+      .gte('end_date', nowIso)
+
+    if (error || !Array.isArray(promotions) || promotions.length === 0) return null
+
+    let best: AppliedPromotionResult | null = null
+
+    for (const promo of promotions) {
+      if (promo.max_uses && promo.current_uses >= promo.max_uses) continue
+
+      const scopedToProducts = Array.isArray(promo.product_ids) ? promo.product_ids : []
+      const eligibleItems = scopedToProducts.length > 0
+        ? items.filter((item) => scopedToProducts.includes(item.productId))
+        : items
+
+      if (!eligibleItems.length) continue
+
+      const eligibleSubtotal = eligibleItems.reduce(
+        (sum, item) => sum + (Number(item.unitPrice || 0) * Number(item.quantity || 0)),
+        0,
+      )
+
+      if (eligibleSubtotal <= 0) continue
+
+      if (Number(eligibleSubtotal) < Number(promo.min_purchase_amount || 0)) continue
+
+      let discount = 0
+      if (promo.discount_type === 'percentage') {
+        discount = Math.min((eligibleSubtotal * Number(promo.discount_value || 0)) / 100, eligibleSubtotal)
+      } else {
+        discount = Math.min(Number(promo.discount_value || 0), eligibleSubtotal)
+      }
+
+      const roundedDiscount = Math.max(0, Math.round(discount * 100) / 100)
+      if (roundedDiscount <= 0) continue
+
+      if (!best || roundedDiscount > best.discountAmount) {
+        best = {
+          promotionId: String(promo.id),
+          promotionName: String(promo.name || 'Promotion'),
+          discountAmount: roundedDiscount,
+        }
+      }
+    }
+
+    return best
+  } catch {
+    return null
+  }
+}
+
+export async function incrementPromotionUsage(promotionId: string) {
+  try {
+    if (!promotionId) return { success: false }
+    const supabase = await createClient()
+
+    const { data: promo } = await supabase
+      .from('promotions')
+      .select('id,current_uses')
+      .eq('id', promotionId)
+      .single()
+
+    if (!promo) return { success: false }
+
+    const { error } = await supabase
+      .from('promotions')
+      .update({
+        current_uses: Number(promo.current_uses || 0) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', promotionId)
+
+    if (error) return { success: false, error: formatPromotionError(error) }
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: formatPromotionError(error) }
   }
 }

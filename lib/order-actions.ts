@@ -5,7 +5,11 @@ import { holdFundsInEscrow, releaseFundsFromEscrow } from '@/lib/escrow-actions'
 import { getUserSafetyStatus } from '@/lib/server-trust-safety'
 import { registerOrderForLogistics } from '@/lib/logistics-actions'
 import { dispatchNotification } from '@/lib/notifications'
-import { applyCoupon } from '@/lib/promotion-actions'
+import {
+  applyCoupon,
+  getBestPromotionDiscountForItems,
+  incrementPromotionUsage,
+} from '@/lib/promotion-actions'
 
 function isMissingColumnError(error: any) {
   const message = String(error?.message || '').toLowerCase()
@@ -247,13 +251,26 @@ export async function createOrder(
       }
 
       const productTotal = merchantItems.reduce((sum, item) => sum + (Number(item.unitPrice) * Number(item.quantity)), 0)
+      const appliedPromotion = await getBestPromotionDiscountForItems(
+        normalizedMerchantId,
+        merchantItems.map((item) => ({
+          productId: String(item.productId),
+          quantity: Number(item.quantity || 0),
+          unitPrice: Number(item.unitPrice || 0),
+        })),
+      )
+      const promotionDiscount = Math.min(Number(appliedPromotion?.discountAmount || 0), productTotal)
+      const discountedProductTotal = Math.max(0, productTotal - promotionDiscount)
       const allocatedDeliveryFee = payload.deliveryType === 'pickup' ? 0 : (createdOrders.length === 0 ? Number(payload.deliveryFee || 0) : 0)
       const INSURANCE_RATE = 0.05 // Return delivery protection insurance: 5%
-      const insuranceAmount = Math.round(productTotal * INSURANCE_RATE)
-      const subtotal = productTotal + allocatedDeliveryFee + insuranceAmount
+      const insuranceAmount = Math.round(discountedProductTotal * INSURANCE_RATE)
+      const subtotal = discountedProductTotal + allocatedDeliveryFee + insuranceAmount
       
       // Apply coupon discount (only on first order for multi-merchant orders)
-      const couponDiscount = createdOrders.length === 0 && payload.appliedCoupon ? Number(payload.appliedCoupon.discount) || 0 : 0
+      const requestedCouponDiscount = createdOrders.length === 0 && payload.appliedCoupon
+        ? Number(payload.appliedCoupon.discount) || 0
+        : 0
+      const couponDiscount = Math.min(requestedCouponDiscount, subtotal)
       const grandTotal = Math.max(0, subtotal - couponDiscount)
       const orderId = crypto.randomUUID()
 
@@ -422,8 +439,11 @@ export async function createOrder(
             image_url: item.imageUrl || item.image || '',
             product_id: item.productId,
           })),
-          subtotal: productTotal,
+          subtotal: discountedProductTotal,
+          originalSubtotal: productTotal,
           deliveryFee: allocatedDeliveryFee,
+          promotionName: appliedPromotion?.promotionName || null,
+          promotionDiscount,
           couponCode: payload.appliedCoupon?.code || null,
           couponDiscount: couponDiscount,
           grandTotal: grandTotal,
@@ -440,6 +460,14 @@ export async function createOrder(
           await applyCoupon(payload.appliedCoupon.code, payload.buyerId)
         } catch (couponError) {
           console.error('Failed to apply coupon usage tracking:', couponError)
+        }
+      }
+
+      if (appliedPromotion?.promotionId && promotionDiscount > 0) {
+        try {
+          await incrementPromotionUsage(appliedPromotion.promotionId)
+        } catch (promotionError) {
+          console.error('Failed to increment promotion usage:', promotionError)
         }
       }
 

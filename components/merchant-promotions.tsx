@@ -52,6 +52,11 @@ interface Coupon {
   created_at: string
 }
 
+interface MerchantProductOption {
+  id: string
+  name: string
+}
+
 type TabType = 'discounts' | 'coupons' | 'analytics'
 
 export function MerchantPromotions() {
@@ -62,6 +67,7 @@ export function MerchantPromotions() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [merchantProducts, setMerchantProducts] = useState<MerchantProductOption[]>([])
   const [formData, setFormData] = useState({
     name: '',
     type: 'discount' as const,
@@ -69,6 +75,7 @@ export function MerchantPromotions() {
     discount_value: 10,
     min_purchase_amount: 0,
     max_uses: undefined as number | undefined,
+    product_ids: [] as string[],
     start_date: new Date().toISOString().split('T')[0],
     end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
   })
@@ -86,8 +93,28 @@ export function MerchantPromotions() {
   const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!user?.userId) return
     loadData()
-  }, [tab])
+  }, [tab, user?.userId])
+
+  useEffect(() => {
+    const loadMerchantProducts = async () => {
+      if (!user?.userId) return
+      try {
+        const res = await fetch(`/api/products/merchant?merchantId=${encodeURIComponent(user.userId)}`)
+        if (!res.ok) return
+        const data = await res.json()
+        const items = Array.isArray(data?.data)
+          ? data.data.map((p: any) => ({ id: String(p.id), name: String(p.name || 'Product') }))
+          : []
+        setMerchantProducts(items)
+      } catch {
+        setMerchantProducts([])
+      }
+    }
+
+    loadMerchantProducts()
+  }, [user?.userId])
 
   const loadData = async () => {
     setLoading(true)
@@ -115,6 +142,10 @@ export function MerchantPromotions() {
 
   const handleCreatePromotion = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!user?.userId) {
+      setError('Merchant session not found. Please sign in again.')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch('/api/merchant/promotions', {
@@ -134,6 +165,7 @@ export function MerchantPromotions() {
         discount_value: 10,
         min_purchase_amount: 0,
         max_uses: undefined,
+        product_ids: [],
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       })
@@ -146,6 +178,10 @@ export function MerchantPromotions() {
 
   const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!user?.userId) {
+      setError('Merchant session not found. Please sign in again.')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch('/api/merchant/coupons', {
@@ -178,6 +214,10 @@ export function MerchantPromotions() {
 
   const handleDeletePromotion = async (id: string) => {
     if (!confirm('Delete this promotion?')) return
+    if (!user?.userId) {
+      setError('Merchant session not found. Please sign in again.')
+      return
+    }
     try {
       const res = await fetch('/api/merchant/promotions', {
         method: 'DELETE',
@@ -203,6 +243,16 @@ export function MerchantPromotions() {
       return `${promo.discount_value}% off`
     }
     return `₦${formatNaira(promo.discount_value)}`
+  }
+
+  const selectedProductsLabel = (productIds: string[]) => {
+    if (!Array.isArray(productIds) || productIds.length === 0) return 'All products'
+    const names = merchantProducts
+      .filter((p) => productIds.includes(p.id))
+      .map((p) => p.name)
+    if (names.length === 0) return `${productIds.length} selected product(s)`
+    if (names.length <= 2) return names.join(', ')
+    return `${names[0]}, ${names[1]} +${names.length - 2} more`
   }
 
   const isActive = (startDate: string, endDate: string) => {
@@ -337,6 +387,36 @@ export function MerchantPromotions() {
                 </div>
               </div>
 
+              <div>
+                <label className="text-xs font-medium">Apply to products</label>
+                <p className="text-xs text-muted-foreground mt-1">Leave all unchecked to apply to every product.</p>
+                <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-border bg-background p-2 space-y-2">
+                  {merchantProducts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground px-2 py-1">No products found yet.</p>
+                  ) : (
+                    merchantProducts.map((product) => {
+                      const checked = formData.product_ids.includes(product.id)
+                      return (
+                        <label key={product.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({ ...formData, product_ids: [...formData.product_ids, product.id] })
+                              } else {
+                                setFormData({ ...formData, product_ids: formData.product_ids.filter((id) => id !== product.id) })
+                              }
+                            }}
+                          />
+                          <span className="text-sm">{product.name}</span>
+                        </label>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+
               <div className="flex gap-2 pt-4">
                 <button
                   type="submit"
@@ -409,6 +489,9 @@ export function MerchantPromotions() {
                         <p className="text-muted-foreground text-xs">Min. Purchase</p>
                         <p className="font-semibold">₦{formatNaira(promo.min_purchase_amount)}</p>
                       </div>
+                    </div>
+                    <div className="mt-3 text-xs text-muted-foreground">
+                      Applies to: <span className="font-medium text-foreground">{selectedProductsLabel(promo.product_ids)}</span>
                     </div>
                   </div>
                   <div className="flex gap-2 ml-4">

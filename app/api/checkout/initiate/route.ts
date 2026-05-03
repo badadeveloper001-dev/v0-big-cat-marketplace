@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
+import { getBestPromotionDiscountForItems, incrementPromotionUsage } from "@/lib/promotion-actions"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -48,6 +49,19 @@ export async function POST(request: NextRequest) {
       appliedCoupon,
     })
 
+    const itemSubtotal = Math.max(0, Number(unitPrice || 0) * Number(quantity || 0))
+    const appliedPromotion = await getBestPromotionDiscountForItems(String(vendorId), [
+      {
+        productId: String(productId),
+        quantity: Number(quantity || 0),
+        unitPrice: Number(unitPrice || 0),
+      },
+    ])
+    const promotionDiscount = Math.min(Number(appliedPromotion?.discountAmount || 0), itemSubtotal)
+    const beforeCouponTotal = Math.max(0, itemSubtotal - promotionDiscount + Number(deliveryFee || 0))
+    const couponDiscount = Math.min(Number(appliedCoupon?.discount || 0), beforeCouponTotal)
+    const finalTotal = Math.max(0, beforeCouponTotal - couponDiscount)
+
     // Validate required fields
     if (!productId || !vendorId || !totalAmount || !deliveryMethod) {
       return NextResponse.json(
@@ -66,13 +80,13 @@ export async function POST(request: NextRequest) {
         quantity,
         unit_price: unitPrice,
         delivery_fee: deliveryFee || 0,
-        total_amount: totalAmount,
+        total_amount: finalTotal,
         delivery_method: deliveryMethod,
         status: "pending",
         payment_status: "pending",
         applied_coupon_code: appliedCoupon?.code || null,
-        coupon_discount: appliedCoupon?.discount || 0,
-        final_total: totalAmount - (appliedCoupon?.discount || 0),
+        coupon_discount: couponDiscount,
+        final_total: finalTotal,
       },
       {
         product_id: productId,
@@ -83,13 +97,13 @@ export async function POST(request: NextRequest) {
         quantity,
         unit_price: unitPrice,
         delivery_fee: deliveryFee || 0,
-        total_amount: totalAmount,
+        total_amount: finalTotal,
         delivery_method: deliveryMethod,
         status: "pending",
         payment_status: "pending",
         applied_coupon_code: appliedCoupon?.code || null,
-        coupon_discount: appliedCoupon?.discount || 0,
-        final_total: totalAmount - (appliedCoupon?.discount || 0),
+        coupon_discount: couponDiscount,
+        final_total: finalTotal,
       },
       {
         product_id: productId,
@@ -100,12 +114,12 @@ export async function POST(request: NextRequest) {
         quantity,
         unit_price: unitPrice,
         delivery_fee: deliveryFee || 0,
-        total_amount: totalAmount,
+        total_amount: finalTotal,
         delivery_method: deliveryMethod,
         status: "pending",
         applied_coupon_code: appliedCoupon?.code || null,
-        coupon_discount: appliedCoupon?.discount || 0,
-        final_total: totalAmount - (appliedCoupon?.discount || 0),
+        coupon_discount: couponDiscount,
+        final_total: finalTotal,
       },
     ]
 
@@ -140,6 +154,10 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Order created successfully:", order)
 
+    if (appliedPromotion?.promotionId && promotionDiscount > 0) {
+      await incrementPromotionUsage(appliedPromotion.promotionId)
+    }
+
     // TODO: In production, call Kora Pay with Bank API here
     // For MVP, simulate successful payment initiation
     const paymentReference = `PM-${Date.now()}`
@@ -151,6 +169,8 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         orderId: order?.[0]?.id,
+        promotionDiscount,
+        promotionName: appliedPromotion?.promotionName || null,
         paymentReference,
         message: "Order initiated successfully. Redirecting to payment...",
       },
