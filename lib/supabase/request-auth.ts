@@ -107,6 +107,7 @@ export function toPublicProfile(profile: Record<string, any> | null | undefined)
     avatar_url: profile.avatar_url,
     website_theme: profile.website_theme,
     website_layout: profile.website_layout,
+    website_banner: profile.website_banner,
     setup_completed: profile.setup_completed,
     created_at: profile.created_at,
   }

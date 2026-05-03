@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { isWebsiteBannerTemplate, normalizeWebsiteBannerConfig, type WebsiteBannerConfig } from '@/lib/merchant-website'
 import { createHash } from 'crypto'
 
 function hashPassword(password: string): string {
@@ -33,9 +34,10 @@ async function getWebsitePreferencesFromAuthMetadata(userId: string) {
     return {
       website_theme: isWebsiteTheme(metadata.website_theme) ? metadata.website_theme : undefined,
       website_layout: isWebsiteLayout(metadata.website_layout) ? metadata.website_layout : undefined,
+      website_banner: metadata.website_banner ? normalizeWebsiteBannerConfig(metadata.website_banner) : undefined,
     }
   } catch {
-    return { website_theme: undefined, website_layout: undefined }
+    return { website_theme: undefined, website_layout: undefined, website_banner: undefined }
   }
 }
 
@@ -43,8 +45,9 @@ async function saveWebsitePreferencesToAuthMetadata(
   userId: string,
   websiteTheme?: WebsiteTheme,
   websiteLayout?: WebsiteLayout,
+  websiteBanner?: WebsiteBannerConfig,
 ) {
-  if (websiteTheme === undefined && websiteLayout === undefined) return
+  if (websiteTheme === undefined && websiteLayout === undefined && websiteBanner === undefined) return
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -70,6 +73,7 @@ async function saveWebsitePreferencesToAuthMetadata(
         ...currentMetadata,
         ...(websiteTheme !== undefined ? { website_theme: websiteTheme } : {}),
         ...(websiteLayout !== undefined ? { website_layout: websiteLayout } : {}),
+        ...(websiteBanner !== undefined ? { website_banner: normalizeWebsiteBannerConfig(websiteBanner) } : {}),
       },
     }),
   })
@@ -89,6 +93,7 @@ export async function getUserProfile(userId: string) {
         ...data,
         website_theme: data.website_theme || metadataPrefs.website_theme,
         website_layout: data.website_layout || metadataPrefs.website_layout,
+        website_banner: metadataPrefs.website_banner,
       },
     }
   } catch (error: any) {
@@ -112,6 +117,7 @@ export async function updateUserProfile(
     email?: string
     website_theme?: WebsiteTheme
     website_layout?: WebsiteLayout
+    website_banner?: WebsiteBannerConfig
   }
 ) {
   try {
@@ -121,7 +127,8 @@ export async function updateUserProfile(
     // Always save them via Supabase Auth user_metadata and keep them out of the DB update.
     const websiteTheme = updates.website_theme
     const websiteLayout = updates.website_layout
-    const { website_theme: _t, website_layout: _l, ...dbUpdates } = updates
+    const websiteBanner = updates.website_banner ? normalizeWebsiteBannerConfig(updates.website_banner) : undefined
+    const { website_theme: _t, website_layout: _l, website_banner: _b, ...dbUpdates } = updates
 
     const { data, error } = await supabase
       .from('auth_users')
@@ -132,7 +139,7 @@ export async function updateUserProfile(
 
     if (error) throw error
 
-    await saveWebsitePreferencesToAuthMetadata(userId, websiteTheme, websiteLayout)
+    await saveWebsitePreferencesToAuthMetadata(userId, websiteTheme, websiteLayout, websiteBanner)
 
     return {
       success: true,
@@ -140,6 +147,7 @@ export async function updateUserProfile(
         ...data,
         website_theme: websiteTheme,
         website_layout: websiteLayout,
+        website_banner: websiteBanner,
       },
     }
   } catch (error: any) {

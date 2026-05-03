@@ -3,11 +3,46 @@
 import { useState, useEffect, useRef } from 'react'
 import { Store, Phone, Mail, MapPin, Globe, Save, Loader2, CheckCircle2, AlertCircle, Copy, ExternalLink, Palette } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
-import { getMerchantMiniWebsitePath, getMerchantMiniWebsiteStorageKey, WEBSITE_LAYOUTS, WEBSITE_THEMES, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
+import {
+  getDefaultWebsiteBannerConfig,
+  getMerchantMiniWebsitePath,
+  getMerchantMiniWebsiteStorageKey,
+  normalizeWebsiteBannerConfig,
+  WEBSITE_BANNER_TEMPLATES,
+  WEBSITE_LAYOUTS,
+  WEBSITE_THEMES,
+  type WebsiteBannerConfig,
+  type WebsiteLayout,
+  type WebsiteTheme,
+} from '@/lib/merchant-website'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
 interface MerchantStoreSettingsProps {
   onComplete?: () => void
+}
+
+function storeSettingsBannerStyle(template: WebsiteBannerConfig['template']) {
+  if (template === 'promo') {
+    return {
+      shell: 'border-fuchsia-200 bg-gradient-to-br from-fuchsia-600 via-rose-500 to-orange-400 text-white',
+      badge: 'bg-white/15 text-white',
+      card: 'bg-fuchsia-50 border-fuchsia-100',
+    }
+  }
+
+  if (template === 'product') {
+    return {
+      shell: 'border-amber-200 bg-gradient-to-br from-zinc-950 via-amber-900 to-orange-500 text-white',
+      badge: 'bg-white/15 text-white',
+      card: 'bg-amber-50 border-amber-100',
+    }
+  }
+
+  return {
+    shell: 'border-emerald-200 bg-gradient-to-br from-emerald-600 via-lime-500 to-teal-500 text-white',
+    badge: 'bg-white/15 text-white',
+    card: 'bg-emerald-50 border-emerald-100',
+  }
 }
 
 export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps) {
@@ -21,6 +56,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
     // Try to restore saved theme from localStorage immediately (no flash)
     let cachedTheme: WebsiteTheme = 'emerald'
     let cachedLayout: WebsiteLayout = 'classic'
+    let cachedBanner: WebsiteBannerConfig = getDefaultWebsiteBannerConfig()
     if (typeof window !== 'undefined' && user?.userId) {
       try {
         const raw = localStorage.getItem(getMerchantMiniWebsiteStorageKey(user.userId))
@@ -28,6 +64,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
           const parsed = JSON.parse(raw)
           if (parsed.theme) cachedTheme = parsed.theme as WebsiteTheme
           if (parsed.layout) cachedLayout = parsed.layout as WebsiteLayout
+          if (parsed.banner) cachedBanner = normalizeWebsiteBannerConfig(parsed.banner)
         }
       } catch {}
     }
@@ -40,6 +77,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
       storeWebsite: '',
       websiteTheme: cachedTheme,
       websiteLayout: cachedLayout,
+      websiteBanner: cachedBanner,
       bankAccountName: '',
       bankAccountNumber: '',
       bankCode: '',
@@ -47,6 +85,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
       commissionRate: 5,
     }
   })
+  const bannerPreviewStyle = storeSettingsBannerStyle(storeSettings.websiteBanner.template)
 
   useEffect(() => {
     if (!user?.userId || typeof window === 'undefined') return
@@ -60,6 +99,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
         ...prev,
         websiteTheme: parsed.theme || prev.websiteTheme,
         websiteLayout: parsed.layout || prev.websiteLayout,
+        websiteBanner: parsed.banner ? normalizeWebsiteBannerConfig(parsed.banner) : prev.websiteBanner,
       }))
     } catch {
       // ignore invalid cached preferences
@@ -86,6 +126,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
         const themeResult = await themeResponse.json()
         const resolvedTheme = themeResult?.success ? themeResult?.data?.website_theme : undefined
         const resolvedLayout = themeResult?.success ? themeResult?.data?.website_layout : undefined
+        const resolvedBanner = themeResult?.success ? themeResult?.data?.website_banner : undefined
 
         if (result?.success && result?.data) {
           const data = result.data
@@ -98,6 +139,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
             storeLocation: data.location || user?.merchantProfile?.location || prev.storeLocation,
             websiteTheme: resolvedTheme || data.website_theme || user?.merchantProfile?.website_theme || prev.websiteTheme,
             websiteLayout: resolvedLayout || data.website_layout || user?.merchantProfile?.website_layout || prev.websiteLayout,
+            websiteBanner: resolvedBanner || data.website_banner || prev.websiteBanner,
           }))
           return
         }
@@ -116,6 +158,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
         storeLocation: user?.merchantProfile?.location || prev.storeLocation,
         websiteTheme: user?.merchantProfile?.website_theme || prev.websiteTheme,
         websiteLayout: user?.merchantProfile?.website_layout || prev.websiteLayout,
+        websiteBanner: prev.websiteBanner,
       }))
     }
 
@@ -127,6 +170,37 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
     setStoreSettings(prev => ({
       ...prev,
       [name]: value,
+    }))
+  }
+
+  const handleBannerToggle = (enabled: boolean) => {
+    setStoreSettings((prev) => ({
+      ...prev,
+      websiteBanner: {
+        ...prev.websiteBanner,
+        enabled,
+      },
+    }))
+  }
+
+  const handleBannerTemplateChange = (template: WebsiteBannerConfig['template']) => {
+    const nextBanner = getDefaultWebsiteBannerConfig(template)
+    setStoreSettings((prev) => ({
+      ...prev,
+      websiteBanner: {
+        ...nextBanner,
+        enabled: prev.websiteBanner.enabled,
+      },
+    }))
+  }
+
+  const handleBannerFieldChange = (field: keyof Omit<WebsiteBannerConfig, 'enabled' | 'template'>, value: string) => {
+    setStoreSettings((prev) => ({
+      ...prev,
+      websiteBanner: {
+        ...prev.websiteBanner,
+        [field]: value,
+      },
     }))
   }
 
@@ -149,6 +223,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
           userId: user.userId,
           website_theme: storeSettings.websiteTheme,
           website_layout: storeSettings.websiteLayout,
+          website_banner: storeSettings.websiteBanner,
         }),
       })
       const themeResult = await themeResponse.json()
@@ -162,15 +237,20 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
       const confirmedThemeResult = await confirmedThemeResponse.json()
       const savedTheme = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_theme : undefined
       const savedLayout = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_layout : undefined
+      const savedBanner = confirmedThemeResult?.success ? confirmedThemeResult?.data?.website_banner : undefined
 
-      if (savedTheme !== storeSettings.websiteTheme || savedLayout !== storeSettings.websiteLayout) {
+      if (
+        savedTheme !== storeSettings.websiteTheme ||
+        savedLayout !== storeSettings.websiteLayout ||
+        JSON.stringify(savedBanner) !== JSON.stringify(normalizeWebsiteBannerConfig(storeSettings.websiteBanner))
+      ) {
         throw new Error('Saved mini website preferences could not be confirmed')
       }
 
       if (typeof window !== 'undefined') {
         localStorage.setItem(
           getMerchantMiniWebsiteStorageKey(user.userId),
-          JSON.stringify({ theme: savedTheme, layout: savedLayout })
+          JSON.stringify({ theme: savedTheme, layout: savedLayout, banner: savedBanner })
         )
       }
 
@@ -417,6 +497,103 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          <div className={`mt-5 rounded-2xl border p-4 ${bannerPreviewStyle.card}`}>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Homepage Promo Banner</h3>
+                <p className="text-xs text-muted-foreground mt-1">Create a polished banner for discounts, product launches, and seasonal promotions.</p>
+              </div>
+              <label className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                <input
+                  type="checkbox"
+                  checked={storeSettings.websiteBanner.enabled}
+                  onChange={(e) => handleBannerToggle(e.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Show banner
+              </label>
+            </div>
+
+            <div className={`rounded-2xl border p-5 shadow-sm ${bannerPreviewStyle.shell}`}>
+              <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${bannerPreviewStyle.badge}`}>
+                {storeSettings.websiteBanner.badge}
+              </div>
+              <h4 className="mt-3 text-xl font-bold leading-tight">{storeSettings.websiteBanner.headline}</h4>
+              <p className="mt-2 max-w-xl text-sm text-white/85">{storeSettings.websiteBanner.subheadline}</p>
+              <div className="mt-4 inline-flex rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-950">
+                {storeSettings.websiteBanner.ctaText}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Banner Template</label>
+                <select
+                  value={storeSettings.websiteBanner.template}
+                  onChange={(e) => handleBannerTemplateChange(e.target.value as WebsiteBannerConfig['template'])}
+                  className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
+                >
+                  {WEBSITE_BANNER_TEMPLATES.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {WEBSITE_BANNER_TEMPLATES.find((template) => template.id === storeSettings.websiteBanner.template)?.description}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Badge</label>
+                  <input
+                    type="text"
+                    value={storeSettings.websiteBanner.badge}
+                    onChange={(e) => handleBannerFieldChange('badge', e.target.value)}
+                    maxLength={40}
+                    className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
+                    placeholder="Limited Offer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Button Label</label>
+                  <input
+                    type="text"
+                    value={storeSettings.websiteBanner.ctaText}
+                    onChange={(e) => handleBannerFieldChange('ctaText', e.target.value)}
+                    maxLength={28}
+                    className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
+                    placeholder="Shop the deal"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Headline</label>
+                <input
+                  type="text"
+                  value={storeSettings.websiteBanner.headline}
+                  onChange={(e) => handleBannerFieldChange('headline', e.target.value)}
+                  maxLength={90}
+                  className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
+                  placeholder="Save big on selected items this week"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Supporting Text</label>
+                <textarea
+                  value={storeSettings.websiteBanner.subheadline}
+                  onChange={(e) => handleBannerFieldChange('subheadline', e.target.value)}
+                  maxLength={180}
+                  className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary resize-none h-24"
+                  placeholder="Highlight your offer, promo code, or hero product in one short message."
+                />
+              </div>
             </div>
           </div>
         </div>

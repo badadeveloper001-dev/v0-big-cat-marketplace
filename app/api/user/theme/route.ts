@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { normalizeWebsiteBannerConfig, type WebsiteBannerConfig } from '@/lib/merchant-website'
 import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 
 type WebsiteTheme = 'emerald' | 'midnight' | 'sunset'
@@ -35,6 +36,7 @@ async function readThemeFromMetadata(userId: string) {
     data: {
       website_theme: isWebsiteTheme(currentMetadata.website_theme) ? currentMetadata.website_theme : undefined,
       website_layout: isWebsiteLayout(currentMetadata.website_layout) ? currentMetadata.website_layout : undefined,
+      website_banner: currentMetadata.website_banner ? normalizeWebsiteBannerConfig(currentMetadata.website_banner) : undefined,
       user_metadata: currentMetadata,
     },
   }
@@ -67,7 +69,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userId, website_theme, website_layout } = body
+    const { userId, website_theme, website_layout, website_banner } = body
 
     if (!userId) {
       return NextResponse.json({ success: false, error: 'userId is required' }, { status: 400 })
@@ -78,9 +80,10 @@ export async function POST(request: NextRequest) {
 
     const theme = isWebsiteTheme(website_theme) ? website_theme : undefined
     const layout = isWebsiteLayout(website_layout) ? website_layout : undefined
+    const banner = website_banner ? normalizeWebsiteBannerConfig(website_banner as WebsiteBannerConfig) : undefined
 
-    if (theme === undefined && layout === undefined) {
-      return NextResponse.json({ success: false, error: 'website_theme or website_layout is required' }, { status: 400 })
+    if (theme === undefined && layout === undefined && banner === undefined) {
+      return NextResponse.json({ success: false, error: 'website_theme, website_layout, or website_banner is required' }, { status: 400 })
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -119,6 +122,7 @@ export async function POST(request: NextRequest) {
           ...currentMetadata,
           ...(theme !== undefined ? { website_theme: theme } : {}),
           ...(layout !== undefined ? { website_layout: layout } : {}),
+          ...(banner !== undefined ? { website_banner: banner } : {}),
         },
       }),
     })
@@ -129,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { website_theme: theme, website_layout: layout },
+      data: { website_theme: theme, website_layout: layout, website_banner: banner },
     })
   } catch (error) {
     console.error('Theme save error:', error)

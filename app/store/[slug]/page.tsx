@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { Loader2, MapPin, Share2, Store, Tag, ShoppingBag, ExternalLink, ShoppingCart, CheckCircle2, Heart } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
-import { extractMerchantIdFromSlug, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
+import { extractMerchantIdFromSlug, normalizeWebsiteBannerConfig, type WebsiteLayout, type WebsiteTheme } from '@/lib/merchant-website'
 import { useCart } from '@/lib/cart-context'
 import { useWishlist } from '@/lib/wishlist-context'
 
@@ -41,6 +41,30 @@ function isWebsiteLayout(value: string | null | undefined): value is WebsiteLayo
   return LAYOUT_IDS.includes(value as WebsiteLayout)
 }
 
+function getBannerStyles(template: string | undefined) {
+  if (template === 'promo') {
+    return {
+      shell: 'border-fuchsia-200 bg-gradient-to-r from-fuchsia-600 via-rose-500 to-orange-400 text-white',
+      badge: 'bg-white/15 text-white',
+      button: 'bg-white text-fuchsia-700 hover:bg-white/90',
+    }
+  }
+
+  if (template === 'product') {
+    return {
+      shell: 'border-amber-200 bg-gradient-to-r from-zinc-950 via-amber-900 to-orange-500 text-white',
+      badge: 'bg-white/15 text-white',
+      button: 'bg-white text-amber-700 hover:bg-white/90',
+    }
+  }
+
+  return {
+    shell: 'border-emerald-200 bg-gradient-to-r from-emerald-600 via-lime-500 to-teal-500 text-white',
+    badge: 'bg-white/15 text-white',
+    button: 'bg-white text-emerald-700 hover:bg-white/90',
+  }
+}
+
 export default function MerchantMiniWebsitePage() {
   const params = useParams<{ slug: string }>()
   const [profile, setProfile] = useState<any | null>(null)
@@ -61,6 +85,8 @@ export default function MerchantMiniWebsitePage() {
     : 'classic'
 
   const themeStyle = themeMap[theme] || themeMap.emerald
+  const banner = normalizeWebsiteBannerConfig(profile?.website_banner)
+  const bannerStyles = getBannerStyles(banner.template)
   const cartCount = getItemCount()
   const cartTotal = getTotal()
   const marketplaceCheckoutPath = '/marketplace?view=cart'
@@ -73,19 +99,11 @@ export default function MerchantMiniWebsitePage() {
       }
 
       try {
-         const [profileResponse, themeResponse] = await Promise.all([
-           fetch(`/api/user/profile?userId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' }),
-           fetch(`/api/user/theme?userId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' }),
-         ])
+         const profileResponse = await fetch(`/api/user/profile?userId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' })
          const profileResult = await profileResponse.json()
-         const themeResult = await themeResponse.json()
 
          if (profileResult.success) {
-           setProfile({
-             ...profileResult.data,
-             website_theme: themeResult?.success ? (themeResult?.data?.website_theme || profileResult?.data?.website_theme) : profileResult?.data?.website_theme,
-             website_layout: themeResult?.success ? (themeResult?.data?.website_layout || profileResult?.data?.website_layout) : profileResult?.data?.website_layout,
-           })
+           setProfile(profileResult.data)
 
            // Load products or services based on merchant_type
            const merchantType = profileResult.data.merchant_type || 'products'
@@ -213,6 +231,28 @@ export default function MerchantMiniWebsitePage() {
         </div>
       </section>
 
+      {banner.enabled && (
+        <section className="px-4 pt-5">
+          <div className={`max-w-6xl mx-auto rounded-[28px] border p-6 shadow-sm ${bannerStyles.shell}`}>
+            <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+              <div className="max-w-2xl">
+                <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${bannerStyles.badge}`}>
+                  {banner.badge}
+                </div>
+                <h2 className="mt-3 text-2xl font-bold leading-tight md:text-3xl">{banner.headline}</h2>
+                <p className="mt-2 text-sm text-white/85 md:text-base">{banner.subheadline}</p>
+              </div>
+              <Link
+                href="#store-items"
+                className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition-colors ${bannerStyles.button}`}
+              >
+                {banner.ctaText}
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -252,7 +292,7 @@ export default function MerchantMiniWebsitePage() {
           </div>
         </div>
 
-        <div>
+        <div id="store-items">
           <div className="flex items-center justify-between mb-3">
              <h2 className="text-xl font-bold text-foreground">Featured {profile?.merchant_type === 'services' ? 'services' : 'products'}</h2>
             <span className="text-sm text-muted-foreground">{products.length} item{products.length !== 1 ? 's' : ''}</span>
