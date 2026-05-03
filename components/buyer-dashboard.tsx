@@ -1198,6 +1198,7 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
               category: product.category || "General",
               image: product.images?.[0] || product.image_url || null,
               stock: Number(product.stock || 0),
+              promotionPercentOff: Number(product.promotion_percent_off || 0),
               merchant: {
                 id: String(product.merchant_id || product.merchant?.id || ''),
                 business_name: product.merchant_profiles?.business_name || product.merchant_profiles?.name || 'Merchant',

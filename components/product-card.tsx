@@ -66,6 +66,7 @@ export function ProductCard({
     category,
     image,
     stock,
+    promotionPercentOff,
     merchant,
   }
 
