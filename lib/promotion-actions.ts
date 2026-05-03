@@ -163,6 +163,36 @@ function calculatePromotionDiscountAmount(
   return Math.min(Number(promotion?.discount_value || 0), eligibleSubtotal)
 }
 
+function calculatePromotionPreviewPercent(promotion: any, unitPrice: number): number {
+  const safeUnitPrice = Math.max(0, Number(unitPrice || 0))
+  if (safeUnitPrice <= 0) return 0
+
+  const ruleType = normalizeRuleType(promotion?.rule_type)
+
+  if (ruleType === 'spend_x_save_y') {
+    const threshold = sanitizePositiveNumber(promotion?.spend_threshold)
+    const saveAmount = sanitizePositiveNumber(promotion?.discount_value)
+    if (threshold > 0 && saveAmount > 0) {
+      return Math.max(0, Math.min(100, Math.round((saveAmount / threshold) * 100)))
+    }
+  }
+
+  if (ruleType === 'buy_x_get_y') {
+    const buyQty = Math.max(1, Math.floor(sanitizePositiveNumber(promotion?.buy_quantity, 1)))
+    const getQty = Math.max(1, Math.floor(sanitizePositiveNumber(promotion?.get_quantity, 1)))
+    const groupSize = buyQty + getQty
+    if (groupSize > 0) {
+      return Math.max(0, Math.min(100, Math.round((getQty / groupSize) * 100)))
+    }
+  }
+
+  if (promotion?.discount_type === 'percentage') {
+    return Math.max(0, Math.min(100, Math.round(Number(promotion?.discount_value || 0))))
+  }
+
+  return Math.max(0, Math.min(100, Math.round((Number(promotion?.discount_value || 0) / safeUnitPrice) * 100)))
+}
+
 async function syncPromotionAndCouponStatuses(supabase: any, merchantId?: string) {
   const nowIso = new Date().toISOString()
   const todayStartIso = getTodayStartIso()
@@ -769,10 +799,11 @@ export async function getPromotionPercentOffForProduct(merchantId: string, produ
         : []
 
       if (scopedProductIds.length > 0 && !scopedProductIds.includes(String(productId))) continue
-      if (promo.max_uses && promo.current_uses >= promo.max_uses) continue
 
       const discountAmount = calculatePromotionDiscountAmount(promo, Number(unitPrice || 0), 1)
-      const percent = Math.max(0, Math.min(100, Math.round((discountAmount / Number(unitPrice || 1)) * 100)))
+      const exactPercent = Math.max(0, Math.min(100, Math.round((discountAmount / Number(unitPrice || 1)) * 100)))
+      const previewPercent = calculatePromotionPreviewPercent(promo, Number(unitPrice || 0))
+      const percent = Math.max(exactPercent, previewPercent)
       if (percent > bestPercent) bestPercent = percent
     }
 
