@@ -216,8 +216,8 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
 
   if (success) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 p-4 flex items-start sm:items-center justify-center overflow-y-auto">
-        <div className="bg-background rounded-2xl p-8 text-center max-w-sm w-full my-4 sm:my-8">
+      <div className="fixed inset-0 z-50 bg-black/50 px-4 py-6 flex items-start justify-center overflow-y-auto">
+        <div className="bg-background rounded-2xl p-8 text-center max-w-sm w-full">
           <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
           <h3 className="font-bold text-foreground mb-2">Withdrawal Initiated</h3>
           <p className="text-sm text-muted-foreground mb-4">
@@ -230,8 +230,8 @@ export function MerchantWithdrawal({ merchantId, walletBalance, onBack, onSucces
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 p-4 flex items-start sm:items-center justify-center overflow-y-auto">
-      <div className="bg-background rounded-2xl p-6 max-w-md w-full my-4 sm:my-8 border border-border shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/50 px-4 py-6 flex items-start justify-center overflow-y-auto">
+      <div className="bg-background rounded-2xl p-6 max-w-md w-full border border-border shadow-xl">
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-bold text-foreground">Withdraw Funds</h2>
           <button onClick={onBack} className="text-muted-foreground hover:text-foreground">
