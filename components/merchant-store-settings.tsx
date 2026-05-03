@@ -81,8 +81,6 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
       bankAccountName: '',
       bankAccountNumber: '',
       bankCode: '',
-      minimumOrder: 1000,
-      commissionRate: 5,
     }
   })
   const bannerPreviewStyle = storeSettingsBannerStyle(storeSettings.websiteBanner.template)
@@ -200,19 +198,6 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
       websiteBanner: {
         ...prev.websiteBanner,
         [field]: value,
-      },
-    }))
-  }
-
-  const handleBannerVariantBFieldChange = (field: 'badge' | 'headline' | 'subheadline' | 'ctaText', value: string) => {
-    setStoreSettings((prev) => ({
-      ...prev,
-      websiteBanner: {
-        ...prev.websiteBanner,
-        variantB: {
-          ...(prev.websiteBanner.variantB || getDefaultWebsiteBannerConfig(prev.websiteBanner.template).variantB),
-          [field]: value,
-        },
       },
     }))
   }
@@ -608,75 +593,7 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
                 />
               </div>
 
-              <div className="rounded-xl border border-border bg-background p-4 space-y-3">
-                <label className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(storeSettings.websiteBanner.abTestEnabled)}
-                    onChange={(e) =>
-                      setStoreSettings((prev) => ({
-                        ...prev,
-                        websiteBanner: {
-                          ...prev.websiteBanner,
-                          abTestEnabled: e.target.checked,
-                          variantB: prev.websiteBanner.variantB || getDefaultWebsiteBannerConfig(prev.websiteBanner.template).variantB,
-                        },
-                      }))
-                    }
-                    className="h-4 w-4 rounded border-border"
-                  />
-                  Enable A/B test for this banner
-                </label>
-                <p className="text-xs text-muted-foreground">Visitors will be split between variant A (current copy) and variant B below.</p>
 
-                {storeSettings.websiteBanner.abTestEnabled && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Variant B Badge</label>
-                      <input
-                        type="text"
-                        value={storeSettings.websiteBanner.variantB?.badge || ''}
-                        onChange={(e) => handleBannerVariantBFieldChange('badge', e.target.value)}
-                        maxLength={40}
-                        className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
-                        placeholder="Limited Offer B"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Variant B Headline</label>
-                      <input
-                        type="text"
-                        value={storeSettings.websiteBanner.variantB?.headline || ''}
-                        onChange={(e) => handleBannerVariantBFieldChange('headline', e.target.value)}
-                        maxLength={90}
-                        className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
-                        placeholder="Alternative headline for testing"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Variant B Supporting Text</label>
-                      <textarea
-                        value={storeSettings.websiteBanner.variantB?.subheadline || ''}
-                        onChange={(e) => handleBannerVariantBFieldChange('subheadline', e.target.value)}
-                        maxLength={180}
-                        className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary resize-none h-20"
-                        placeholder="Alternative campaign message"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Variant B Button Label</label>
-                      <input
-                        type="text"
-                        value={storeSettings.websiteBanner.variantB?.ctaText || ''}
-                        onChange={(e) => handleBannerVariantBFieldChange('ctaText', e.target.value)}
-                        maxLength={28}
-                        className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
-                        placeholder="Explore now"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>
@@ -731,46 +648,6 @@ export function MerchantStoreSettings({ onComplete }: MerchantStoreSettingsProps
           </div>
         </div>
 
-        {/* Store Policies */}
-        <div className="bg-card rounded-2xl border border-border p-6 mb-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Store Policies</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Minimum Order Value</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  name="minimumOrder"
-                  value={storeSettings.minimumOrder}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
-                  placeholder="1000"
-                />
-                <span className="text-sm text-muted-foreground font-medium">₦</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">Customers must order at least this amount</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Commission Rate</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  name="commissionRate"
-                  value={storeSettings.commissionRate}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 bg-muted rounded-lg text-foreground border border-border focus:outline-none focus:border-primary"
-                  placeholder="5"
-                  min="1"
-                  max="20"
-                />
-                <span className="text-sm text-muted-foreground font-medium">%</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">BigCat marketplace commission on your sales</p>
-            </div>
-          </div>
-        </div>
 
         {error && (
           <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center gap-3">

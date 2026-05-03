@@ -237,7 +237,7 @@ function BuyerWalletSection({ userId }: { userId: string }) {
       {/* ── Bank Transfer Modal ── */}
       {showBankModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4 sm:pb-0">
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 p-5 space-y-4 shadow-2xl">
+          <div className="w-full max-w-sm max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white dark:bg-zinc-900 p-5 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-base">Fund Your Wallet</h3>
               <button onClick={() => setShowBankModal(false)} className="p-1.5 rounded-full hover:bg-muted transition-colors">
@@ -853,7 +853,7 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
             {/* ── Bank Transfer Modal ── */}
             {showBankModal && (
               <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4 sm:pb-0">
-                <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 p-5 space-y-4 shadow-2xl">
+                <div className="w-full max-w-sm max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white dark:bg-zinc-900 p-5 space-y-4 shadow-2xl">
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-base">Fund Your Wallet</h3>
                     <button onClick={() => setShowBankModal(false)} className="p-1.5 rounded-full hover:bg-muted transition-colors">

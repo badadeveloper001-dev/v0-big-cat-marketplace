@@ -104,15 +104,36 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   }
 
   const getWalletBalance = () => {
-    const storageKey = getWalletStorageKey()
-    const raw = localStorage.getItem(storageKey)
-    const parsed = raw ? Number(raw) : 0
-    return Number.isFinite(parsed) ? parsed : 0
+    // Prefer DB balance; localStorage is only a fallback during the same session
+    return walletBalance
+  }
+
+  const loadWalletBalance = async () => {
+    if (!user?.userId) return
+    try {
+      const res = await fetch(`/api/buyer/wallet?userId=${encodeURIComponent(user.userId)}`, { cache: 'no-store' })
+      const data = await res.json()
+      if (data?.success) {
+        const dbBalance = Number(data.balance || 0)
+        setWalletBalance(dbBalance)
+        // Keep localStorage in sync so other parts of the app reflect DB balance
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(getWalletStorageKey(), String(dbBalance))
+        }
+      }
+    } catch {
+      // Fall back to localStorage on network error
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem(getWalletStorageKey())
+        const parsed = raw ? Number(raw) : 0
+        setWalletBalance(Number.isFinite(parsed) ? parsed : 0)
+      }
+    }
   }
 
   useEffect(() => {
     if (!isWalletPayment) return
-    setWalletBalance(getWalletBalance())
+    loadWalletBalance()
   }, [isWalletPayment, user?.userId])
 
   useEffect(() => {
@@ -256,10 +277,31 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
 
       // Update wallet if using palmpay
       if (isWalletPayment) {
-        const currentBalance = getWalletBalance()
-        const updatedBalance = Math.max(0, currentBalance - Number(serviceBooking.basePrice || 0))
-        localStorage.setItem(getWalletStorageKey(), updatedBalance.toString())
-        setWalletBalance(updatedBalance)
+        const serviceAmount = Number(serviceBooking.basePrice || 0)
+        try {
+          const debitRes = await fetch('/api/buyer/wallet/debit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              buyerId: user?.userId,
+              amount: serviceAmount,
+              orderId: bookingId,
+              reason: `Payment for service booking #${bookingId.slice(0, 8).toUpperCase()}`,
+            }),
+          })
+          const debitData = await debitRes.json()
+          const newBalance = Number(debitData?.newBalance ?? Math.max(0, walletBalance - serviceAmount))
+          setWalletBalance(newBalance)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(getWalletStorageKey(), String(newBalance))
+          }
+        } catch {
+          const fallback = Math.max(0, walletBalance - serviceAmount)
+          setWalletBalance(fallback)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(getWalletStorageKey(), String(fallback))
+          }
+        }
         setSuccess('Service booking confirmed! Payment secured in escrow.')
       } else {
         setSuccess('Service booking confirmed! Payment secured in escrow.')
@@ -387,9 +429,32 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       })
 
       if (isWalletPayment) {
-        const updatedBalance = Math.max(0, currentWalletBalance - grandTotal)
-        localStorage.setItem(getWalletStorageKey(), updatedBalance.toString())
-        setWalletBalance(updatedBalance)
+        // Debit the DB wallet; also update localStorage as a fast-path cache
+        try {
+          const debitRes = await fetch('/api/buyer/wallet/debit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              buyerId: user.userId,
+              amount: grandTotal,
+              orderId,
+              reason: `Payment for order #${orderId.slice(0, 8).toUpperCase()}`,
+            }),
+          })
+          const debitData = await debitRes.json()
+          const newBalance = Number(debitData?.newBalance ?? Math.max(0, currentWalletBalance - grandTotal))
+          setWalletBalance(newBalance)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(getWalletStorageKey(), String(newBalance))
+          }
+        } catch {
+          // Best-effort: update localStorage even if API call fails
+          const fallback = Math.max(0, currentWalletBalance - grandTotal)
+          setWalletBalance(fallback)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(getWalletStorageKey(), String(fallback))
+          }
+        }
         setSuccess('Payment successful and funds secured in escrow')
       } else {
         setSuccess(
