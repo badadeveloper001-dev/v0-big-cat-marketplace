@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRole } from '@/lib/role-context'
 import {
   Zap,
   Gift,
@@ -54,6 +55,7 @@ interface Coupon {
 type TabType = 'discounts' | 'coupons' | 'analytics'
 
 export function MerchantPromotions() {
+  const { user } = useRole()
   const [tab, setTab] = useState<TabType>('discounts')
   const [promotions, setPromotions] = useState<Promotion[]>([])
   const [coupons, setCoupons] = useState<Coupon[]>([])
@@ -91,13 +93,15 @@ export function MerchantPromotions() {
     setLoading(true)
     setError('')
     try {
+      const headers: Record<string, string> = {}
+      if (user?.userId) headers['x-user-id'] = user.userId
       if (tab === 'discounts') {
-        const res = await fetch('/api/merchant/promotions')
+        const res = await fetch('/api/merchant/promotions', { headers })
         if (!res.ok) throw new Error('Failed to load promotions')
         const data = await res.json()
         setPromotions(data.data || [])
       } else if (tab === 'coupons') {
-        const res = await fetch('/api/merchant/coupons')
+        const res = await fetch('/api/merchant/coupons', { headers })
         if (!res.ok) throw new Error('Failed to load coupons')
         const data = await res.json()
         setCoupons(data.data || [])
@@ -115,7 +119,7 @@ export function MerchantPromotions() {
     try {
       const res = await fetch('/api/merchant/promotions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(user?.userId ? { 'x-user-id': user.userId } : {}) },
         body: JSON.stringify(formData),
       })
       const data = await res.json()
@@ -146,7 +150,7 @@ export function MerchantPromotions() {
     try {
       const res = await fetch('/api/merchant/coupons', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(user?.userId ? { 'x-user-id': user.userId } : {}) },
         body: JSON.stringify({
           action: 'create',
           input: couponData,
@@ -177,7 +181,7 @@ export function MerchantPromotions() {
     try {
       const res = await fetch('/api/merchant/promotions', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(user?.userId ? { 'x-user-id': user.userId } : {}) },
         body: JSON.stringify({ promotionId: id }),
       })
       const data = await res.json()

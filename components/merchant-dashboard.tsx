@@ -87,6 +87,7 @@ function formatMonthValue(date: Date) {
 export function MerchantDashboard() {
   const { setRole, setUser, user, isLoading } = useRole()
   const [activeTab, setActiveTab] = useState("home")
+    const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [currentInsight, setCurrentInsight] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -1398,91 +1399,87 @@ export function MerchantDashboard() {
       </header>
 
       {/* Tab Navigation */}
-      <div className="sticky top-14 z-40 bg-card border-b border-border px-4 flex gap-4">
+      <div className="sticky top-14 z-40 bg-card border-b border-border px-4 flex items-center gap-1">
         <button
           onClick={() => setActiveTab("home")}
-          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "home"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
+          className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "home" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-            Overview
+          Overview
         </button>
         {!isServiceMerchant && (
-        <button
-          onClick={() => setActiveTab("products")}
-          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "products"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
+          <button
+            onClick={() => setActiveTab("products")}
+            className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "products" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
             Products
-        </button>
+          </button>
         )}
         {isServiceMerchant && (
-        <button
-          onClick={() => setActiveTab("services")}
-          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "services"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
+          <button
+            onClick={() => setActiveTab("services")}
+            className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "services" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
             Services
-        </button>
+          </button>
         )}
         <button
           onClick={() => setActiveTab("orders")}
-          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "orders"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
+          className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "orders" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-            Orders
+          Orders
         </button>
         <button
           onClick={() => setActiveTab("messages")}
-          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "messages"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
+          className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "messages" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-            Messages
+          Messages
         </button>
-        <button
-          onClick={() => setActiveTab("promotions")}
-          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "promotions"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-            Promotions
-        </button>
-        <button
-          onClick={() => setActiveTab("ai")}
-          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "ai"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-            AI
-        </button>
-        <button
-          onClick={() => setActiveTab("store")}
-          className={`py-3 px-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "store"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-            Store
-        </button>
+        <div className="relative ml-auto">
+          <button
+            onClick={() => setShowMoreMenu((v) => !v)}
+            className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1 whitespace-nowrap ${
+              ["promotions", "store", "ai", "analytics"].includes(activeTab)
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {activeTab === "promotions" ? "Promotions" : activeTab === "store" ? "Store" : activeTab === "ai" ? "AI" : activeTab === "analytics" ? "Analytics" : "More"}
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+          {showMoreMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-border bg-card shadow-lg py-1 z-50">
+                {[
+                  { id: "promotions", label: "Promotions" },
+                  { id: "store", label: "Store & Banner" },
+                  { id: "ai", label: "AI BizPilot" },
+                  { id: "analytics", label: "Analytics" },
+                ].map(({ id, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => { setActiveTab(id); setShowMoreMenu(false) }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                      activeTab === id ? "text-primary font-semibold bg-primary/5" : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Main Content */}
