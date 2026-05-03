@@ -688,14 +688,28 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [fundAmount, setFundAmount] = useState("5000")
   const [funding, setFunding] = useState(false)
+  const [fundSuccess, setFundSuccess] = useState("")
   const [balance, setBalance] = useState(0)
   const [transactions, setTransactions] = useState<WalletTransactionRow[]>([])
   const [error, setError] = useState("")
   const [lastLoaded, setLastLoaded] = useState<string>("")
+  const [balanceVisible, setBalanceVisible] = useState(true)
+  const [showBankModal, setShowBankModal] = useState(false)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [showAllTx, setShowAllTx] = useState(false)
+  const [fundRef] = useState(() => `BCM-${Math.random().toString(36).slice(2, 10).toUpperCase()}`)
 
   const isMerchant = user?.role === "merchant"
   const authUserId = String(user?.userId || "").trim()
   const merchantId = String(user?.email || user?.userId || "").trim()
+
+  const virtualAccount = deriveVirtualAccount(merchantId || authUserId)
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopiedField(field)
+    setTimeout(() => setCopiedField(null), 2000)
+  }
 
   const loadMerchantWallet = async () => {
     if (!merchantId) {
@@ -758,6 +772,7 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
 
     setFunding(true)
     setError("")
+    setFundSuccess("")
     try {
       const response = await fetch('/api/merchant/wallet/fund', {
         method: 'POST',
@@ -776,6 +791,7 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
         return
       }
 
+      setFundSuccess(`₦${amount.toLocaleString('en-NG')} added to your wallet!`)
       setFundAmount('5000')
       await loadMerchantWallet()
     } catch {
@@ -798,6 +814,8 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
     if (debitTypes.has(type) && Number.isFinite(amount) && amount > 0) return sum + amount
     return sum
   }, 0)
+
+  const visibleTx = showAllTx ? transactions : transactions.slice(0, 5)
 
   if (showWithdraw && merchantId) {
     return (
@@ -832,119 +850,258 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
       <main className="mx-auto max-w-xl px-4 py-5 space-y-5">
         {isMerchant ? (
           <>
-            <section className="rounded-3xl p-5 text-white shadow-xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700">
-              <p className="text-sm text-slate-300">Available Balance</p>
-              {loading ? (
-                <div className="py-6 flex items-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm text-slate-200">Loading wallet...</span>
+            {/* ── Bank Transfer Modal ── */}
+            {showBankModal && (
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4 sm:pb-0">
+                <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 p-5 space-y-4 shadow-2xl">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-base">Fund Your Wallet</h3>
+                    <button onClick={() => setShowBankModal(false)} className="p-1.5 rounded-full hover:bg-muted transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                    <p className="text-xs text-slate-600 dark:text-slate-300 font-medium uppercase tracking-wide">Transfer to this account</p>
+
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">Bank Name</p>
+                          <p className="text-sm font-semibold">Wema Bank</p>
+                        </div>
+                        <Building2 className="w-5 h-5 text-slate-500" />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">Account Number</p>
+                          <p className="text-lg font-bold tracking-widest">{virtualAccount}</p>
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(virtualAccount, 'account')}
+                          className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                        >
+                          {copiedField === 'account' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">Account Name</p>
+                          <p className="text-sm font-semibold">BIGCAT MARKETPLACE / {merchantId.slice(0, 8).toUpperCase()}</p>
+                        </div>
+                      </div>
+
+                      <div className="h-px bg-slate-200 dark:bg-slate-700" />
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">Payment Reference</p>
+                          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{fundRef}</p>
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(fundRef, 'ref')}
+                          className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                        >
+                          {copiedField === 'ref' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Transfer any amount to the account above. Your wallet will be credited within <strong>5 minutes</strong>. Always include your payment reference so we can identify your payment.
+                  </p>
+
+                  {/* Quick manual top-up for demo / testing */}
+                  <div className="space-y-2 border-t border-border pt-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quick top-up (demo)</p>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {QUICK_AMOUNTS.map(amt => (
+                        <button
+                          key={amt}
+                          onClick={() => setFundAmount(String(amt))}
+                          className={`rounded-xl border py-2 text-xs font-semibold transition-colors ${
+                            fundAmount === String(amt)
+                              ? 'bg-slate-800 text-white border-slate-800'
+                              : 'border-border text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {amt >= 1000 ? `₦${amt / 1000}k` : `₦${amt}`}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">₦</span>
+                        <input
+                          type="number" min="100" max="1000000"
+                          value={fundAmount}
+                          onChange={e => setFundAmount(e.target.value)}
+                          className="w-full rounded-xl border border-border bg-background pl-8 pr-3 py-2.5 text-sm outline-none focus:border-slate-500"
+                          placeholder="Custom amount"
+                        />
+                      </div>
+                      <button
+                        onClick={async () => { await handleFundWallet(); if (!error) setShowBankModal(false) }}
+                        disabled={funding}
+                        className="rounded-xl bg-slate-800 text-white text-sm font-semibold px-5 py-2.5 hover:bg-slate-900 disabled:opacity-60 transition-colors"
+                      >
+                        {funding ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                      </button>
+                    </div>
+                    {error && <p className="text-xs text-red-600">{error}</p>}
+                    {fundSuccess && <p className="text-xs text-emerald-600 font-medium">{fundSuccess}</p>}
+                  </div>
                 </div>
-              ) : (
-                <h2 className="mt-2 text-4xl font-extrabold tracking-tight">{formatNaira(balance)}</h2>
-              )}
-              <div className="mt-4 flex items-center gap-2 text-xs text-slate-300">
-                <Wallet className="w-4 h-4" />
-                <span>Live wallet backed by escrow settlements</span>
+              </div>
+            )}
+
+            {/* ── Merchant wallet card ── */}
+            <section className="rounded-3xl p-5 text-white shadow-xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 relative overflow-hidden">
+              {/* decorative circles */}
+              <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
+              <div className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full bg-white/10 pointer-events-none" />
+              {/* card chip */}
+              <div className="absolute top-5 right-16 w-8 h-6 rounded bg-yellow-400/60 border border-yellow-300/40 pointer-events-none" />
+
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-slate-300" />
+                    <span className="text-sm font-semibold text-slate-300 tracking-wide uppercase">Merchant Wallet</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setBalanceVisible(v => !v)}
+                      className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                      aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
+                    >
+                      {balanceVisible ? <EyeOff className="w-3.5 h-3.5 text-white" /> : <Eye className="w-3.5 h-3.5 text-white" />}
+                    </button>
+                    <button
+                      onClick={loadMerchantWallet}
+                      className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                      aria-label="Refresh wallet"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 mb-1">Available Balance</p>
+                {loading ? (
+                  <div className="py-2 flex items-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+                    <span className="text-sm text-slate-300">Loading...</span>
+                  </div>
+                ) : (
+                  <h2 className="text-4xl font-extrabold tracking-tight">
+                    {balanceVisible ? formatNaira(balance) : '₦ ••••••'}
+                  </h2>
+                )}
+                <p className="text-[11px] text-slate-400 mt-1">{virtualAccount.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3')} · Wema Bank</p>
+
+                <div className="mt-4 grid grid-cols-2 gap-2 text-center">
+                  <div className="rounded-2xl bg-white/15 py-2 px-3">
+                    <p className="text-[11px] text-slate-300 uppercase tracking-wide">Total In</p>
+                    <p className="text-sm font-bold">{balanceVisible ? formatNaira(totalIn) : '••••'}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/15 py-2 px-3">
+                    <p className="text-[11px] text-slate-300 uppercase tracking-wide">Withdrawn</p>
+                    <p className="text-sm font-bold">{balanceVisible ? formatNaira(totalOut) : '••••'}</p>
+                  </div>
+                </div>
               </div>
             </section>
 
-            {error && (
+            {error && !showBankModal && (
               <div className="rounded-2xl px-4 py-3 text-sm bg-red-50 text-red-700 border border-red-200">
                 {error}
               </div>
             )}
 
-            <section className="rounded-2xl border border-border bg-card p-4 grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-muted/60 p-3 border border-border">
-                <p className="text-xs text-muted-foreground">Total Credits</p>
-                <p className="text-lg font-bold text-emerald-600">{formatNaira(totalIn)}</p>
+            {fundSuccess && !showBankModal && (
+              <div className="rounded-2xl px-4 py-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+                {fundSuccess}
               </div>
-              <div className="rounded-xl bg-muted/60 p-3 border border-border">
-                <p className="text-xs text-muted-foreground">Total Withdrawn</p>
-                <p className="text-lg font-bold text-red-600">{formatNaira(totalOut)}</p>
-              </div>
+            )}
+
+            {/* ── Quick Actions ── */}
+            <section className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { setShowBankModal(true); setError(""); setFundSuccess("") }}
+                className="flex flex-col items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 dark:bg-slate-900/40 dark:border-slate-800 p-4 hover:bg-slate-100 dark:hover:bg-slate-900/70 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
+                  <ArrowDownLeft className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Add Money</span>
+              </button>
+              <button
+                onClick={() => setShowWithdraw(true)}
+                className="flex flex-col items-center gap-1.5 rounded-2xl border border-border bg-muted/40 p-4 hover:bg-muted transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
+                  <ArrowUpRight className="w-5 h-5 text-primary-foreground" />
+                </div>
+                <span className="text-xs font-semibold text-foreground">Withdraw</span>
+              </button>
             </section>
 
+            {lastLoaded && (
+              <p className="text-[11px] text-muted-foreground text-center">Last updated {new Date(lastLoaded).toLocaleString()}</p>
+            )}
+
+            {/* ── Transaction history ── */}
             <section className="rounded-2xl border border-border bg-card p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Wallet Actions</h3>
-                <button
-                  onClick={loadMerchantWallet}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" /> Refresh
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="w-full rounded-xl border border-border bg-muted/50 py-3 px-4">
-                  <label className="text-xs text-muted-foreground block mb-1">Add Funds</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="1"
-                      value={fundAmount}
-                      onChange={(event) => setFundAmount(event.target.value)}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                      placeholder="Amount"
-                    />
-                    <button
-                      onClick={handleFundWallet}
-                      disabled={funding}
-                      className="rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-2 hover:bg-emerald-700 disabled:opacity-60"
-                    >
-                      {funding ? 'Adding...' : 'Add'}
-                    </button>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowWithdraw(true)}
-                  className="w-full rounded-xl bg-primary text-primary-foreground font-semibold py-3 hover:opacity-90 transition-opacity"
-                >
-                  Withdraw Funds
-                </button>
-                <div className="w-full rounded-xl border border-border bg-muted/50 py-3 px-4 text-sm text-muted-foreground flex items-center gap-2 sm:col-span-2">
-                  <Landmark className="w-4 h-4" />
-                  Wallet funding is instant after confirmation. Bank transfer withdrawals settle within 24 hours.
-                </div>
-              </div>
-
-              {lastLoaded && (
-                <p className="text-[11px] text-muted-foreground">Updated {new Date(lastLoaded).toLocaleString()}</p>
-              )}
-            </section>
-
-            <section className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold">Recent Activity</h3>
-                <span className="text-xs text-muted-foreground">Latest {Math.min(10, transactions.length)}</span>
+                <h3 className="font-semibold">Transaction History</h3>
+                {transactions.length > 5 && (
+                  <button onClick={() => setShowAllTx(v => !v)} className="text-xs font-semibold text-primary hover:underline">
+                    {showAllTx ? 'Show less' : `See all (${transactions.length})`}
+                  </button>
+                )}
               </div>
 
               {transactions.length === 0 ? (
-                <div className="rounded-xl bg-muted/50 border border-border p-4 text-sm text-muted-foreground">
-                  No wallet activity yet.
+                <div className="rounded-xl bg-muted/50 border border-border p-4 text-sm text-muted-foreground text-center">
+                  <Wallet className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p>No wallet activity yet.</p>
+                  <p className="text-xs mt-1">Fund your wallet or receive escrow settlements to get started.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {transactions.slice(0, 10).map((tx) => {
-                    const type = String(tx.type || '').toLowerCase()
-                    const isDebit = type.includes('withdraw') || type.includes('debit')
-                    const amount = Number(tx.amount || 0)
+                  {visibleTx.map((tx) => {
+                    const type = String(tx.type || '').toLowerCase().trim()
+                    const isDebit = debitTypes.has(type) || type.includes('withdraw')
+                    const amount = Math.max(0, Number(tx.amount || 0))
+                    const label = tx.reason || (type === 'wallet_credit' ? 'Wallet top-up' : type === 'escrow_release' ? 'Escrow settlement' : type === 'withdrawal' ? 'Withdrawal' : type === 'wallet_debit' ? 'Wallet debit' : 'Wallet activity')
+                    const txDate = tx.created_at ? new Date(tx.created_at) : null
+
                     return (
-                      <div
-                        key={tx.id}
-                        className="rounded-xl border border-border bg-background px-3 py-2.5 flex items-center justify-between"
-                      >
-                        <div className="min-w-0 pr-3">
-                          <p className="text-sm font-medium truncate">{tx.reason || tx.type || 'Wallet activity'}</p>
+                      <div key={tx.id} className="rounded-xl border border-border bg-background px-3 py-3 flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isDebit ? 'bg-red-100' : 'bg-emerald-100'}`}>
+                          {isDebit
+                            ? <ArrowUpRight className="w-4 h-4 text-red-600" />
+                            : <ArrowDownLeft className="w-4 h-4 text-emerald-600" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{label}</p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(tx.created_at || '').toLocaleString()} • {tx.status || 'completed'}
+                            {txDate ? txDate.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                            {tx.order_id ? ` · #${String(tx.order_id).slice(0, 8).toUpperCase()}` : ''}
                           </p>
                         </div>
-                        <p className={`text-sm font-semibold ${isDebit ? 'text-red-600' : 'text-emerald-600'} flex items-center gap-1`}>
-                          {isDebit ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownLeft className="w-3.5 h-3.5" />}
-                          {isDebit ? '-' : '+'}{formatNaira(Math.abs(amount))}
-                        </p>
+                        <div className="text-right shrink-0">
+                          <p className={`text-sm font-bold ${isDebit ? 'text-red-600' : 'text-emerald-600'}`}>
+                            {isDebit ? '−' : '+'}{formatNaira(amount)}
+                          </p>
+                          <p className={`text-[10px] font-medium uppercase ${tx.status === 'completed' ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                            {tx.status || 'completed'}
+                          </p>
+                        </div>
                       </div>
                     )
                   })}
