@@ -154,6 +154,25 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Order created successfully:", order)
 
+    try {
+      const stockResult = await supabase
+        .from('products')
+        .select('id, stock')
+        .eq('id', productId)
+        .single()
+
+      if (!stockResult.error && stockResult.data) {
+        const currentStock = Math.max(0, Number(stockResult.data.stock || 0))
+        const nextStock = Math.max(0, currentStock - Number(quantity || 0))
+        await supabase
+          .from('products')
+          .update({ stock: nextStock })
+          .eq('id', productId)
+      }
+    } catch (stockError) {
+      console.error('[v0] Stock update failed:', stockError)
+    }
+
     if (appliedPromotion?.promotionId && promotionDiscount > 0) {
       await incrementPromotionUsage(appliedPromotion.promotionId)
     }

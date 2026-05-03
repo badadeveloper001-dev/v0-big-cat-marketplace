@@ -29,6 +29,91 @@ function isMissingResourceError(error: any) {
     || message.includes('column')
 }
 
+async function checkStockAvailability(
+  supabase: any,
+  merchantId: string,
+  items: Array<{ productId: string; quantity: number; productName?: string }>,
+) {
+  const qtyByProduct = new Map<string, { quantity: number; productName?: string }>()
+  for (const item of items) {
+    const productId = String(item.productId || '').trim()
+    if (!productId) continue
+    const existing = qtyByProduct.get(productId)
+    qtyByProduct.set(productId, {
+      quantity: Number(existing?.quantity || 0) + Number(item.quantity || 0),
+      productName: item.productName || existing?.productName,
+    })
+  }
+
+  const productIds = Array.from(qtyByProduct.keys())
+  if (productIds.length === 0) return { success: true as const }
+
+  const { data, error } = await (supabase.from('products') as any)
+    .select('id, stock, name')
+    .in('id', productIds)
+    .eq('merchant_id', merchantId)
+
+  if (error) {
+    if (isMissingResourceError(error)) return { success: true as const }
+    return { success: false as const, error: String(error?.message || 'Failed to check stock') }
+  }
+
+  const stockById = new Map((Array.isArray(data) ? data : []).map((p: any) => [String(p.id), p]))
+
+  for (const [productId, needed] of qtyByProduct.entries()) {
+    const row = stockById.get(productId)
+    if (!row) continue
+    const available = Math.max(0, Number(row.stock || 0))
+    if (available < needed.quantity) {
+      return {
+        success: false as const,
+        error: `${needed.productName || row.name || 'A product'} is out of stock. Only ${available} left.`,
+      }
+    }
+  }
+
+  return { success: true as const }
+}
+
+async function decrementStockLevels(
+  supabase: any,
+  merchantId: string,
+  items: Array<{ productId: string; quantity: number }>,
+) {
+  const qtyByProduct = new Map<string, number>()
+  for (const item of items) {
+    const productId = String(item.productId || '').trim()
+    if (!productId) continue
+    qtyByProduct.set(productId, Number(qtyByProduct.get(productId) || 0) + Number(item.quantity || 0))
+  }
+
+  for (const [productId, quantity] of qtyByProduct.entries()) {
+    const stockResult = await (supabase.from('products') as any)
+      .select('id, stock')
+      .eq('id', productId)
+      .eq('merchant_id', merchantId)
+      .single()
+
+    if (stockResult.error) {
+      if (isMissingResourceError(stockResult.error)) continue
+      throw stockResult.error
+    }
+
+    const currentStock = Math.max(0, Number(stockResult.data?.stock || 0))
+    const nextStock = Math.max(0, currentStock - quantity)
+
+    const updateResult = await (supabase.from('products') as any)
+      .update({ stock: nextStock })
+      .eq('id', productId)
+      .eq('merchant_id', merchantId)
+
+    if (updateResult.error) {
+      if (isMissingResourceError(updateResult.error)) continue
+      throw updateResult.error
+    }
+  }
+}
+
 function normalizeWorkflowStatus(input: string) {
   const raw = String(input || '').trim().toLowerCase()
   if (raw === 'order_received') return 'order_received'
@@ -250,6 +335,19 @@ export async function createOrder(
         return { success: false, error: 'One or more cart items are missing merchant information. Please remove the item and add it again.' }
       }
 
+      const stockCheck = await checkStockAvailability(
+        supabase,
+        normalizedMerchantId,
+        merchantItems.map((item) => ({
+          productId: item.productId,
+          quantity: Number(item.quantity || 0),
+          productName: item.productName,
+        })),
+      )
+      if (!stockCheck.success) {
+        return { success: false, error: stockCheck.error }
+      }
+
       const productTotal = merchantItems.reduce((sum, item) => sum + (Number(item.unitPrice) * Number(item.quantity)), 0)
       const appliedPromotion = await getBestPromotionDiscountForItems(
         normalizedMerchantId,
@@ -385,6 +483,15 @@ export async function createOrder(
       }
 
       if (itemsResult.error) throw itemsResult.error
+
+      await decrementStockLevels(
+        supabase,
+        normalizedMerchantId,
+        merchantItems.map((item) => ({
+          productId: item.productId,
+          quantity: Number(item.quantity || 0),
+        })),
+      )
 
       await holdFundsInEscrow(
         supabase,

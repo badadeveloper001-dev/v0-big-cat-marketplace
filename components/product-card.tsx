@@ -159,6 +159,11 @@ export function ProductCard({
             <p className="text-lg font-bold text-foreground">
               {formatNaira(price)}
             </p>
+            {promotionPercentOff > 0 && (
+              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                {promotionPercentOff}% OFF
+              </span>
+            )}
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isOutOfStock ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
               {isOutOfStock ? 'Out of stock' : `${availableStock} in stock`}
             </span>
