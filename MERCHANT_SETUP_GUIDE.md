@@ -60,7 +60,7 @@ interface MerchantSetupProps {
 - SMEDAN ID badge
 - Contact button
 - Share functionality
-- Featured products section (placeholder)
+- Products/services section with empty-state until listings are published
 - Edit button (if owner)
 
 **Props:**

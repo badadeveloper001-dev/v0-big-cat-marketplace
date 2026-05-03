@@ -16,7 +16,11 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
       },
       {
         q: 'What payment methods are accepted?',
-        a: 'We accept PalmPay wallet, bank transfer, and credit/debit card payments. All payments are protected by our escrow system.',
+        a: 'We accept PalmPay wallet, bank transfer, and credit/debit card payments. You can also apply eligible coupon codes at checkout. All payments are protected by our escrow system.',
+      },
+      {
+        q: 'Why do I see a crossed-out price on some products?',
+        a: 'A crossed-out price means the product currently has an active promotion. The lower price is the discounted amount and the badge shows the percentage off.',
       },
       {
         q: 'Can I track my order?',
@@ -45,8 +49,12 @@ const faqs: { category: string; icon: React.ReactNode; items: { q: string; a: st
         a: 'Mark your order as delivered only after you have received it and are satisfied with it. Once marked as delivered, the transaction is final and funds are released to the merchant.',
       },
       {
-        q: 'What is VAT on BigCat?',
+        q: 'What is the 5% insurance fee on BigCat?',
         a: 'BigCat charges 5% insurance on all goods and services to cover return delivery if there are product issues. Insurance is calculated on the product or service price (not delivery fees) and is shown in your price breakdown at checkout.',
+      },
+      {
+        q: 'How do coupons and promotions work?',
+        a: 'Merchants can run limited-time promotions and issue coupon codes. Product-level promotions are applied automatically where eligible. Coupon discounts apply only when the code is valid, active, and matches the checkout conditions (such as minimum spend or eligible items).',
       },
       {
         q: 'What does the insurance charge cover?',

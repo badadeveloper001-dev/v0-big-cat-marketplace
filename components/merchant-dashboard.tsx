@@ -108,9 +108,6 @@ export function MerchantDashboard() {
   const [showTokenDialog, setShowTokenDialog] = useState(false)
   const [tokenBalance, setTokenBalance] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
-  const [cardBalance, setCardBalance] = useState(0)
-  const [bankBalance, setBankBalance] = useState(0)
-  const [tokenPaymentMethod, setTokenPaymentMethod] = useState<"wallet" | "card" | "bank">("wallet")
   const [tokenDialogError, setTokenDialogError] = useState("")
   const [tokenBuying, setTokenBuying] = useState(false)
   const [merchantTodos, setMerchantTodos] = useState<MerchantTodo[]>([])
@@ -1104,14 +1101,7 @@ export function MerchantDashboard() {
 
   const openTokenDialog = () => {
     setTokenDialogError("")
-    setTokenPaymentMethod("wallet")
     setTokenBuying(false)
-    if (typeof window !== "undefined" && user?.userId) {
-      const card = localStorage.getItem(`demo_card_balance_${user.userId}`)
-      setCardBalance(card !== null ? parseFloat(card) : 50000)
-      const bank = localStorage.getItem(`demo_bank_balance_${user.userId}`)
-      setBankBalance(bank !== null ? parseFloat(bank) : 100000)
-    }
     setShowTokenDialog(true)
   }
 
@@ -1120,19 +1110,8 @@ export function MerchantDashboard() {
     setTokenDialogError("")
     setTokenBuying(true)
 
-    const methodLabel = tokenPaymentMethod === "wallet" ? "Wallet" : tokenPaymentMethod === "card" ? "Card" : "Bank Transfer"
-
-    // Check selected payment source balance
-    let currentBalance = 0
-    if (tokenPaymentMethod === "wallet") {
-      currentBalance = walletBalance
-    } else if (tokenPaymentMethod === "card") {
-      const raw = typeof window !== "undefined" ? localStorage.getItem(`demo_card_balance_${user.userId}`) : null
-      currentBalance = raw !== null ? parseFloat(raw) : 50000
-    } else {
-      const raw = typeof window !== "undefined" ? localStorage.getItem(`demo_bank_balance_${user.userId}`) : null
-      currentBalance = raw !== null ? parseFloat(raw) : 100000
-    }
+    const methodLabel = "Wallet"
+    const currentBalance = walletBalance
 
     if (currentBalance < price) {
       setTokenDialogError(`Insufficient ${methodLabel} balance. Need ${formatNaira(price)}, have ${formatNaira(currentBalance)}.`)
@@ -1153,17 +1132,9 @@ export function MerchantDashboard() {
         return
       }
 
-      // Deduct from the chosen payment source
+      // Deduct from wallet balance after successful token purchase.
       const newBalance = currentBalance - price
-      if (tokenPaymentMethod === "wallet") {
-        setWalletBalance(newBalance)
-      } else if (tokenPaymentMethod === "card") {
-        localStorage.setItem(`demo_card_balance_${user.userId}`, newBalance.toString())
-        setCardBalance(newBalance)
-      } else {
-        localStorage.setItem(`demo_bank_balance_${user.userId}`, newBalance.toString())
-        setBankBalance(newBalance)
-      }
+      setWalletBalance(newBalance)
 
       setTokenBalance(Number(result.balance || 0))
       setStats((prev) => {
@@ -1287,31 +1258,8 @@ export function MerchantDashboard() {
             <p className="text-sm text-muted-foreground">Boost your store visibility</p>
           </div>
 
-          {/* Payment method selector */}
-          <div className="mb-4">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Pay with</p>
-            <div className="grid grid-cols-3 gap-2">
-              {([
-                { id: "wallet" as const, label: "Wallet", balance: walletBalance },
-                { id: "card" as const, label: "Card", balance: cardBalance },
-                { id: "bank" as const, label: "Bank", balance: bankBalance },
-              ] as const).map((method) => (
-                <button
-                  key={method.id}
-                  onClick={() => { setTokenPaymentMethod(method.id); setTokenDialogError("") }}
-                  className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-medium transition-colors ${
-                    tokenPaymentMethod === method.id
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-secondary/40 text-muted-foreground hover:border-primary/40"
-                  }`}
-                >
-                  <span>{method.label}</span>
-                  <span className={`text-[10px] font-semibold ${
-                    tokenPaymentMethod === method.id ? "text-primary" : "text-foreground"
-                  }`}>{formatNaira(method.balance)}</span>
-                </button>
-              ))}
-            </div>
+          <div className="mb-4 rounded-xl border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Pay with:</span> Wallet ({formatNaira(walletBalance)})
           </div>
 
           {tokenDialogError && (
@@ -1326,8 +1274,7 @@ export function MerchantDashboard() {
               { tokens: 500, price: 4500 },
               { tokens: 1000, price: 8000 },
             ].map((pack) => {
-              const selectedBalance = tokenPaymentMethod === "wallet" ? walletBalance : tokenPaymentMethod === "card" ? cardBalance : bankBalance
-              const canAfford = selectedBalance >= pack.price
+              const canAfford = walletBalance >= pack.price
               return (
                 <button
                   key={pack.tokens}
