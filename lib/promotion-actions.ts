@@ -1,5 +1,22 @@
 import { createClient } from '@/lib/supabase/server'
 
+function formatPromotionError(error: any) {
+  const message = String(error?.message || error || '').toLowerCase()
+  const code = String(error?.code || '')
+
+  const missingSchema =
+    message.includes('schema cache')
+    || message.includes('could not find the table')
+    || message.includes('does not exist')
+    || code === 'PGRST205'
+
+  if (missingSchema) {
+    return 'Promotions database tables are not set up yet. Run scripts/022-create-promotions-tables.sql in Supabase SQL Editor, then retry.'
+  }
+
+  return String(error?.message || 'Promotion operation failed')
+}
+
 export interface PromotionInput {
   name: string
   type: 'discount' | 'bundle' | 'flash_sale'
@@ -50,7 +67,7 @@ export async function createPromotion(merchantId: string, input: PromotionInput)
     if (error) throw error
     return { success: true, data }
   } catch (error: any) {
-    return { success: false, error: error.message }
+    return { success: false, error: formatPromotionError(error) }
   }
 }
 
@@ -96,7 +113,7 @@ export async function updatePromotion(
     if (error) throw error
     return { success: true, data }
   } catch (error: any) {
-    return { success: false, error: error.message }
+    return { success: false, error: formatPromotionError(error) }
   }
 }
 
@@ -122,7 +139,7 @@ export async function deletePromotion(merchantId: string, promotionId: string) {
     if (error) throw error
     return { success: true }
   } catch (error: any) {
-    return { success: false, error: error.message }
+    return { success: false, error: formatPromotionError(error) }
   }
 }
 
@@ -138,7 +155,7 @@ export async function getMerchantPromotions(merchantId: string) {
     if (error) throw error
     return { success: true, data: data || [] }
   } catch (error: any) {
-    return { success: false, error: error.message, data: [] }
+    return { success: false, error: formatPromotionError(error), data: [] }
   }
 }
 
@@ -164,7 +181,7 @@ export async function createCoupon(merchantId: string, input: CouponInput) {
     if (error) throw error
     return { success: true, data }
   } catch (error: any) {
-    return { success: false, error: error.message }
+    return { success: false, error: formatPromotionError(error) }
   }
 }
 
@@ -180,7 +197,7 @@ export async function getMerchantCoupons(merchantId: string) {
     if (error) throw error
     return { success: true, data: data || [] }
   } catch (error: any) {
-    return { success: false, error: error.message, data: [] }
+    return { success: false, error: formatPromotionError(error), data: [] }
   }
 }
 
@@ -252,7 +269,7 @@ export async function validateCoupon(couponCode: string, buyerId: string, cartTo
       discount: Math.round(discount * 100) / 100,
     }
   } catch (error: any) {
-    return { success: false, error: error.message, discount: 0 }
+    return { success: false, error: formatPromotionError(error), discount: 0 }
   }
 }
 
@@ -300,7 +317,7 @@ export async function applyCoupon(couponCode: string, buyerId: string) {
 
     return { success: true }
   } catch (error: any) {
-    return { success: false, error: error.message }
+    return { success: false, error: formatPromotionError(error) }
   }
 }
 
@@ -329,6 +346,6 @@ export async function getPromotionAnalytics(merchantId: string, promotionId: str
     if (error) throw error
     return { success: true, data: data || [] }
   } catch (error: any) {
-    return { success: false, error: error.message, data: [] }
+    return { success: false, error: formatPromotionError(error), data: [] }
   }
 }
