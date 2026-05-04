@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Loader2, Search, Wrench } from 'lucide-react'
+import { ArrowLeft, Calendar, CheckCircle2, ChevronRight, Clock, FileText, Loader2, MapPin, MessageCircle, Search, Wallet, Wrench, X } from 'lucide-react'
 import { formatNaira } from '@/lib/currency-utils'
 import { getUserStrikeCount, isUserSuspended, resetSafetyState, syncSafetyStateFromServer } from '@/lib/trust-safety'
 
@@ -18,41 +18,29 @@ export function ServicesMarketplace({
 }) {
   const [services, setServices] = useState<any[]>([])
   const [bookings, setBookings] = useState<any[]>([])
+  const [bills, setBills] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [bookingLoading, setBookingLoading] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
   const [error, setError] = useState('')
-  const [selectedService, setSelectedService] = useState<any | null>(null)
-  const [serviceAddress, setServiceAddress] = useState('')
-  const [buyerNote, setBuyerNote] = useState('')
-  const [scheduledAt, setScheduledAt] = useState('')
+  const [viewService, setViewService] = useState<any | null>(null)
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
+  const [payingBillId, setPayingBillId] = useState<string | null>(null)
+  const [payConfirm, setPayConfirm] = useState<any | null>(null)
+  const [activeTab, setActiveTab] = useState<'browse' | 'jobs' | 'bills'>('browse')
 
   const syncSuspensionFromServer = async () => {
     try {
       const response = await fetch(`/api/safety/status?userId=${encodeURIComponent(buyerId)}`)
       const result = await response.json()
       if (result.success) {
-        const nextStrikes = Number(result.strikes || 0)
-        const nextSuspended = Boolean(result.suspended)
-        const nextRemainingMs = Number(result.remainingMs || 0)
-
-        syncSafetyStateFromServer(buyerId, {
-          strikes: nextStrikes,
-          suspended: nextSuspended,
-          remainingMs: nextRemainingMs,
-        })
-
-        setStrikeCount(nextStrikes)
-        setSuspended(nextSuspended)
+        syncSafetyStateFromServer(buyerId, { strikes: Number(result.strikes || 0), suspended: Boolean(result.suspended), remainingMs: Number(result.remainingMs || 0) })
+        setSuspended(Boolean(result.suspended))
+        setStrikeCount(Number(result.strikes || 0))
         return
       }
-    } catch (err) {
-      console.error('Safety status sync failed:', err)
-    }
-
+    } catch {}
     setSuspended(isUserSuspended(buyerId))
     setStrikeCount(getUserStrikeCount(buyerId))
   }
@@ -65,9 +53,7 @@ export function ServicesMarketplace({
 
   const categories = useMemo(() => {
     const set = new Set<string>()
-    services.forEach((service) => {
-      if (service?.category) set.add(String(service.category))
-    })
+    services.forEach((s) => { if (s?.category) set.add(String(s.category)) })
     return Array.from(set)
   }, [services])
 
@@ -77,20 +63,12 @@ export function ServicesMarketplace({
       const params = new URLSearchParams()
       if (query.trim()) params.set('search', query.trim())
       if (category) params.set('category', category)
-
       const response = await fetch(`/api/services?${params.toString()}`)
       const result = await response.json()
-
-      if (!result.success) {
-        setError(result.error || 'Failed to fetch services')
-        setServices([])
-        return
-      }
-
-      setServices(Array.isArray(result.data) ? result.data : [])
-      setError('')
-    } catch (err) {
-      console.error('Load services failed:', err)
+      setServices(result.success && Array.isArray(result.data) ? result.data : [])
+      if (!result.success) setError(result.error || 'Failed to fetch services')
+      else setError('')
+    } catch {
       setError('Unable to load services')
       setServices([])
     } finally {
@@ -102,308 +80,208 @@ export function ServicesMarketplace({
     try {
       const response = await fetch(`/api/service-bookings?buyerId=${buyerId}`)
       const result = await response.json()
-      if (result.success && Array.isArray(result.data)) {
-        setBookings(result.data)
-      }
-    } catch (err) {
-      console.error('Load bookings failed:', err)
-    }
+      if (result.success && Array.isArray(result.data)) setBookings(result.data)
+    } catch {}
   }
 
-  useEffect(() => {
-    loadServices()
-  }, [category])
+  const loadBills = async () => {
+    if (buyerId === 'guest') return
+    try {
+      const response = await fetch(`/api/service-bills?buyerId=${encodeURIComponent(buyerId)}`)
+      const result = await response.json()
+      if (result.success && Array.isArray(result.data)) setBills(result.data)
+    } catch {}
+  }
 
-  useEffect(() => {
-    loadBookings()
-  }, [buyerId])
-
-  useEffect(() => {
-    syncSuspensionFromServer()
-  }, [buyerId])
+  useEffect(() => { loadServices() }, [category])
+  useEffect(() => { loadBookings(); loadBills() }, [buyerId])
+  useEffect(() => { syncSuspensionFromServer() }, [buyerId])
 
   const startChatWithMerchant = async (service: any) => {
     if (buyerId === 'guest') { onNeedsAuth?.(); return }
     if (guardSuspendedAction()) return
-
     const merchantId = String(service?.merchant_id || '').trim()
-    if (!merchantId) {
-      setError('Merchant is not available for chat yet')
-      return
-    }
-
+    if (!merchantId) { setError('Merchant is not available for chat'); return }
     try {
       const response = await fetch('/api/messages/conversation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ buyerId, merchantId }),
       })
-
       const result = await response.json()
-      if (!result.success) {
-        setError(result.error || 'Unable to start chat')
-        return
-      }
-
+      if (!result.success) { setError(result.error || 'Unable to start chat'); return }
       onChatMerchant?.({
         id: result.data?.id,
         vendorId: merchantId,
         vendorName: service.merchant_name || 'Merchant',
         vendorLocation: service.service_city || service.service_state || 'Nigeria',
         vendorRating: 5,
-        lastMessage: 'Start a conversation',
+        lastMessage: `Hi, I\u2019m interested in your "${service.title}" service. Can we discuss the details?`,
         timestamp: new Date(),
         unread: 0,
         avatar: String(service.merchant_name || 'M').charAt(0).toUpperCase(),
       })
-    } catch (err) {
-      console.error('Start merchant chat failed:', err)
+    } catch {
       setError('Unable to start chat with merchant')
     }
   }
 
-  const submitBooking = async () => {
-    if (buyerId === 'guest') { onNeedsAuth?.(); return }
-    if (guardSuspendedAction()) return
-
-    if (!selectedService) return
-
-    if (!serviceAddress.trim()) {
-      setError('Please enter a service address')
-      return
-    }
-
-    setBookingLoading(true)
+  const confirmPayBill = async () => {
+    if (!payConfirm) return
+    setPayingBillId(payConfirm.id)
     try {
-      const response = await fetch('/api/service-bookings', {
-        method: 'POST',
+      const response = await fetch('/api/service-bills', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serviceId: selectedService.id,
-          buyerId,
-          scheduledAt: scheduledAt || null,
-          serviceAddress: serviceAddress.trim(),
-          buyerNote: buyerNote.trim(),
-        }),
+        body: JSON.stringify({ action: 'pay', billId: payConfirm.id, buyerId }),
       })
-
       const result = await response.json()
-
       if (!result.success) {
-        if (result.code === 'POLICY_USER_SUSPENDED') {
-          syncSafetyStateFromServer(buyerId, { strikes: Number(result.strikes || 0), suspended: true, remainingMs: Number(result.remainingMs || 0) })
-          setSuspended(true)
-        }
-        setError(result.error || 'Booking failed. Please try again.')
+        setError(result.error || 'Payment failed')
+        setPayConfirm(null)
         return
       }
-
-      setSelectedService(null)
-      setServiceAddress('')
-      setBuyerNote('')
-      setScheduledAt('')
+      setPayConfirm(null)
       setError('')
+      await loadBills()
       await loadBookings()
-    } catch (err) {
-      console.error('Submit booking failed:', err)
-      setError('Unable to submit booking. Please try again.')
+      setActiveTab('jobs')
+    } catch {
+      setError('Payment failed. Please try again.')
     } finally {
-      setBookingLoading(false)
+      setPayingBillId(null)
     }
   }
 
   const updateBooking = async (bookingId: string, status: 'released' | 'disputed') => {
     if (guardSuspendedAction()) return
-
     try {
       const response = await fetch('/api/service-bookings/status', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId,
-          status,
-          actorId: buyerId,
-          actorType: 'buyer',
-        }),
+        body: JSON.stringify({ bookingId, status, actorId: buyerId, actorType: 'buyer' }),
       })
-
       const result = await response.json()
-      if (!result.success) {
-        if (result.code === 'POLICY_USER_SUSPENDED') {
-          const nextStrikes = Number(result.strikes || 0)
-          const nextSuspended = Boolean(result.suspended)
-          const nextRemainingMs = Number(result.remainingMs || 0)
-
-          syncSafetyStateFromServer(buyerId, {
-            strikes: nextStrikes,
-            suspended: nextSuspended,
-            remainingMs: nextRemainingMs,
-          })
-          setStrikeCount(nextStrikes)
-          setSuspended(nextSuspended)
-        }
-
-        setError(result.error || 'Failed to update booking')
-        return
-      }
-
+      if (!result.success) { setError(result.error || 'Failed to update'); return }
       await loadBookings()
-    } catch (err) {
-      console.error('Update booking failed:', err)
+    } catch {
       setError('Unable to update booking')
     }
   }
 
+  const pendingBills = bills.filter((b) => b.status === 'sent')
+  const paidBills = bills.filter((b) => b.status === 'paid')
+
   return (
-    <div className="px-4 py-4 space-y-5">
+    <div className="px-4 py-4 space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
+        <button onClick={onBack} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <h2 className="text-lg font-bold text-foreground">Services Marketplace</h2>
+        <h2 className="text-lg font-bold text-foreground">Services</h2>
         <div className="w-10" />
       </div>
 
-      <div className="bg-card border border-border rounded-2xl p-3 space-y-3">
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
-          <Search className="w-4 h-4 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search services"
-            className="w-full bg-transparent text-sm outline-none"
-          />
-          <button onClick={loadServices} className="text-xs text-primary font-medium">Search</button>
-        </div>
-        <div className="flex gap-2 overflow-auto">
+      <div className="flex gap-1 bg-secondary/60 rounded-xl p-1">
+        {(['browse', 'jobs', 'bills'] as const).map((tab) => (
           <button
-            onClick={() => setCategory('')}
-            className={`px-3 py-1.5 text-xs rounded-full border ${!category ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border text-muted-foreground'}`}
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all ${activeTab === tab ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
           >
-            All
+            {tab === 'browse' ? 'Browse' : tab === 'jobs' ? `My Jobs${bookings.length > 0 ? ` (${bookings.length})` : ''}` : `Bills${pendingBills.length > 0 ? ` (${pendingBills.length})` : ''}`}
           </button>
-          {categories.map((item) => (
-            <button
-              key={item}
-              onClick={() => setCategory(item)}
-              className={`px-3 py-1.5 text-xs rounded-full border ${category === item ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border text-muted-foreground'}`}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
+        ))}
       </div>
 
       {error && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
-      )}
-
-      {suspended && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-          <p className="text-sm font-semibold text-red-700">Account Suspended</p>
-          <p className="text-xs text-red-700 mt-1">
-            Your account has been temporarily suspended for violating platform policies.
-          </p>
-          <p className="text-xs text-red-600 mt-1">Strikes: {strikeCount}</p>
-          <button
-            onClick={() => {
-              resetSafetyState(buyerId)
-              setSuspended(false)
-              setStrikeCount(0)
-              setError('')
-            }}
-            className="mt-3 px-3 py-2 rounded-lg border border-red-200 bg-white text-red-700 text-xs font-medium"
-          >
-            Reset Strikes (Demo)
-          </button>
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive flex items-start justify-between gap-2">
+          <span>{error}</span>
+          <button onClick={() => setError('')}><X className="w-4 h-4 shrink-0" /></button>
         </div>
       )}
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2">
-        <span className="text-amber-500 text-base mt-0.5">💬</span>
-        <p className="text-xs text-amber-800 leading-relaxed">
-          <span className="font-semibold">Tip:</span> Always chat with the service provider before booking to confirm availability, discuss your requirements, and agree on pricing.
-        </p>
-      </div>
+      {activeTab === 'browse' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2">
+            <MessageCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800 leading-relaxed">
+              <span className="font-semibold">How it works:</span> Browse services → Chat the provider → Agree on price → Provider sends you a bill → Pay securely through BigCat.
+            </p>
+          </div>
 
-      <section>
-        <h3 className="text-sm font-semibold text-foreground mb-2">Available Services</h3>
-        {loading ? (
-          <div className="py-10 flex items-center justify-center text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            Loading services...
-          </div>
-        ) : services.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-card p-6 text-center">
-            <Wrench className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">No services available yet</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {services.map((service) => (
-              <div key={service.id} className="rounded-2xl border border-border bg-card p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-start gap-2 flex-wrap">
-                      <p className="font-semibold text-foreground text-sm">{service.title}</p>
-                      {service.category && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{service.category}</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{service.description || 'No description provided'}</p>
-                    <p className="text-xs text-muted-foreground mt-1 font-medium">{service.merchant_name || 'Merchant'}{service.service_city ? ` • ${service.service_city}` : ''}{service.service_state ? `, ${service.service_state}` : ''}</p>
-                    {Array.isArray(service.working_days) && service.working_days.length > 0 && (
-                      <p className="text-xs text-muted-foreground mt-0.5">Available: {service.working_days.join(', ')}{service.working_hours ? ` • ${service.working_hours}` : ''}</p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold text-foreground">{formatNaira(Number(service.base_price || 0))}</p>
-                    <p className="text-[10px] text-muted-foreground">starting from</p>
-                  </div>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => { if (guardSuspendedAction()) return; setSelectedService(service) }}
-                    disabled={suspended}
-                    className="w-full rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-medium disabled:opacity-60"
-                  >
-                    Book Service
-                  </button>
-                  <button
-                    onClick={() => startChatWithMerchant(service)}
-                    disabled={suspended}
-                    className="w-full rounded-xl border border-border bg-background text-foreground px-3 py-2 text-sm font-medium disabled:opacity-60"
-                  >
-                    Chat Provider
-                  </button>
-                </div>
+          <div className="bg-card border border-border rounded-2xl p-3 space-y-3">
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
+              <Search className="w-4 h-4 text-muted-foreground" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && loadServices()} placeholder="Search services..." className="w-full bg-transparent text-sm outline-none" />
+              <button onClick={loadServices} className="text-xs text-primary font-medium">Search</button>
+            </div>
+            {categories.length > 0 && (
+              <div className="flex gap-2 overflow-auto pb-0.5">
+                <button onClick={() => setCategory('')} className={`px-3 py-1.5 text-xs rounded-full border shrink-0 ${!category ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border text-muted-foreground'}`}>All</button>
+                {categories.map((item) => (
+                  <button key={item} onClick={() => setCategory(item)} className={`px-3 py-1.5 text-xs rounded-full border shrink-0 ${category === item ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border text-muted-foreground'}`}>{item}</button>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </section>
 
-      <section>
-        <h3 className="text-sm font-semibold text-foreground mb-2">My Service Bookings</h3>
-        {bookings.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-card p-5 text-center text-sm text-muted-foreground">
-            You have no service bookings yet.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {bookings.map((booking) => (
+          {loading ? (
+            <div className="py-10 flex items-center justify-center text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin mr-2" />Loading...</div>
+          ) : services.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-card p-8 text-center">
+              <Wrench className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">No services available yet</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {services.map((service) => (
+                <button key={service.id} onClick={() => setViewService(service)} className="w-full text-left rounded-2xl border border-border bg-card p-4 hover:border-primary/30 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start gap-2 flex-wrap">
+                        <p className="font-semibold text-foreground text-sm">{service.title}</p>
+                        {service.category && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium shrink-0">{service.category}</span>}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{service.description || 'No description provided'}</p>
+                      <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground font-medium">
+                        <span>{service.merchant_name || 'Merchant'}</span>
+                        {(service.service_city || service.service_state) && (
+                          <><span className="text-border">•</span><MapPin className="w-3 h-3" /><span>{[service.service_city, service.service_state].filter(Boolean).join(', ')}</span></>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'jobs' && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Active and completed service jobs you have paid for.</p>
+          {bookings.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-card p-8 text-center">
+              <Wrench className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">No active jobs yet. Pay a bill to get started.</p>
+            </div>
+          ) : (
+            bookings.map((booking) => (
               <div key={booking.id} className="rounded-2xl border border-border bg-card p-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-sm text-foreground">{booking.service?.title || 'Service booking'}</p>
-                    <p className="text-xs text-muted-foreground">Provider: {booking.merchant_name || 'Merchant'}</p>
-                    {booking.service_address && <p className="text-xs text-muted-foreground">Address: {booking.service_address}</p>}
-                    {booking.scheduled_at && <p className="text-xs text-muted-foreground">Scheduled: {new Date(booking.scheduled_at).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })}</p>}
-                    {booking.buyer_note && <p className="text-xs text-muted-foreground italic">Note: "{booking.buyer_note}"</p>}
+                    <p className="font-semibold text-sm text-foreground">{booking.service?.title || 'Service job'}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Provider: {booking.merchant_name || 'Merchant'}</p>
+                    {booking.service_address && <p className="text-xs text-muted-foreground">Location: {booking.service_address}</p>}
+                    {booking.scheduled_at && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(booking.scheduled_at).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold text-foreground">{formatNaira(Number(booking.quoted_price || 0))}</p>
@@ -411,57 +289,190 @@ export function ServicesMarketplace({
                       booking.status === 'released' ? 'bg-primary/10 text-primary' :
                       booking.status === 'completed' ? 'bg-amber-100 text-amber-700' :
                       booking.status === 'cancelled' || booking.status === 'disputed' ? 'bg-destructive/10 text-destructive' :
+                      booking.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
                       'bg-secondary text-foreground'
-                    }`}>
-                      {String(booking.status || 'requested').replace(/_/g, ' ')}
-                    </span>
+                    }`}>{String(booking.status || 'accepted').replace(/_/g, ' ')}</span>
                   </div>
                 </div>
                 {booking.status === 'completed' && (
                   <div className="grid grid-cols-2 gap-2 mt-3">
-                    <button onClick={() => updateBooking(booking.id, 'released')} className="rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium">Confirm & Release Funds</button>
+                    <button onClick={() => updateBooking(booking.id, 'released')} className="rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium flex items-center justify-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Confirm & Release
+                    </button>
                     <button onClick={() => updateBooking(booking.id, 'disputed')} className="rounded-lg bg-destructive/10 text-destructive py-2 text-xs font-medium">Report Issue</button>
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+            ))
+          )}
+        </div>
+      )}
 
-      {selectedService && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-card border border-border p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-foreground">Book {selectedService.title}</h3>
-              <button onClick={() => setSelectedService(null)} className="text-sm text-muted-foreground">Close</button>
+      {activeTab === 'bills' && (
+        <div className="space-y-3">
+          {bills.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-card p-8 text-center">
+              <FileText className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">No bills yet. Chat a service provider to get a quote.</p>
             </div>
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-            />
-            <input
-              value={serviceAddress}
-              onChange={(e) => setServiceAddress(e.target.value)}
-              placeholder="Service address"
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-            />
-            <textarea
-              value={buyerNote}
-              onChange={(e) => setBuyerNote(e.target.value)}
-              placeholder="Notes for merchant"
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm min-h-24"
-            />
-            <button
-              onClick={submitBooking}
-              disabled={bookingLoading || suspended}
-              className="w-full rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-medium disabled:opacity-60"
-            >
-              {bookingLoading ? 'Booking...' : 'Confirm Booking'}
-            </button>
+          ) : (
+            <>
+              {pendingBills.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-foreground">Pending Payment</p>
+                  {pendingBills.map((bill) => (
+                    <div key={bill.id} className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-sm text-foreground">{bill.scope_summary || 'Service bill'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">From: {bill.merchant_name || 'Merchant'}</p>
+                          {bill.timeline && <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />{bill.timeline}</p>}
+                          {Array.isArray(bill.line_items) && bill.line_items.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {bill.line_items.map((item: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span>{item.description}{item.quantity > 1 ? ` \u00d7${item.quantity}` : ''}</span>
+                                  <span>{formatNaira(Number(item.unit_price) * Number(item.quantity || 1))}</span>
+                                </div>
+                              ))}
+                              {Number(bill.discount_amount) > 0 && (
+                                <div className="flex items-center justify-between text-xs text-primary font-medium">
+                                  <span>Discount</span><span>-{formatNaira(Number(bill.discount_amount))}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {bill.notes && <p className="text-xs text-muted-foreground italic mt-1">"{bill.notes}"</p>}
+                          {bill.valid_until && <p className="text-xs text-amber-600 mt-1">Expires: {new Date(bill.valid_until).toLocaleDateString('en-NG')}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-base font-bold text-foreground">{formatNaira(Number(bill.total_amount))}</p>
+                          <span className="text-[10px] text-primary font-medium">Total</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button onClick={() => setPayConfirm(bill)} disabled={payingBillId === bill.id} className="rounded-xl bg-primary text-primary-foreground py-2 text-sm font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
+                          <Wallet className="w-4 h-4" />{payingBillId === bill.id ? 'Processing...' : 'Pay Now'}
+                        </button>
+                        <button onClick={async () => { await fetch('/api/service-bills', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel', billId: bill.id, actorId: buyerId, actorType: 'buyer' }) }); await loadBills() }} className="rounded-xl border border-destructive/30 bg-destructive/10 text-destructive py-2 text-sm font-medium">Decline</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {paidBills.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">Paid Bills</p>
+                  {paidBills.map((bill) => (
+                    <div key={bill.id} className="rounded-2xl border border-border bg-card p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-sm text-foreground">{bill.scope_summary || 'Service bill'}</p>
+                          <p className="text-xs text-muted-foreground">From: {bill.merchant_name || 'Merchant'}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(bill.created_at).toLocaleDateString('en-NG')}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-foreground">{formatNaira(Number(bill.total_amount))}</p>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Paid</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {viewService && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-card border border-border overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Wrench className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-bold text-foreground text-base">{viewService.title}</p>
+                  {viewService.category && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{viewService.category}</span>}
+                </div>
+              </div>
+              <button onClick={() => setViewService(null)} className="p-2 text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-5 pb-5 space-y-4">
+              {viewService.description && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">About This Service</p>
+                  <p className="text-sm text-foreground leading-relaxed">{viewService.description}</p>
+                </div>
+              )}
+              <div className="rounded-xl bg-secondary/50 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-24 shrink-0 text-muted-foreground text-xs font-semibold">Provider</span>
+                  <span className="font-medium text-foreground">{viewService.merchant_name || 'Merchant'}</span>
+                </div>
+                {(viewService.service_city || viewService.service_state) && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="w-24 shrink-0 text-muted-foreground text-xs font-semibold">Location</span>
+                    <span className="flex items-center gap-1 text-foreground"><MapPin className="w-3 h-3 text-primary" />{[viewService.service_city, viewService.service_state].filter(Boolean).join(', ')}</span>
+                  </div>
+                )}
+                {Array.isArray(viewService.working_days) && viewService.working_days.length > 0 && (
+                  <div className="flex items-start gap-2 text-sm">
+                    <span className="w-24 shrink-0 text-muted-foreground text-xs font-semibold">Available</span>
+                    <span className="text-foreground">{viewService.working_days.join(', ')}{viewService.working_hours ? ` \u00b7 ${viewService.working_hours}` : ''}</span>
+                  </div>
+                )}
+              </div>
+              <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                <p className="text-xs font-semibold text-primary mb-0.5">Pricing by agreement</p>
+                <p className="text-xs text-muted-foreground">Price is discussed directly with the provider. Once you agree, the provider will send you a bill to pay securely through BigCat.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button onClick={() => { setViewService(null); startChatWithMerchant(viewService) }} disabled={suspended} className="w-full rounded-xl bg-primary text-primary-foreground px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+                  <MessageCircle className="w-4 h-4" /> Chat Provider
+                </button>
+                <button onClick={() => { setViewService(null); startChatWithMerchant(viewService) }} disabled={suspended} className="w-full rounded-xl border border-primary text-primary px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+                  Request Quote
+                </button>
+              </div>
+            </div>
           </div>
+        </div>
+      )}
+
+      {payConfirm && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-card border border-border p-6 shadow-2xl">
+            <h3 className="font-bold text-foreground text-lg mb-1">Confirm Payment</h3>
+            <p className="text-sm text-muted-foreground mb-4">Funds will be held in escrow and released when you confirm the work is done.</p>
+            <div className="rounded-xl bg-secondary/50 p-3 mb-4 space-y-1">
+              <p className="text-sm font-semibold text-foreground">{payConfirm.scope_summary || 'Service bill'}</p>
+              <p className="text-xs text-muted-foreground">From: {payConfirm.merchant_name || 'Merchant'}</p>
+              {payConfirm.timeline && <p className="text-xs text-muted-foreground">Timeline: {payConfirm.timeline}</p>}
+            </div>
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm text-muted-foreground">Total to pay</p>
+              <p className="text-xl font-bold text-foreground">{formatNaira(Number(payConfirm.total_amount))}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={confirmPayBill} disabled={!!payingBillId} className="rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1.5">
+                {payingBillId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
+                {payingBillId ? 'Paying...' : 'Pay from Wallet'}
+              </button>
+              <button onClick={() => setPayConfirm(null)} className="rounded-xl border border-border bg-background text-foreground py-2.5 text-sm font-medium">Cancel</button>
+            </div>
+            <p className="text-[10px] text-muted-foreground text-center mt-3">Deducted from your wallet balance.</p>
+          </div>
+        </div>
+      )}
+
+      {suspended && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 mt-4">
+          <p className="text-sm font-semibold text-red-700">Account Suspended</p>
+          <p className="text-xs text-red-700 mt-1">Temporarily suspended for violating platform policies. Strikes: {strikeCount}</p>
+          <button onClick={() => { resetSafetyState(buyerId); setSuspended(false); setStrikeCount(0); setError('') }} className="mt-3 px-3 py-2 rounded-lg border border-red-200 bg-white text-red-700 text-xs font-medium">Reset Strikes (Demo)</button>
         </div>
       )}
     </div>
