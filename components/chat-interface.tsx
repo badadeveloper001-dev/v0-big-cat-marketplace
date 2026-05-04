@@ -22,7 +22,11 @@ import {
   Loader2,
   MessageSquare,
   ShieldAlert,
+  FileText,
+  Plus,
+  X,
 } from "lucide-react"
+import { formatNaira } from "@/lib/currency-utils"
 
 interface Message {
   id: string
@@ -188,16 +192,31 @@ function ChatConversationScreen({
   onBack,
   onViewStore,
   onPlaceOrder,
+  userRole,
+  merchantId,
 }: {
   conversation: Conversation
   onBack: () => void
   onViewStore?: (conversation: Conversation) => void
   onPlaceOrder?: (conversation: Conversation) => void
+  userRole?: 'merchant' | 'buyer'
+  merchantId?: string
 }) {
   const { user } = useRole()
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [showQuickActions, setShowQuickActions] = useState(true)
+  const [showBillForm, setShowBillForm] = useState(false)
+  const [billForm, setBillForm] = useState({
+    scopeSummary: '',
+    timeline: '',
+    lineItems: [{ description: '', quantity: 1, unit_price: 0 }] as { description: string; quantity: number; unit_price: number }[],
+    discountAmount: '',
+    notes: '',
+    validUntil: '',
+  })
+  const [sendingBill, setSendingBill] = useState(false)
+  const [billError, setBillError] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState("")
@@ -322,6 +341,65 @@ function ChatConversationScreen({
           } else {
             setWarning(result.error || "For your safety, please keep all conversations within the platform.")
           }
+            const billTotal = billForm.lineItems.reduce((sum, i) => sum + Number(i.unit_price) * Number(i.quantity || 1), 0) - Number(billForm.discountAmount || 0)
+
+            const handleSendBill = async () => {
+              if (!billForm.scopeSummary.trim()) { setBillError('Scope summary is required'); return }
+              if (!billForm.lineItems[0]?.description.trim()) { setBillError('Add at least one line item'); return }
+              const resolvedMerchantId = merchantId || user?.userId
+              if (!resolvedMerchantId) { setBillError('Merchant ID missing'); return }
+              const buyerId = String(conversation.vendorId)
+              setSendingBill(true)
+              setBillError('')
+              try {
+                const createRes = await fetch('/api/service-bills', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    merchantId: resolvedMerchantId,
+                    buyerId,
+                    scopeSummary: billForm.scopeSummary,
+                    timeline: billForm.timeline,
+                    lineItems: billForm.lineItems.filter((i) => i.description.trim()),
+                    discountAmount: Number(billForm.discountAmount || 0),
+                    notes: billForm.notes,
+                    validUntil: billForm.validUntil || null,
+                  }),
+                })
+                const createResult = await createRes.json()
+                if (!createResult.success) { setBillError(createResult.error || 'Failed to create bill'); return }
+                const billId = createResult.data?.id
+                const sendRes = await fetch('/api/service-bills', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'send', billId, merchantId: resolvedMerchantId }),
+                })
+                const sendResult = await sendRes.json()
+                if (!sendResult.success) { setBillError(sendResult.error || 'Bill created but could not send'); return }
+                // Also send a chat notification message
+                await fetch('/api/messages/send', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    conversationId: conversation.id,
+                    senderId: resolvedMerchantId,
+                    content: `📋 I've sent you a service bill for ${formatNaira(billTotal)}. Scope: "${billForm.scopeSummary}". Check your Bills tab to review and pay securely.`,
+                  }),
+                })
+                setShowBillForm(false)
+                setShowQuickActions(false)
+                setBillForm({ scopeSummary: '', timeline: '', lineItems: [{ description: '', quantity: 1, unit_price: 0 }], discountAmount: '', notes: '', validUntil: '' })
+                // Reload messages
+                const msgRes = await fetch(`/api/messages/${conversation.id}?userId=${encodeURIComponent(resolvedMerchantId)}`)
+                const msgResult = await msgRes.json()
+                if (msgResult.success) setMessages((msgResult.data || []).map((m: any) => mapMessage(m, resolvedMerchantId)))
+              } catch {
+                setBillError('Unable to send bill. Try again.')
+              } finally {
+                setSendingBill(false)
+              }
+            }
+
           return
         }
 
@@ -431,37 +509,86 @@ function ChatConversationScreen({
         )}
       </div>
 
-      {showQuickActions && (
-        <div className="border-t border-border bg-card p-4">
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => {
-                if (onViewStore) {
-                  onViewStore(conversation)
-                } else {
-                  window.location.href = "/"
-                }
-              }}
-              className="flex items-center justify-center gap-2 p-3 bg-secondary hover:bg-secondary/80 rounded-xl transition-colors text-sm font-medium text-foreground"
-            >
-              <Store className="w-4 h-4" />
-              View Store
-            </button>
-            <button
-              onClick={() => {
-                if (onPlaceOrder) {
-                  onPlaceOrder(conversation)
-                } else {
-                  window.location.href = "/"
-                }
-              }}
-              className="flex items-center justify-center gap-2 p-3 bg-primary hover:bg-primary/90 rounded-xl transition-colors text-sm font-medium text-primary-foreground"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              Place Order
-            </button>
+      {userRole === 'merchant' ? (
+        <>
+          {showBillForm && (
+            <div className="border-t border-border bg-card px-4 pt-3 pb-4 space-y-3 max-h-[70vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-foreground">Send Bill to {conversation.vendorName}</p>
+                <button onClick={() => { setShowBillForm(false); setBillError('') }} className="p-1 text-muted-foreground"><X className="w-4 h-4" /></button>
+              </div>
+              {billError && <p className="text-xs text-destructive">{billError}</p>}
+              <div>
+                <input value={billForm.scopeSummary} onChange={(e) => setBillForm((p) => ({ ...p, scopeSummary: e.target.value }))} placeholder="What are you billing for? e.g. Deep house cleaning" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={billForm.timeline} onChange={(e) => setBillForm((p) => ({ ...p, timeline: e.target.value }))} placeholder="Timeline e.g. 1 day" className="rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+                <input type="date" value={billForm.validUntil} onChange={(e) => setBillForm((p) => ({ ...p, validUntil: e.target.value }))} className="rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground font-medium">Line Items</p>
+                  <button onClick={() => setBillForm((p) => ({ ...p, lineItems: [...p.lineItems, { description: '', quantity: 1, unit_price: 0 }] }))} className="text-xs text-primary font-medium flex items-center gap-1"><Plus className="w-3 h-3" />Add row</button>
+                </div>
+                <div className="grid grid-cols-12 gap-1 mb-1">
+                  <p className="col-span-6 text-[10px] text-muted-foreground">Item</p>
+                  <p className="col-span-2 text-[10px] text-muted-foreground text-center">Qty</p>
+                  <p className="col-span-3 text-[10px] text-muted-foreground">Price (₦)</p>
+                </div>
+                {billForm.lineItems.map((item, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-1 items-center">
+                    <input value={item.description} onChange={(e) => setBillForm((p) => { const li = [...p.lineItems]; li[i] = { ...li[i], description: e.target.value }; return { ...p, lineItems: li } })} placeholder="Description" className="col-span-6 rounded-lg border border-border bg-background px-2 py-1.5 text-xs" />
+                    <input type="number" min={1} value={item.quantity} onChange={(e) => setBillForm((p) => { const li = [...p.lineItems]; li[i] = { ...li[i], quantity: Number(e.target.value) }; return { ...p, lineItems: li } })} className="col-span-2 rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-center" />
+                    <input type="number" min={0} value={item.unit_price || ''} onChange={(e) => setBillForm((p) => { const li = [...p.lineItems]; li[i] = { ...li[i], unit_price: Number(e.target.value) }; return { ...p, lineItems: li } })} placeholder="0" className="col-span-3 rounded-lg border border-border bg-background px-2 py-1.5 text-xs" />
+                    {billForm.lineItems.length > 1 && (
+                      <button onClick={() => setBillForm((p) => ({ ...p, lineItems: p.lineItems.filter((_, j) => j !== i) }))} className="col-span-1 flex justify-center text-muted-foreground hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="number" min={0} value={billForm.discountAmount} onChange={(e) => setBillForm((p) => ({ ...p, discountAmount: e.target.value }))} placeholder="Discount (₦)" className="rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Total</span>
+                  <span className="text-sm font-bold text-foreground">{formatNaira(Math.max(0, billTotal))}</span>
+                </div>
+              </div>
+              <textarea value={billForm.notes} onChange={(e) => setBillForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Notes (optional)" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm min-h-[52px]" />
+              <button onClick={handleSendBill} disabled={sendingBill} className="w-full rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+                {sendingBill ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                {sendingBill ? 'Sending...' : 'Send Bill'}
+              </button>
+            </div>
+          )}
+          {!showBillForm && (
+            <div className="border-t border-border bg-card px-4 py-2.5">
+              <button onClick={() => setShowBillForm(true)} className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 py-2 text-sm font-medium text-primary hover:bg-primary/10 transition-colors">
+                <FileText className="w-4 h-4" /> Send Bill to Buyer
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        showQuickActions && (
+          <div className="border-t border-border bg-card p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { if (onViewStore) onViewStore(conversation); else window.location.href = "/" }}
+                className="flex items-center justify-center gap-2 p-3 bg-secondary hover:bg-secondary/80 rounded-xl transition-colors text-sm font-medium text-foreground"
+              >
+                <Store className="w-4 h-4" />
+                View Store
+              </button>
+              <button
+                onClick={() => { if (onPlaceOrder) onPlaceOrder(conversation); else window.location.href = "/" }}
+                className="flex items-center justify-center gap-2 p-3 bg-primary hover:bg-primary/90 rounded-xl transition-colors text-sm font-medium text-primary-foreground"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Browse Products
+              </button>
+            </div>
           </div>
-        </div>
+        )
       )}
 
       <div className="border-t border-border bg-card p-4">
@@ -518,11 +645,15 @@ export function ChatInterface({
   onUnreadChange,
   onViewStore,
   onPlaceOrder,
+  userRole,
+  merchantId,
 }: {
   initialConversation?: Conversation | null
   onUnreadChange?: (count: number) => void
   onViewStore?: (conversation: Conversation) => void
   onPlaceOrder?: (conversation: Conversation) => void
+  userRole?: 'merchant' | 'buyer'
+  merchantId?: string
 }) {
   const { user } = useRole()
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(initialConversation)
@@ -642,7 +773,7 @@ export function ChatInterface({
   }
 
   if (selectedConversation) {
-    return <ChatConversationScreen conversation={selectedConversation} onBack={() => setSelectedConversation(null)} onViewStore={onViewStore} onPlaceOrder={onPlaceOrder} />
+    return <ChatConversationScreen conversation={selectedConversation} onBack={() => setSelectedConversation(null)} onViewStore={onViewStore} onPlaceOrder={onPlaceOrder} userRole={userRole} merchantId={merchantId} />
   }
 
   return (

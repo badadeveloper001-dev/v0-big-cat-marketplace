@@ -1393,11 +1393,16 @@ export function MerchantDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("messages")}
-          className={`py-3 px-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+          className={`relative py-3 px-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             activeTab === "messages" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           Messages
+          {unreadMessages > 0 && (
+            <span className="absolute -top-0.5 right-0 min-w-[16px] h-4 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+              {unreadMessages > 99 ? '99+' : unreadMessages}
+            </span>
+          )}
         </button>
         <div className="relative ml-auto">
           <button
@@ -1527,28 +1532,11 @@ export function MerchantDashboard() {
                   </div>
                   {!step.done && (
                     <button onClick={step.action} className="text-xs font-medium text-primary hover:underline shrink-0">
-                      {step.cta}
+                      Go
                     </button>
                   )}
                 </div>
               ))}
-            </div>
-            {nextOnboardingStep && (
-              <button
-                onClick={nextOnboardingStep.action}
-                className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground"
-              >
-                Next best action: {nextOnboardingStep.cta}
-              </button>
-            )}
-          </div>
-        </section>
-
-        <section className="px-4 mb-6">
-          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-foreground">Merchant Operations Cockpit</h3>
-              <span className="text-xs text-muted-foreground">Live operational signals</span>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-4">
               {isServiceMerchant ? (
@@ -1913,7 +1901,7 @@ export function MerchantDashboard() {
         ) : activeTab === "services" ? (
           <MerchantServices merchantId={user?.userId || ""} />
         ) : activeTab === "messages" ? (
-          <ChatInterface />
+          <ChatInterface userRole="merchant" merchantId={user?.userId || ''} />
         ) : activeTab === "promotions" ? (
           <div className="px-4 py-6">
             <MerchantPromotions />
