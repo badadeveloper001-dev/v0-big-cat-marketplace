@@ -46,6 +46,7 @@ import {
   Loader2,
   Download,
   User,
+  Users,
   MessageSquare,
   ArrowUpRight,
 } from "lucide-react"
@@ -454,9 +455,10 @@ export function MerchantDashboard() {
       let nextTokenBalance = 0
       let merchantOrders: any[] = []
       let merchantProducts: any[] = []
+  let followerCount = 0
 
-      if (user?.userId) {
-        const [tokenResponse, walletResponse, ordersResponse, productsResponse] = await Promise.all([
+  if (user?.userId) {
+        const [tokenResponse, walletResponse, ordersResponse, productsResponse, followResponse] = await Promise.all([
           fetch(`/api/merchant/tokens?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
           }),
@@ -469,12 +471,17 @@ export function MerchantDashboard() {
           fetch(`/api/products/merchant?merchantId=${encodeURIComponent(user.userId)}&includePrivate=1`, {
             cache: 'no-store',
           }),
+          fetch(`/api/merchant/follow?merchantId=${encodeURIComponent(user.userId)}`, {
+            cache: 'no-store',
+          }),
         ])
 
         const tokenResult = await tokenResponse.json()
         const walletResult = await walletResponse.json()
         const ordersResult = await ordersResponse.json()
         const productsResult = await productsResponse.json()
+        const followResult = await followResponse.json()
+        followerCount = Number(followResult?.count ?? 0)
 
         if (tokenResult.success) {
           nextTokenBalance = Number(tokenResult.balance || 0)
@@ -646,6 +653,7 @@ export function MerchantDashboard() {
         { label: profitLoss >= 0 ? "Profit" : "Loss", value: profitValue, valueClass: profitLoss >= 0 ? "text-primary" : "text-destructive", change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
         { label: "Wallet Balance", value: formatNaira(liveWalletBalance), change: "Tap to withdraw", trend: "up", icon: NairaIcon, action: () => setShowWithdrawal(true) },
         { label: "Escrow Balance", value: formatNaira(escrowBalance), change: nextTokenBalance > 0 ? `${nextTokenBalance} tokens` : "Held safely", trend: "up", icon: Clock },
+        { label: "Followers", value: followerCount.toLocaleString(), change: followerCount === 1 ? "1 buyer following you" : `${followerCount} buyers following you`, trend: "up", icon: Users },
       ]
       setStats(statsData)
     } catch (error) {
