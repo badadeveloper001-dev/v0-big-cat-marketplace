@@ -85,7 +85,10 @@ export async function PATCH(request: NextRequest) {
       const buyerId = String(body?.buyerId || '').trim()
       const auth = await requireAuthenticatedUser(buyerId, request)
       if (auth.response) return auth.response
-      return NextResponse.json(await payServiceBill(buyerId, billId))
+      return NextResponse.json(await payServiceBill(buyerId, billId, {
+        paymentMethod: body?.paymentMethod,
+        paymentAddress: body?.paymentAddress,
+      }))
     }
 
     // Merchant or buyer: cancel bill

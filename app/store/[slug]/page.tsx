@@ -109,7 +109,9 @@ export default function MerchantMiniWebsitePage() {
       }
   const cartCount = getItemCount()
   const cartTotal = getTotal()
+  const isServiceStore = profile?.merchant_type === 'services'
   const marketplaceCheckoutPath = '/marketplace?view=cart'
+  const marketplaceServicesPath = '/marketplace?view=services'
 
   useEffect(() => {
     const loadStorefront = async () => {
@@ -338,9 +340,9 @@ export default function MerchantMiniWebsitePage() {
                 <Users className="w-3.5 h-3.5" />
                 {followerCount.toLocaleString('en-NG')} follower{followerCount === 1 ? '' : 's'}
               </span>
-              <Link href="/marketplace" className={`rounded-xl ${themeStyle.button} px-4 py-2 text-sm font-semibold text-center transition-colors flex items-center justify-center gap-2`}>
+              <Link href={isServiceStore ? marketplaceServicesPath : '/marketplace'} className={`rounded-xl ${themeStyle.button} px-4 py-2 text-sm font-semibold text-center transition-colors flex items-center justify-center gap-2`}>
                 <ShoppingBag className="w-4 h-4" />
-                Shop on BigCat
+                {isServiceStore ? 'Browse Services' : 'Shop on BigCat'}
               </Link>
             </div>
           </div>
@@ -387,6 +389,7 @@ export default function MerchantMiniWebsitePage() {
             {followMessage}
           </div>
         )}
+        {!isServiceStore && (
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -406,6 +409,7 @@ export default function MerchantMiniWebsitePage() {
             </div>
           </div>
         </div>
+        )}
 
         <div className={`rounded-2xl border p-4 ${themeStyle.soft}`}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -436,6 +440,61 @@ export default function MerchantMiniWebsitePage() {
               <Store className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                <p className="text-sm text-muted-foreground">{profile?.merchant_type === 'services' ? 'Services will appear here as the merchant updates their storefront.' : 'Products will appear here as the merchant updates their storefront.'}</p>
             </div>
+          ) : isServiceStore ? (
+            <div className={gridClass}>
+              {products.slice(0, 12).map((service) => {
+                const workingDays = Array.isArray(service.working_days) ? service.working_days : []
+                const location = [service.service_city, service.service_state].filter(Boolean).join(', ')
+
+                return (
+                  <div key={service.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-sm text-foreground line-clamp-2">{service.title || service.name || 'Service'}</p>
+                      {service.category && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium shrink-0">
+                          {service.category}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground mt-2 line-clamp-3">{service.description || 'No description provided yet.'}</p>
+
+                    {location && (
+                      <p className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {location}
+                      </p>
+                    )}
+
+                    {workingDays.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {workingDays.join(', ')}{service.working_hours ? ` • ${service.working_hours}` : ''}
+                      </p>
+                    )}
+
+                    <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-2">
+                      <p className="text-[11px] font-semibold text-primary">Pricing by agreement</p>
+                      <p className="text-[11px] text-muted-foreground">Discuss scope and price in chat, then pay safely in checkout.</p>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Link
+                        href={marketplaceServicesPath}
+                        className={`block w-full rounded-xl ${themeStyle.button} py-2 text-center text-sm font-semibold text-white`}
+                      >
+                        Open Services
+                      </Link>
+                      <Link
+                        href={marketplaceServicesPath}
+                        className="block w-full rounded-xl border border-border bg-secondary py-2 text-center text-sm font-medium text-foreground"
+                      >
+                        Request Quote
+                      </Link>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           ) : (
             <div className={gridClass}>
               {products.slice(0, 12).map((product) => {
@@ -446,20 +505,20 @@ export default function MerchantMiniWebsitePage() {
                 <div key={product.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
                   <div className="aspect-[4/3] bg-secondary overflow-hidden">
                     {product.images?.[0] ? (
-                      <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover" />
+                      <img src={product.images[0]} alt={product.name || product.title || 'Item'} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">No image</div>
                     )}
                   </div>
                   <div className="p-3">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-sm text-foreground line-clamp-2">{product.name}</p>
+                      <p className="font-semibold text-sm text-foreground line-clamp-2">{product.name || product.title || 'Product'}</p>
                       <button
                         onClick={() =>
                           toggleItem({
                             id: String(product.id),
                             productId: String(product.id),
-                            name: product.name,
+                            name: product.name || product.title || 'Product',
                             price: Number(product.price || 0),
                             category: product.category || 'General',
                             image: product.images?.[0] || product.image_url || null,

@@ -245,9 +245,18 @@ export async function getBuyerServiceBills(buyerId: string) {
   }
 }
 
-export async function payServiceBill(buyerId: string, billId: string) {
+export async function payServiceBill(
+  buyerId: string,
+  billId: string,
+  options?: {
+    paymentMethod?: 'palmpay' | 'bank' | 'card'
+    paymentAddress?: string
+  },
+) {
   try {
     const supabase = await createClient()
+    const paymentMethod = options?.paymentMethod === 'bank' || options?.paymentMethod === 'card' ? options.paymentMethod : 'palmpay'
+    const paymentAddress = String(options?.paymentAddress || '').trim() || null
 
     // 1. Load bill
     const { data: bill, error: billError } = await (supabase.from('service_bills') as any)
@@ -263,46 +272,61 @@ export async function payServiceBill(buyerId: string, billId: string) {
     const amount = Number(bill.total_amount)
     if (!amount || amount <= 0) return { success: false, error: 'Invalid bill amount' }
 
-    // 2. Check wallet balance
-    const { data: txRows, error: txError } = await supabase
-      .from('transactions')
-      .select('type, amount')
-      .eq('buyer_id', buyerId)
+    if (paymentMethod === 'palmpay') {
+      // 2. Check wallet balance for wallet payments
+      const { data: txRows, error: txError } = await supabase
+        .from('transactions')
+        .select('type, amount')
+        .eq('buyer_id', buyerId)
 
-    if (txError) throw txError
+      if (txError) throw txError
 
-    const creditTypes = new Set(['wallet_credit', 'refund', 'payment', 'escrow_release'])
-    const debitTypes = new Set(['wallet_debit', 'withdrawal'])
-    const balance = (txRows || []).reduce((sum: number, tx: any) => {
-      const type = String(tx?.type || '').toLowerCase()
-      const amt = Math.max(0, Number(tx?.amount || 0))
-      if (creditTypes.has(type)) return sum + amt
-      if (debitTypes.has(type)) return sum - amt
-      return sum
-    }, 0)
+      const creditTypes = new Set(['wallet_credit', 'refund', 'payment', 'escrow_release'])
+      const debitTypes = new Set(['wallet_debit', 'withdrawal'])
+      const balance = (txRows || []).reduce((sum: number, tx: any) => {
+        const type = String(tx?.type || '').toLowerCase()
+        const amt = Math.max(0, Number(tx?.amount || 0))
+        if (creditTypes.has(type)) return sum + amt
+        if (debitTypes.has(type)) return sum - amt
+        return sum
+      }, 0)
 
-    if (balance < amount) {
-      return {
-        success: false,
-        error: `Insufficient wallet balance. You need ₦${amount.toLocaleString('en-NG')} but have ₦${balance.toLocaleString('en-NG')}. Please top up your wallet first.`,
-        code: 'INSUFFICIENT_BALANCE',
-        currentBalance: balance,
-        required: amount,
+      if (balance < amount) {
+        return {
+          success: false,
+          error: `Insufficient wallet balance. You need ₦${amount.toLocaleString('en-NG')} but have ₦${balance.toLocaleString('en-NG')}. Please top up your wallet first.`,
+          code: 'INSUFFICIENT_BALANCE',
+          currentBalance: balance,
+          required: amount,
+        }
       }
+
+      // 3. Debit buyer wallet
+      const { error: debitError } = await supabase
+        .from('transactions')
+        .insert({
+          buyer_id: buyerId,
+          type: 'wallet_debit',
+          amount,
+          reason: `Service bill payment: ${bill.scope_summary || billId}`,
+          status: 'completed',
+        })
+
+      if (debitError) throw debitError
+    } else {
+      // Non-wallet methods are treated as externally settled and recorded.
+      const { error: paymentError } = await supabase
+        .from('transactions')
+        .insert({
+          buyer_id: buyerId,
+          type: 'payment',
+          amount,
+          reason: `Service bill payment via ${paymentMethod}: ${bill.scope_summary || billId}`,
+          status: 'completed',
+        })
+
+      if (paymentError) throw paymentError
     }
-
-    // 3. Debit buyer wallet
-    const { error: debitError } = await supabase
-      .from('transactions')
-      .insert({
-        buyer_id: buyerId,
-        type: 'wallet_debit',
-        amount,
-        reason: `Service bill payment: ${bill.scope_summary || billId}`,
-        status: 'completed',
-      })
-
-    if (debitError) throw debitError
 
     // 4. Create service booking with quoted price = total_amount
     let bookingId: string | null = null
@@ -316,6 +340,7 @@ export async function payServiceBill(buyerId: string, billId: string) {
           quoted_price: amount,
           payment_status: 'paid',
           escrow_status: 'held',
+          service_address: paymentAddress,
           buyer_note: bill.scope_summary || null,
         })
         .select('id')

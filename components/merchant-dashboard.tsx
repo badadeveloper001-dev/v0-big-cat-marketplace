@@ -653,7 +653,13 @@ export function MerchantDashboard() {
       } catch { /* ignore */ }
 
       const statsData = [
-        { label: "Total Cost Price", value: formatNaira(totalInventoryCost), change: `${merchantProducts.length} products`, trend: "up", icon: NairaIcon },
+        {
+          label: isServiceMerchant ? "Service Listing Value" : "Total Cost Price",
+          value: formatNaira(totalInventoryCost),
+          change: `${merchantProducts.length} ${isServiceMerchant ? 'services' : 'products'}`,
+          trend: "up",
+          icon: NairaIcon,
+        },
         { label: "Total Sales", value: formatNaira(totalSales), change: `${releasedOrders.length} orders released`, trend: "up", icon: NairaIcon },
         { label: profitLoss >= 0 ? "Profit" : "Loss", value: profitValue, valueClass: profitLoss >= 0 ? "text-primary" : "text-destructive", change: activeOrders > 0 ? `${activeOrders} active orders` : "Audited", trend: profitLoss >= 0 ? "up" : "down", icon: profitLoss >= 0 ? TrendingUp : TrendingDown },
         { label: "Wallet Balance", value: formatNaira(liveWalletBalance), change: "Tap to withdraw", trend: "up", icon: NairaIcon, action: () => setShowWithdrawal(true) },

@@ -39,6 +39,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
 
   const [savedAddresses, setSavedAddresses] = useState<Array<{ id: string; label: string; address: string }>>([])
   const [serviceBooking, setServiceBooking] = useState<any>(null)
+  const [serviceBillPayment, setServiceBillPayment] = useState<any>(null)
   const savedLocation = [user?.city, user?.state].filter(Boolean).join(', ')
 
   const mapSavedMethodToCheckoutMethod = (type?: string | null): PaymentMethod | null => {
@@ -53,18 +54,35 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const getCheckoutPrefsKey = () => `checkout_prefs_${user?.userId || 'guest'}`
   const getSavedAddressesKey = () => `saved_addresses_${user?.userId || 'guest'}`
 
-  // Load service booking from sessionStorage
+  // Load service checkout context from sessionStorage
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const stored = sessionStorage.getItem('serviceBookingDetails')
-    if (stored) {
+
+    const storedBooking = sessionStorage.getItem('serviceBookingDetails')
+    if (storedBooking) {
       try {
-        setServiceBooking(JSON.parse(stored))
+        const parsed = JSON.parse(storedBooking)
+        setServiceBooking(parsed)
+        if (parsed?.serviceAddress) {
+          setDeliveryAddress(String(parsed.serviceAddress))
+        }
       } catch (err) {
         console.error('Failed to parse service booking:', err)
       }
     }
+
+    const storedBill = sessionStorage.getItem('serviceBillCheckout')
+    if (storedBill) {
+      try {
+        setServiceBillPayment(JSON.parse(storedBill))
+      } catch (err) {
+        console.error('Failed to parse service bill checkout:', err)
+      }
+    }
   }, [])
+
+  const isServiceCheckout = Boolean(serviceBooking || serviceBillPayment)
+  const isServiceBillCheckout = Boolean(serviceBillPayment)
 
   // Calculate total weight
   const totalWeight = items.reduce((sum, item) => sum + (0.5 * item.quantity), 0) // Default 0.5kg per item
@@ -87,16 +105,18 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
 
   const INSURANCE_RATE = 0.05 // Return delivery protection insurance: 5%
   const productTotal = getTotal()
-  const serviceTotal = Number(serviceBooking?.basePrice || 0)
-  const effectivePromotionDiscount = serviceBooking ? 0 : Math.min(promotionDiscount, productTotal)
-  const discountedProductTotal = serviceBooking ? serviceTotal : Math.max(0, productTotal - effectivePromotionDiscount)
-  const insuranceBase = serviceBooking ? serviceTotal : discountedProductTotal // Insurance applies to goods/services, not delivery
-  const insuranceAmount = Math.round(insuranceBase * INSURANCE_RATE)
-  const subtotalAfterPromotion = serviceBooking ? serviceTotal : (discountedProductTotal + deliveryFee)
-  const effectiveCouponDiscount = serviceBooking ? 0 : Math.min(Number(appliedCoupon?.discount || 0), subtotalAfterPromotion + insuranceAmount)
+  const serviceTotal = isServiceBillCheckout
+    ? Number(serviceBillPayment?.totalAmount || 0)
+    : Number(serviceBooking?.basePrice || 0)
+  const effectivePromotionDiscount = isServiceCheckout ? 0 : Math.min(promotionDiscount, productTotal)
+  const discountedProductTotal = isServiceCheckout ? serviceTotal : Math.max(0, productTotal - effectivePromotionDiscount)
+  const insuranceBase = isServiceCheckout ? serviceTotal : discountedProductTotal // Insurance applies to goods/services, not delivery
+  const insuranceAmount = isServiceBillCheckout ? 0 : Math.round(insuranceBase * INSURANCE_RATE)
+  const subtotalAfterPromotion = isServiceCheckout ? serviceTotal : (discountedProductTotal + deliveryFee)
+  const effectiveCouponDiscount = isServiceCheckout ? 0 : Math.min(Number(appliedCoupon?.discount || 0), subtotalAfterPromotion + insuranceAmount)
   const grandTotal = Math.max(0, subtotalAfterPromotion + insuranceAmount - effectiveCouponDiscount)
   const isWalletPayment = paymentMethod === 'palmpay'
-  const isWalletInsufficient = isWalletPayment && (serviceBooking || deliveryAddress.trim()) && walletBalance < grandTotal
+  const isWalletInsufficient = isWalletPayment && (isServiceCheckout || deliveryAddress.trim()) && walletBalance < grandTotal
   const walletShortfall = isWalletInsufficient ? grandTotal - walletBalance : 0
 
   const getWalletStorageKey = () => {
@@ -323,6 +343,55 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     }
   }
 
+  const handleServiceBillCheckout = async () => {
+    if (!serviceBillPayment) return
+
+    if (!deliveryAddress.trim()) {
+      setError('Please enter your service address before payment.')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('/api/service-bills', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'pay',
+          billId: String(serviceBillPayment.billId || ''),
+          buyerId: user?.userId,
+          paymentMethod,
+          paymentAddress: deliveryAddress.trim(),
+        }),
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        setError(result.error || 'Payment failed')
+        setIsSubmitting(false)
+        return
+      }
+
+      if (isWalletPayment) {
+        await loadWalletBalance()
+      }
+
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('serviceBillCheckout')
+      }
+
+      setSuccess('Service bill paid successfully. Funds are secured in escrow.')
+      setIsSubmitting(false)
+      setTimeout(() => {
+        onSuccess(String(result.bookingId || serviceBillPayment.billId || `bill_${Date.now()}`))
+      }, 700)
+    } catch (err) {
+      console.error('Service bill checkout failed:', err)
+      setError('Failed to complete bill payment')
+      setIsSubmitting(false)
+    }
+  }
+
   const handleSubmit = async () => {
     setError('')
     setSuccess('')
@@ -335,6 +404,11 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     if (!user?.userId) {
       setError('Please log in to place an order')
       return
+    }
+
+    // Handle service bill payment
+    if (serviceBillPayment) {
+      return handleServiceBillCheckout()
     }
 
     // Handle service booking if present
@@ -481,7 +555,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     }
   }
 
-  if (items.length === 0 && !serviceBooking) {
+  if (items.length === 0 && !isServiceCheckout) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
         <Package className="w-16 h-16 text-muted-foreground mb-4" />
@@ -515,18 +589,23 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
       <main className="flex-1 overflow-auto pb-32">
         {/* Order/Service Booking Summary */}
         <section className="p-4 border-b border-border">
-          <h2 className="font-semibold text-foreground mb-3">{serviceBooking ? 'Service Booking' : 'Order Summary'}</h2>
+          <h2 className="font-semibold text-foreground mb-3">{isServiceBillCheckout ? 'Service Bill' : serviceBooking ? 'Service Booking' : 'Order Summary'}</h2>
           <div className="space-y-3">
-            {serviceBooking ? (
+            {isServiceCheckout ? (
               <>
                 <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
                   <div className="flex-1">
-                    <p className="font-medium text-foreground">{serviceBooking.serviceTitle}</p>
-                    <p className="text-sm text-muted-foreground">{serviceBooking.merchantName}</p>
+                    <p className="font-medium text-foreground">{isServiceBillCheckout ? (serviceBillPayment.scopeSummary || 'Service bill') : serviceBooking.serviceTitle}</p>
+                    <p className="text-sm text-muted-foreground">{isServiceBillCheckout ? (serviceBillPayment.merchantName || 'Merchant') : serviceBooking.merchantName}</p>
                   </div>
-                  <p className="font-medium text-foreground">{formatNaira(Number(serviceBooking.basePrice || 0))}</p>
+                  <p className="font-medium text-foreground">{formatNaira(serviceTotal)}</p>
                 </div>
-                {serviceBooking.scheduledAt && (
+                {isServiceBillCheckout && serviceBillPayment.timeline && (
+                  <div className="text-sm text-muted-foreground">
+                    <p>Timeline: {serviceBillPayment.timeline}</p>
+                  </div>
+                )}
+                {!isServiceBillCheckout && serviceBooking.scheduledAt && (
                   <div className="text-sm text-muted-foreground">
                     <p>Scheduled: {new Date(serviceBooking.scheduledAt).toLocaleString()}</p>
                   </div>
@@ -549,7 +628,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         </section>
 
         {/* Delivery Options - Only for products */}
-        {!serviceBooking && (
+        {!isServiceCheckout && (
         <section className="p-4 border-b border-border space-y-4">
           <h2 className="font-semibold text-foreground">Delivery Options</h2>
 
@@ -634,24 +713,29 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         )}
 
         {/* Service Address - Only for services */}
-        {serviceBooking && (
+        {isServiceCheckout && (
         <section className="p-4 border-b border-border">
           <h2 className="font-semibold text-foreground mb-3">Service Details</h2>
           <div className="space-y-3">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Service Address</p>
-              <p className="font-medium text-foreground">{serviceBooking.serviceAddress}</p>
+              <textarea
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                placeholder="Enter your service address"
+                className="w-full rounded-xl border border-border bg-muted px-3 py-2 text-sm text-foreground min-h-20"
+              />
             </div>
-            {serviceBooking.scheduledAt && (
+            {!isServiceBillCheckout && serviceBooking?.scheduledAt && (
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Scheduled Date & Time</p>
                 <p className="font-medium text-foreground">{new Date(serviceBooking.scheduledAt).toLocaleString()}</p>
               </div>
             )}
-            {serviceBooking.buyerNote && (
+            {(isServiceBillCheckout ? serviceBillPayment?.notes : serviceBooking?.buyerNote) && (
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Notes</p>
-                <p className="font-medium text-foreground">{serviceBooking.buyerNote}</p>
+                <p className="font-medium text-foreground">{isServiceBillCheckout ? serviceBillPayment.notes : serviceBooking.buyerNote}</p>
               </div>
             )}
           </div>
@@ -659,7 +743,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         )}
 
         {/* Delivery Address - Only for products */}
-        {!serviceBooking && (
+        {!isServiceCheckout && (
         <section className="p-4 border-b border-border">
           <h2 className="font-semibold text-foreground mb-3">
             {fulfillmentMethod === 'pickup' ? 'Preferred Drop-off Point' : 'Delivery Address'}
@@ -757,7 +841,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         {/* Price Breakdown */}
         <section className="p-4">
           <h2 className="font-semibold text-foreground mb-3">Price Details</h2>
-          {!serviceBooking && (
+          {!isServiceCheckout && (
             <div className="mb-4 rounded-xl border border-border bg-card p-3 space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Coupon Code</p>
               {!appliedCoupon ? (
@@ -827,16 +911,18 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
             </div>
           )}
           <div className="space-y-2">
-            {serviceBooking ? (
+            {isServiceCheckout ? (
               <>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Service Price</span>
-                  <span className="font-medium text-foreground">{formatNaira(Number(serviceBooking.basePrice || 0))}</span>
+                  <span className="text-muted-foreground">Service Amount</span>
+                  <span className="font-medium text-foreground">{formatNaira(serviceTotal)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Insurance (5%)</span>
-                  <span className="font-medium text-foreground">{formatNaira(insuranceAmount)}</span>
-                </div>
+                {insuranceAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Insurance (5%)</span>
+                    <span className="font-medium text-foreground">{formatNaira(insuranceAmount)}</span>
+                  </div>
+                )}
                 <div className="h-px bg-border my-2" />
                 <div className="flex justify-between">
                   <span className="font-semibold text-foreground">Total Amount</span>
@@ -891,7 +977,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
 
           <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground space-y-1">
             <p className="font-semibold">Why checkout is safe</p>
-            {serviceBooking ? (
+            {isServiceCheckout ? (
               <>
                 <p>Funds are held in escrow until service is completed.</p>
                 <p>You can release funds or dispute the service from your bookings.</p>
@@ -927,7 +1013,7 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
           <div>
             <p className="text-sm text-muted-foreground">Total to pay</p>
             <p className="text-xl font-bold text-foreground">
-              {deliveryAddress.trim() ? formatNaira(grandTotal) : '--'}
+              {deliveryAddress.trim() || isServiceCheckout ? formatNaira(grandTotal) : '--'}
             </p>
           </div>
           <button

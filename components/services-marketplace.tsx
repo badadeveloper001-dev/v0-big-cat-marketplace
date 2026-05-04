@@ -10,11 +10,13 @@ export function ServicesMarketplace({
   onBack,
   onChatMerchant,
   onNeedsAuth,
+  onProceedToCheckout,
 }: {
   buyerId: string
   onBack: () => void
   onChatMerchant?: (conversation?: any) => void
   onNeedsAuth?: () => void
+  onProceedToCheckout?: (bill: any) => void
 }) {
   const [services, setServices] = useState<any[]>([])
   const [bookings, setBookings] = useState<any[]>([])
@@ -26,8 +28,6 @@ export function ServicesMarketplace({
   const [viewService, setViewService] = useState<any | null>(null)
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
-  const [payingBillId, setPayingBillId] = useState<string | null>(null)
-  const [payConfirm, setPayConfirm] = useState<any | null>(null)
   const [activeTab, setActiveTab] = useState<'browse' | 'jobs' | 'bills'>('browse')
 
   const syncSuspensionFromServer = async () => {
@@ -126,31 +126,19 @@ export function ServicesMarketplace({
     }
   }
 
-  const confirmPayBill = async () => {
-    if (!payConfirm) return
-    setPayingBillId(payConfirm.id)
-    try {
-      const response = await fetch('/api/service-bills', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'pay', billId: payConfirm.id, buyerId }),
-      })
-      const result = await response.json()
-      if (!result.success) {
-        setError(result.error || 'Payment failed')
-        setPayConfirm(null)
-        return
-      }
-      setPayConfirm(null)
-      setError('')
-      await loadBills()
-      await loadBookings()
-      setActiveTab('jobs')
-    } catch {
-      setError('Payment failed. Please try again.')
-    } finally {
-      setPayingBillId(null)
+  const proceedToBillCheckout = (bill: any) => {
+    if (buyerId === 'guest') {
+      onNeedsAuth?.()
+      return
     }
+    if (guardSuspendedAction()) return
+
+    if (!onProceedToCheckout) {
+      setError('Checkout is not available right now. Please try again.')
+      return
+    }
+
+    onProceedToCheckout(bill)
   }
 
   const updateBooking = async (bookingId: string, status: 'released' | 'disputed') => {
@@ -351,8 +339,8 @@ export function ServicesMarketplace({
                         </div>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2">
-                        <button onClick={() => setPayConfirm(bill)} disabled={payingBillId === bill.id} className="rounded-xl bg-primary text-primary-foreground py-2 text-sm font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
-                          <Wallet className="w-4 h-4" />{payingBillId === bill.id ? 'Processing...' : 'Pay Now'}
+                        <button onClick={() => proceedToBillCheckout(bill)} className="rounded-xl bg-primary text-primary-foreground py-2 text-sm font-semibold flex items-center justify-center gap-1.5">
+                          <Wallet className="w-4 h-4" />Pay Now
                         </button>
                         <button onClick={async () => { await fetch('/api/service-bills', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel', billId: bill.id, actorId: buyerId, actorType: 'buyer' }) }); await loadBills() }} className="rounded-xl border border-destructive/30 bg-destructive/10 text-destructive py-2 text-sm font-medium">Decline</button>
                       </div>
@@ -438,32 +426,6 @@ export function ServicesMarketplace({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {payConfirm && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-card border border-border p-6 shadow-2xl">
-            <h3 className="font-bold text-foreground text-lg mb-1">Confirm Payment</h3>
-            <p className="text-sm text-muted-foreground mb-4">Funds will be held in escrow and released when you confirm the work is done.</p>
-            <div className="rounded-xl bg-secondary/50 p-3 mb-4 space-y-1">
-              <p className="text-sm font-semibold text-foreground">{payConfirm.scope_summary || 'Service bill'}</p>
-              <p className="text-xs text-muted-foreground">From: {payConfirm.merchant_name || 'Merchant'}</p>
-              {payConfirm.timeline && <p className="text-xs text-muted-foreground">Timeline: {payConfirm.timeline}</p>}
-            </div>
-            <div className="flex items-center justify-between mb-5">
-              <p className="text-sm text-muted-foreground">Total to pay</p>
-              <p className="text-xl font-bold text-foreground">{formatNaira(Number(payConfirm.total_amount))}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={confirmPayBill} disabled={!!payingBillId} className="rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1.5">
-                {payingBillId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
-                {payingBillId ? 'Paying...' : 'Pay from Wallet'}
-              </button>
-              <button onClick={() => setPayConfirm(null)} className="rounded-xl border border-border bg-background text-foreground py-2.5 text-sm font-medium">Cancel</button>
-            </div>
-            <p className="text-[10px] text-muted-foreground text-center mt-3">Deducted from your wallet balance.</p>
           </div>
         </div>
       )}

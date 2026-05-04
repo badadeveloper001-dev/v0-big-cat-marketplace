@@ -266,6 +266,18 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
     if (view === 'cart') {
       setShowCart(true)
       window.history.replaceState({}, '', '/marketplace')
+      return
+    }
+
+    if (view === 'checkout') {
+      setShowCheckout(true)
+      window.history.replaceState({}, '', '/marketplace')
+      return
+    }
+
+    if (view === 'services') {
+      setShowServices(true)
+      window.history.replaceState({}, '', '/marketplace')
     }
   }, [])
 
@@ -920,6 +932,33 @@ export function BuyerDashboard({ onNeedsOnboarding }: { onNeedsOnboarding?: () =
         buyerId={user?.userId ?? 'guest'}
         onBack={() => setShowServices(false)}
         onNeedsAuth={() => { setShowServices(false); setShowAuthPrompt(true) }}
+        onProceedToCheckout={(bill) => {
+          if (!user?.userId) {
+            setShowServices(false)
+            setPendingCheckout(true)
+            setShowAuthPrompt(true)
+            return
+          }
+
+          if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('serviceBookingDetails')
+            sessionStorage.setItem('serviceBillCheckout', JSON.stringify({
+              billId: bill.id,
+              buyerId: user.userId,
+              merchantId: bill.merchant_id,
+              merchantName: bill.merchant_name || 'Merchant',
+              scopeSummary: bill.scope_summary || 'Service bill',
+              timeline: bill.timeline || '',
+              notes: bill.notes || '',
+              lineItems: Array.isArray(bill.line_items) ? bill.line_items : [],
+              totalAmount: Number(bill.total_amount || 0),
+              validUntil: bill.valid_until || null,
+            }))
+          }
+
+          setShowServices(false)
+          setShowCheckout(true)
+        }}
         onChatMerchant={(conversation) => {
             if (guardSuspendedAction()) return
           setShowServices(false)
