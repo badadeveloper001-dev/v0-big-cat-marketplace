@@ -368,7 +368,7 @@ export function MerchantDashboard() {
       loadOrders()
       loadUnreadMessages()
     }
-  }, [user])
+  }, [user?.userId, isServiceMerchant])
 
   useEffect(() => {
     if (!user?.userId) return
@@ -458,7 +458,7 @@ export function MerchantDashboard() {
       let followerCount = 0
 
       if (user?.userId) {
-        const [tokenResponse, walletResponse, ordersResponse, productsResponse, followResponse] = await Promise.all([
+        const [tokenResponse, walletResponse, ordersResponse, listingsResponse, followResponse] = await Promise.all([
           fetch(`/api/merchant/tokens?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
           }),
@@ -468,9 +468,14 @@ export function MerchantDashboard() {
           fetch(`/api/orders/merchant?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
           }),
-          fetch(`/api/products/merchant?merchantId=${encodeURIComponent(user.userId)}&includePrivate=1`, {
+          fetch(
+            isServiceMerchant
+              ? `/api/services?merchantId=${encodeURIComponent(user.userId)}`
+              : `/api/products/merchant?merchantId=${encodeURIComponent(user.userId)}&includePrivate=1`,
+            {
             cache: 'no-store',
-          }),
+            },
+          ),
           fetch(`/api/merchant/follow?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
           }),
@@ -479,7 +484,7 @@ export function MerchantDashboard() {
         const tokenResult = await tokenResponse.json()
         const walletResult = await walletResponse.json()
         const ordersResult = await ordersResponse.json()
-        const productsResult = await productsResponse.json()
+        const listingsResult = await listingsResponse.json()
         const followResult = await followResponse.json()
         followerCount = Number(followResult?.data?.followerCount ?? 0)
 
@@ -498,7 +503,7 @@ export function MerchantDashboard() {
             ? ordersResult.orders
             : []
 
-        merchantProducts = Array.isArray(productsResult.data) ? productsResult.data : []
+        merchantProducts = Array.isArray(listingsResult.data) ? listingsResult.data : []
         setAllOrders(merchantOrders)
         setAllProducts(merchantProducts)
       }
@@ -667,7 +672,11 @@ export function MerchantDashboard() {
     setLoadingProducts(true)
     try {
       if (user?.userId) {
-        const response = await fetch(`/api/products/merchant?merchantId=${user.userId}&includePrivate=1`)
+        const response = await fetch(
+          isServiceMerchant
+            ? `/api/services?merchantId=${encodeURIComponent(user.userId)}`
+            : `/api/products/merchant?merchantId=${user.userId}&includePrivate=1`,
+        )
         const result = await response.json()
         if (result.success && result.data) {
           setAllProducts(result.data)

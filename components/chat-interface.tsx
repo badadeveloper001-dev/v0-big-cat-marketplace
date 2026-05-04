@@ -297,6 +297,78 @@ function ChatConversationScreen({
     loadMessages()
   }, [conversation.id, user?.userId])
 
+  const billTotal = billForm.lineItems.reduce((sum, i) => sum + Number(i.unit_price) * Number(i.quantity || 1), 0) - Number(billForm.discountAmount || 0)
+
+  const handleSendBill = async () => {
+    if (!billForm.scopeSummary.trim()) { setBillError('Scope summary is required'); return }
+    if (!billForm.lineItems[0]?.description.trim()) { setBillError('Add at least one line item'); return }
+
+    const resolvedMerchantId = merchantId || user?.userId
+    if (!resolvedMerchantId) { setBillError('Merchant ID missing'); return }
+
+    const buyerId = String(conversation.vendorId)
+    setSendingBill(true)
+    setBillError('')
+
+    try {
+      const createRes = await fetch('/api/service-bills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantId: resolvedMerchantId,
+          buyerId,
+          scopeSummary: billForm.scopeSummary,
+          timeline: billForm.timeline,
+          lineItems: billForm.lineItems.filter((i) => i.description.trim()),
+          discountAmount: Number(billForm.discountAmount || 0),
+          notes: billForm.notes,
+          validUntil: billForm.validUntil || null,
+        }),
+      })
+
+      const createResult = await createRes.json()
+      if (!createResult.success) {
+        setBillError(createResult.error || 'Failed to create bill')
+        return
+      }
+
+      const billId = createResult.data?.id
+      const sendRes = await fetch('/api/service-bills', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', billId, merchantId: resolvedMerchantId }),
+      })
+
+      const sendResult = await sendRes.json()
+      if (!sendResult.success) {
+        setBillError(sendResult.error || 'Bill created but could not send')
+        return
+      }
+
+      await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: conversation.id,
+          senderId: resolvedMerchantId,
+          content: `📋 I've sent you a service bill for ${formatNaira(billTotal)}. Scope: "${billForm.scopeSummary}". Check your Bills tab to review and pay securely.`,
+        }),
+      })
+
+      setShowBillForm(false)
+      setShowQuickActions(false)
+      setBillForm({ scopeSummary: '', timeline: '', lineItems: [{ description: '', quantity: 1, unit_price: 0 }], discountAmount: '', notes: '', validUntil: '' })
+
+      const msgRes = await fetch(`/api/messages/${conversation.id}?userId=${encodeURIComponent(resolvedMerchantId)}`)
+      const msgResult = await msgRes.json()
+      if (msgResult.success) setMessages((msgResult.data || []).map((m: any) => mapMessage(m, resolvedMerchantId)))
+    } catch {
+      setBillError('Unable to send bill. Try again.')
+    } finally {
+      setSendingBill(false)
+    }
+  }
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !user?.userId || sending || suspended) return
 
@@ -341,65 +413,6 @@ function ChatConversationScreen({
           } else {
             setWarning(result.error || "For your safety, please keep all conversations within the platform.")
           }
-            const billTotal = billForm.lineItems.reduce((sum, i) => sum + Number(i.unit_price) * Number(i.quantity || 1), 0) - Number(billForm.discountAmount || 0)
-
-            const handleSendBill = async () => {
-              if (!billForm.scopeSummary.trim()) { setBillError('Scope summary is required'); return }
-              if (!billForm.lineItems[0]?.description.trim()) { setBillError('Add at least one line item'); return }
-              const resolvedMerchantId = merchantId || user?.userId
-              if (!resolvedMerchantId) { setBillError('Merchant ID missing'); return }
-              const buyerId = String(conversation.vendorId)
-              setSendingBill(true)
-              setBillError('')
-              try {
-                const createRes = await fetch('/api/service-bills', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    merchantId: resolvedMerchantId,
-                    buyerId,
-                    scopeSummary: billForm.scopeSummary,
-                    timeline: billForm.timeline,
-                    lineItems: billForm.lineItems.filter((i) => i.description.trim()),
-                    discountAmount: Number(billForm.discountAmount || 0),
-                    notes: billForm.notes,
-                    validUntil: billForm.validUntil || null,
-                  }),
-                })
-                const createResult = await createRes.json()
-                if (!createResult.success) { setBillError(createResult.error || 'Failed to create bill'); return }
-                const billId = createResult.data?.id
-                const sendRes = await fetch('/api/service-bills', {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'send', billId, merchantId: resolvedMerchantId }),
-                })
-                const sendResult = await sendRes.json()
-                if (!sendResult.success) { setBillError(sendResult.error || 'Bill created but could not send'); return }
-                // Also send a chat notification message
-                await fetch('/api/messages/send', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    conversationId: conversation.id,
-                    senderId: resolvedMerchantId,
-                    content: `📋 I've sent you a service bill for ${formatNaira(billTotal)}. Scope: "${billForm.scopeSummary}". Check your Bills tab to review and pay securely.`,
-                  }),
-                })
-                setShowBillForm(false)
-                setShowQuickActions(false)
-                setBillForm({ scopeSummary: '', timeline: '', lineItems: [{ description: '', quantity: 1, unit_price: 0 }], discountAmount: '', notes: '', validUntil: '' })
-                // Reload messages
-                const msgRes = await fetch(`/api/messages/${conversation.id}?userId=${encodeURIComponent(resolvedMerchantId)}`)
-                const msgResult = await msgRes.json()
-                if (msgResult.success) setMessages((msgResult.data || []).map((m: any) => mapMessage(m, resolvedMerchantId)))
-              } catch {
-                setBillError('Unable to send bill. Try again.')
-              } finally {
-                setSendingBill(false)
-              }
-            }
-
           return
         }
 
