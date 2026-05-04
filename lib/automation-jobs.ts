@@ -26,24 +26,45 @@ async function getMerchants() {
   return data || []
 }
 
-async function getMerchantRevenue(merchantId: string, fromIso: string, toIso: string) {
+// Fetch revenue for ALL merchants in two bulk queries instead of N per-merchant queries
+async function getAllMerchantsRevenue(merchantIds: string[], fromIso: string, toIso: string) {
+  if (merchantIds.length === 0) return new Map<string, { orders: number; revenue: number }>()
   const supabase = await createClient()
+  const settledStatuses = ["paid", "processing", "in_transit", "shipped", "delivered", "completed"]
   const { data, error } = await (supabase.from("orders") as any)
-    .select("id, status, grand_total, total_amount, product_total")
-    .eq("merchant_id", merchantId)
+    .select("merchant_id, status, grand_total, total_amount, product_total")
+    .in("merchant_id", merchantIds)
+    .in("status", settledStatuses)
     .gte("created_at", fromIso)
     .lt("created_at", toIso)
 
-  if (error) return { orders: 0, revenue: 0 }
+  const result = new Map<string, { orders: number; revenue: number }>()
+  for (const id of merchantIds) result.set(id, { orders: 0, revenue: 0 })
 
-  const settledStatuses = new Set(["paid", "processing", "in_transit", "shipped", "delivered", "completed"])
-  const rows = (data || []).filter((row: any) => settledStatuses.has(String(row.status || "").toLowerCase()))
-  const revenue = rows.reduce((sum: number, row: any) => {
+  if (error || !data) return result
+
+  for (const row of data) {
+    const id = String(row.merchant_id || "")
+    if (!id) continue
+    const existing = result.get(id) || { orders: 0, revenue: 0 }
     const value = Number(row.grand_total || row.total_amount || row.product_total || 0)
-    return sum + (Number.isFinite(value) ? value : 0)
-  }, 0)
+    result.set(id, { orders: existing.orders + 1, revenue: existing.revenue + (Number.isFinite(value) ? value : 0) })
+  }
 
-  return { orders: rows.length, revenue }
+  return result
+}
+
+// Run an async task list in parallel with a concurrency cap
+async function batchRun<T>(tasks: (() => Promise<T>)[], concurrency = 10): Promise<T[]> {
+  const results: T[] = []
+  for (let i = 0; i < tasks.length; i += concurrency) {
+    const batch = tasks.slice(i, i + concurrency).map((fn) => fn())
+    const settled = await Promise.allSettled(batch)
+    for (const s of settled) {
+      if (s.status === "fulfilled") results.push(s.value)
+    }
+  }
+  return results
 }
 
 export async function runUnprocessedOrderReminderJob() {
@@ -131,12 +152,20 @@ export async function runBizPilotAlertsJob() {
   const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
   const weekKey = startOfWeek(now).toISOString().slice(0, 10)
 
+  const merchantIds = merchants.map((m: any) => String(m.id))
+
+  // Two bulk queries instead of 2×N sequential queries
+  const [currentRevenues, previousRevenues] = await Promise.all([
+    getAllMerchantsRevenue(merchantIds, sevenDaysAgo.toISOString(), now.toISOString()),
+    getAllMerchantsRevenue(merchantIds, fourteenDaysAgo.toISOString(), sevenDaysAgo.toISOString()),
+  ])
+
   let processed = 0
 
-  for (const merchant of merchants) {
+  const tasks = merchants.map((merchant: any) => async () => {
     const merchantId = String(merchant.id)
-    const current = await getMerchantRevenue(merchantId, sevenDaysAgo.toISOString(), now.toISOString())
-    const previous = await getMerchantRevenue(merchantId, fourteenDaysAgo.toISOString(), sevenDaysAgo.toISOString())
+    const current = currentRevenues.get(merchantId) || { orders: 0, revenue: 0 }
+    const previous = previousRevenues.get(merchantId) || { orders: 0, revenue: 0 }
 
     if (previous.revenue > 0 && current.revenue < previous.revenue * 0.8) {
       const dropPct = Math.round(((previous.revenue - current.revenue) / previous.revenue) * 100)
@@ -149,7 +178,7 @@ export async function runBizPilotAlertsJob() {
         emailSubject: "BizPilot alert: Sales dropped",
       })
       processed += 1
-      continue
+      return
     }
 
     if (current.revenue > 0 && (previous.revenue === 0 || current.revenue >= previous.revenue * 1.2)) {
@@ -163,7 +192,9 @@ export async function runBizPilotAlertsJob() {
       })
       processed += 1
     }
-  }
+  })
+
+  await batchRun(tasks, 10)
 
   return { success: true, processed }
 }
@@ -175,64 +206,75 @@ export async function runWeeklyBusinessReportJob() {
   const weekStartIso = weekStart.toISOString()
   const weekStartKey = weekStartIso.slice(0, 10)
 
+  const merchantIds = merchants.map((m: any) => String(m.id))
+
+  // Bulk fetch: already-reported merchants this week
+  const { data: existingLogs } = await (supabase.from("weekly_business_report_logs") as any)
+    .select("merchant_id")
+    .in("merchant_id", merchantIds)
+    .eq("week_start", weekStartKey)
+
+  const alreadyReported = new Set((existingLogs || []).map((r: any) => String(r.merchant_id)))
+
+  // Bulk fetch: this week's revenue in 1 query
+  const revenueMap = await getAllMerchantsRevenue(merchantIds, weekStartIso, new Date().toISOString())
+
+  // Bulk fetch: this week's order items for all merchants in 1 query
+  const { data: allItems } = await (supabase.from("order_items") as any)
+    .select("product_name, quantity, merchant_id")
+    .in("merchant_id", merchantIds)
+    .gte("created_at", weekStartIso)
+
+  // Build per-merchant best-seller map from the single bulk result
+  const itemsByMerchant = new Map<string, Map<string, number>>()
+  for (const item of allItems || []) {
+    const mid = String(item.merchant_id || "")
+    if (!mid) continue
+    if (!itemsByMerchant.has(mid)) itemsByMerchant.set(mid, new Map())
+    const counts = itemsByMerchant.get(mid)!
+    const name = String(item.product_name || "Unknown product")
+    counts.set(name, (counts.get(name) || 0) + Number(item.quantity || 0))
+  }
+
   let processed = 0
 
-  for (const merchant of merchants) {
-    const merchantId = String(merchant.id)
+  const tasks = merchants
+    .filter((m: any) => !alreadyReported.has(String(m.id)))
+    .map((merchant: any) => async () => {
+      const merchantId = String(merchant.id)
+      const summary = revenueMap.get(merchantId) || { orders: 0, revenue: 0 }
 
-    const existing = await (supabase.from("weekly_business_report_logs") as any)
-      .select("id")
-      .eq("merchant_id", merchantId)
-      .eq("week_start", weekStartKey)
-      .maybeSingle()
-
-    if (existing.data) continue
-
-    const summary = await getMerchantRevenue(merchantId, weekStartIso, new Date().toISOString())
-
-    const itemsResult = await (supabase.from("order_items") as any)
-      .select("product_name, quantity, merchant_id, created_at")
-      .eq("merchant_id", merchantId)
-      .gte("created_at", weekStartIso)
-
-    const counts = new Map<string, number>()
-    for (const item of itemsResult.data || []) {
-      const name = String(item.product_name || "Unknown product")
-      const qty = Number(item.quantity || 0)
-      counts.set(name, (counts.get(name) || 0) + qty)
-    }
-
-    let bestSellingProduct = "No sales yet"
-    let bestQty = 0
-    for (const [name, qty] of counts.entries()) {
-      if (qty > bestQty) {
-        bestQty = qty
-        bestSellingProduct = name
+      const counts = itemsByMerchant.get(merchantId) || new Map()
+      let bestSellingProduct = "No sales yet"
+      let bestQty = 0
+      for (const [name, qty] of counts.entries()) {
+        if (qty > bestQty) { bestQty = qty; bestSellingProduct = name }
       }
-    }
 
-    await dispatchNotification({
-      userId: merchantId,
-      type: "report",
-      title: "Weekly Business Report",
-      message: `Orders: ${summary.orders} | Revenue: ${toCurrency(summary.revenue)} | Best seller: ${bestSellingProduct}`,
-      eventKey: `weekly:report:${merchantId}:${weekStartKey}`,
-      emailSubject: "Your weekly business report",
-      emailText: `Weekly report\n\nTotal orders: ${summary.orders}\nTotal revenue: ${toCurrency(summary.revenue)}\nBest selling product: ${bestSellingProduct}`,
+      await dispatchNotification({
+        userId: merchantId,
+        type: "report",
+        title: "Weekly Business Report",
+        message: `Orders: ${summary.orders} | Revenue: ${toCurrency(summary.revenue)} | Best seller: ${bestSellingProduct}`,
+        eventKey: `weekly:report:${merchantId}:${weekStartKey}`,
+        emailSubject: "Your weekly business report",
+        emailText: `Weekly report\n\nTotal orders: ${summary.orders}\nTotal revenue: ${toCurrency(summary.revenue)}\nBest selling product: ${bestSellingProduct}`,
+      })
+
+      await (supabase.from("weekly_business_report_logs") as any).insert({
+        merchant_id: merchantId,
+        week_start: weekStartKey,
+        totals: {
+          total_orders: summary.orders,
+          total_revenue: summary.revenue,
+          best_selling_product: bestSellingProduct,
+        },
+      })
+
+      processed += 1
     })
 
-    await (supabase.from("weekly_business_report_logs") as any).insert({
-      merchant_id: merchantId,
-      week_start: weekStartKey,
-      totals: {
-        total_orders: summary.orders,
-        total_revenue: summary.revenue,
-        best_selling_product: bestSellingProduct,
-      },
-    })
-
-    processed += 1
-  }
+  await batchRun(tasks, 10)
 
   return { success: true, processed }
 }

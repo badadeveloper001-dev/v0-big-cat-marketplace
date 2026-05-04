@@ -197,7 +197,7 @@ async function recordBuyerWalletRefund(
 export async function getBuyerOrders(buyerId: string) {
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase.from('orders').select('*, order_items(*, products(*))').eq('buyer_id', buyerId).order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('orders').select('*, order_items(*, products(*))').eq('buyer_id', buyerId).order('created_at', { ascending: false }).limit(100)
     if (error) throw error
 
     const orderIds = Array.isArray(data) ? data.map((order: any) => String(order.id || '')).filter(Boolean) : []
@@ -282,7 +282,7 @@ export async function getBuyerOrders(buyerId: string) {
 export async function getMerchantOrders(merchantId: string) {
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase.from('orders').select('*, order_items(*, products(*)), auth_users!buyer_id(name, email)').eq('merchant_id', merchantId).order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('orders').select('*, order_items(*, products(*)), auth_users!buyer_id(name, email)').eq('merchant_id', merchantId).order('created_at', { ascending: false }).limit(100)
     if (error) throw error
     return { success: true, data: data || [] }
   } catch (error: any) {

@@ -293,22 +293,55 @@ export async function getMerchantProducts(merchantId: string) {
   }
 }
 
-export async function getAllProducts(options: { buyerLat?: number | null; buyerLng?: number | null } = {}) {
+export async function getAllProducts(options: {
+  buyerLat?: number | null
+  buyerLng?: number | null
+  category?: string | null
+  search?: string | null
+  limit?: number
+  page?: number
+} = {}) {
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase
+    const pageSize = Math.min(Math.max(Number(options.limit) || 100, 1), 200)
+    const page = Math.max(Number(options.page) || 1, 1)
+    const offset = (page - 1) * pageSize
+
+    let query = supabase
       .from('products')
-      .select('*, merchant_profiles:auth_users!merchant_id(id, business_name, business_category, business_description, name, city, state, location, avatar_url)')
+      .select('*, merchant_profiles:auth_users!merchant_id(id, business_name, business_category, business_description, name, city, state, location, avatar_url)', { count: 'exact' })
       .eq('is_active', true)
+      .order('created_at', { ascending: false })
+
+    // Push category filter to DB — avoid loading products just to discard them
+    if (options.category && options.category !== 'All') {
+      query = (query as any).eq('category', options.category)
+    }
+
+    // Push text search to DB using ilike on name and description
+    if (options.search && options.search.trim()) {
+      const term = `%${options.search.trim()}%`
+      query = (query as any).or(`name.ilike.${term},description.ilike.${term}`)
+    }
+
+    query = (query as any).range(offset, offset + pageSize - 1)
+
+    const { data, error, count } = await (query as any)
     if (error) throw error
 
     const normalizedProducts = (data || []).map(normalizeProduct)
     const productsWithDistance = await attachProductDistances(normalizedProducts, options.buyerLat, options.buyerLng)
     const sortedProducts = sortProductsByLocation(productsWithDistance)
 
-    return { success: true, data: sortedProducts.map(sanitizeProductForPublic) }
+    return {
+      success: true,
+      data: sortedProducts.map(sanitizeProductForPublic),
+      total: count ?? null,
+      page,
+      pageSize,
+    }
   } catch (error: any) {
-    return { success: false, error: error.message, data: [] }
+    return { success: false, error: error.message, data: [], total: null, page: 1, pageSize: 100 }
   }
 }
 

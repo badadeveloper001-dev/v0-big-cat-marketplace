@@ -7,10 +7,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const buyerLat = Number(searchParams.get('buyerLat'))
     const buyerLng = Number(searchParams.get('buyerLng'))
+    const category = searchParams.get('category') || null
+    const search = searchParams.get('search') || null
+    const page = Number(searchParams.get('page') || '1')
+    const limit = Number(searchParams.get('limit') || '100')
 
     const result = await getAllProducts({
       buyerLat: Number.isFinite(buyerLat) ? buyerLat : null,
       buyerLng: Number.isFinite(buyerLng) ? buyerLng : null,
+      category,
+      search,
+      page: Math.max(1, page),
+      limit: Math.min(Math.max(1, limit), 200),
     })
 
     if (!result.success || !Array.isArray(result.data) || result.data.length === 0) {
