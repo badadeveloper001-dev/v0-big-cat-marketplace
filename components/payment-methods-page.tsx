@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowLeft, Loader2, Wallet, Landmark, RefreshCw, ArrowDownLeft, ArrowUpRight, Plus, Trash2, CreditCard, ShoppingBag, Eye, EyeOff, Copy, Check, Building2, Send, X } from "lucide-react"
+import { ArrowLeft, Loader2, Wallet, Landmark, RefreshCw, ArrowDownLeft, ArrowUpRight, Plus, Trash2, CreditCard, ShoppingBag, Eye, EyeOff, Copy, Check, Building2, Send, X, Shield, Gift, BadgeCheck, Unlock, RotateCcw } from "lucide-react"
 import { useRole } from "@/lib/role-context"
 import { formatNaira } from "@/lib/currency-utils"
 import { MerchantWithdrawal } from "@/components/merchant-withdrawal"
@@ -73,6 +73,7 @@ function BuyerWalletSection({ userId }: { userId: string }) {
   const [fundSuccess, setFundSuccess] = useState("")
   const [showAllTx, setShowAllTx] = useState(false)
   const [balanceVisible, setBalanceVisible] = useState(true)
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [showBankModal, setShowBankModal] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [fundRef] = useState(() => `BCW-${Math.random().toString(36).slice(2, 10).toUpperCase()}`)
@@ -103,6 +104,7 @@ function BuyerWalletSection({ userId }: { userId: string }) {
         setWalletBalance(Number(walletData.balance || 0))
         setWalletTransactions(Array.isArray(walletData.transactions) ? walletData.transactions : [])
         setWalletError("")
+        setLastRefreshed(new Date())
       } else {
         setWalletBalance(0)
         setWalletTransactions([])
@@ -378,7 +380,14 @@ function BuyerWalletSection({ userId }: { userId: string }) {
           <h2 className="text-4xl font-extrabold tracking-tight">
             {balanceVisible ? formatNaira(walletBalance) : '₦ ••••••'}
           </h2>
-          <p className="text-[11px] text-emerald-300 mt-1">{virtualAccount.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3')} · Wema Bank</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-[11px] text-emerald-300">{virtualAccount.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3')} · Wema Bank</p>
+            {lastRefreshed && (
+              <p className="text-[10px] text-emerald-400/80 ml-auto">
+                Updated {lastRefreshed.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
+          </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2 text-center">
             <div className="rounded-2xl bg-white/15 py-2 px-3">
@@ -524,15 +533,37 @@ function BuyerWalletSection({ userId }: { userId: string }) {
               const type = String(tx.type || '').toLowerCase().trim()
               const isDebit = debitTypes.has(type)
               const amount = Math.max(0, Number(tx.amount || 0))
-              const label = tx.reason || (type === 'wallet_credit' ? 'Wallet top-up' : type === 'refund' ? 'Refund credit' : type === 'wallet_debit' ? 'Wallet payment' : 'Wallet activity')
+              const label = tx.reason || (
+                type === 'wallet_credit' ? 'Wallet top-up'
+                : type === 'refund' ? 'Refund credit'
+                : type === 'escrow_release' ? 'Escrow released'
+                : type === 'payment' ? 'Payment received'
+                : type === 'wallet_debit' ? 'Wallet payment'
+                : type === 'withdrawal' ? 'Withdrawal'
+                : 'Wallet activity'
+              )
               const txDate = tx.created_at ? new Date(tx.created_at) : null
+              const iconBg = type === 'refund' ? 'bg-blue-100'
+                : type === 'escrow_release' ? 'bg-emerald-100'
+                : type === 'payment' ? 'bg-amber-100'
+                : type === 'withdrawal' ? 'bg-orange-100'
+                : isDebit ? 'bg-red-100' : 'bg-emerald-100'
+              const txIcon = type === 'refund'
+                ? <RotateCcw className="w-4 h-4 text-blue-600" />
+                : type === 'escrow_release'
+                ? <Unlock className="w-4 h-4 text-emerald-600" />
+                : type === 'payment'
+                ? <ShoppingBag className="w-4 h-4 text-amber-600" />
+                : type === 'withdrawal'
+                ? <Send className="w-4 h-4 text-orange-500" />
+                : isDebit
+                ? <ArrowUpRight className="w-4 h-4 text-red-600" />
+                : <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
 
               return (
                 <div key={tx.id} className="rounded-xl border border-border bg-background px-3 py-3 flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isDebit ? 'bg-red-100' : 'bg-emerald-100'}`}>
-                    {isDebit
-                      ? <ArrowUpRight className="w-4 h-4 text-red-600" />
-                      : <ArrowDownLeft className="w-4 h-4 text-emerald-600" />}
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${iconBg}`}>
+                    {txIcon}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{label}</p>
@@ -1077,15 +1108,33 @@ export function PaymentMethodsPage({ onBack }: PaymentMethodsPageProps) {
                     const type = String(tx.type || '').toLowerCase().trim()
                     const isDebit = debitTypes.has(type) || type.includes('withdraw')
                     const amount = Math.max(0, Number(tx.amount || 0))
-                    const label = tx.reason || (type === 'wallet_credit' ? 'Wallet top-up' : type === 'escrow_release' ? 'Escrow settlement' : type === 'withdrawal' ? 'Withdrawal' : type === 'wallet_debit' ? 'Wallet debit' : 'Wallet activity')
+                    const label = tx.reason || (
+                      type === 'wallet_credit' ? 'Wallet top-up'
+                      : type === 'escrow_release' ? 'Escrow settlement'
+                      : type === 'payment' ? 'Order payment'
+                      : type === 'withdrawal' ? 'Withdrawal'
+                      : type === 'wallet_debit' ? 'Wallet debit'
+                      : 'Wallet activity'
+                    )
                     const txDate = tx.created_at ? new Date(tx.created_at) : null
+                    const iconBg = type === 'escrow_release' ? 'bg-teal-100'
+                      : type === 'payment' ? 'bg-amber-100'
+                      : type === 'withdrawal' ? 'bg-orange-100'
+                      : isDebit ? 'bg-red-100' : 'bg-emerald-100'
+                    const txIcon = type === 'escrow_release'
+                      ? <Unlock className="w-4 h-4 text-teal-600" />
+                      : type === 'payment'
+                      ? <ShoppingBag className="w-4 h-4 text-amber-600" />
+                      : type === 'withdrawal'
+                      ? <Send className="w-4 h-4 text-orange-500" />
+                      : isDebit
+                      ? <ArrowUpRight className="w-4 h-4 text-red-600" />
+                      : <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
 
                     return (
                       <div key={tx.id} className="rounded-xl border border-border bg-background px-3 py-3 flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isDebit ? 'bg-red-100' : 'bg-emerald-100'}`}>
-                          {isDebit
-                            ? <ArrowUpRight className="w-4 h-4 text-red-600" />
-                            : <ArrowDownLeft className="w-4 h-4 text-emerald-600" />}
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${iconBg}`}>
+                          {txIcon}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{label}</p>

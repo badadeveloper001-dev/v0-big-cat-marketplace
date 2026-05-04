@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, Truck, Zap, MapPin, Package, CreditCard, CheckCircle2, Wallet, Building2 } from "lucide-react"
+import { ArrowLeft, Truck, Zap, MapPin, Package, CreditCard, CheckCircle2, Wallet, Building2, Loader2, Plus, RefreshCw, ArrowDownLeft } from "lucide-react"
 import { useCart } from "@/lib/cart-context"
 import { useRole } from "@/lib/role-context"
 import { createOrder } from "@/lib/order-actions"
@@ -34,6 +34,11 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
   const [promotionNames, setPromotionNames] = useState<string[]>([])
   const [deliveryFee, setDeliveryFee] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
+  const [walletLoading, setWalletLoading] = useState(false)
+  const [showTopUp, setShowTopUp] = useState(false)
+  const [topUpAmount, setTopUpAmount] = useState('')
+  const [topUpLoading, setTopUpLoading] = useState(false)
+  const [topUpError, setTopUpError] = useState('')
   const [suspended, setSuspended] = useState(false)
   const [strikeCount, setStrikeCount] = useState(0)
 
@@ -128,8 +133,9 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
     return walletBalance
   }
 
-  const loadWalletBalance = async () => {
+  const loadWalletBalance = async (showLoader = false) => {
     if (!user?.userId) return
+    if (showLoader) setWalletLoading(true)
     try {
       const res = await fetch(`/api/buyer/wallet?userId=${encodeURIComponent(user.userId)}`, { cache: 'no-store' })
       const data = await res.json()
@@ -148,12 +154,44 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
         const parsed = raw ? Number(raw) : 0
         setWalletBalance(Number.isFinite(parsed) ? parsed : 0)
       }
+    } finally {
+      if (showLoader) setWalletLoading(false)
+    }
+  }
+
+  const handleInlineTopUp = async () => {
+    const amount = Number(topUpAmount || 0)
+    if (!Number.isFinite(amount) || amount < 100) {
+      setTopUpError('Minimum top-up is ₦100')
+      return
+    }
+    if (!user?.userId) return
+    setTopUpLoading(true)
+    setTopUpError('')
+    try {
+      const res = await fetch('/api/buyer/wallet/fund', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyerId: user.userId, amount, reason: `Wallet top-up – ₦${amount.toLocaleString('en-NG')}` }),
+      })
+      const result = await res.json()
+      if (!result?.success) {
+        setTopUpError(result?.error || 'Failed to fund wallet')
+        return
+      }
+      setTopUpAmount('')
+      setShowTopUp(false)
+      await loadWalletBalance(true)
+    } catch {
+      setTopUpError('Could not fund wallet. Please try again.')
+    } finally {
+      setTopUpLoading(false)
     }
   }
 
   useEffect(() => {
     if (!isWalletPayment) return
-    loadWalletBalance()
+    loadWalletBalance(true)
   }, [isWalletPayment, user?.userId])
 
   useEffect(() => {
@@ -794,22 +832,97 @@ export function CheckoutPage({ onBack, onSuccess }: CheckoutPageProps) {
           <PaymentMethodSelector selectedMethod={paymentMethod} onSelect={setPaymentMethod} />
 
           {isWalletPayment && (
-            <div className="rounded-xl border border-[#E8D7FF] bg-[#F9F5FF] p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-[#5B21B6] font-medium">Wallet Balance</span>
-                <span className="font-semibold text-[#6C2BD9]">{formatNaira(walletBalance)}</span>
+            <div className="rounded-xl border border-[#E8D7FF] bg-[#F9F5FF] space-y-3 p-3">
+              {/* Balance row */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-[#5B21B6]" />
+                  <span className="text-sm text-[#5B21B6] font-medium">Wallet Balance</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {walletLoading
+                    ? <Loader2 className="w-4 h-4 animate-spin text-[#6C2BD9]" />
+                    : <span className="text-base font-bold text-[#6C2BD9]">{formatNaira(walletBalance)}</span>
+                  }
+                  <button
+                    onClick={() => loadWalletBalance(true)}
+                    className="p-1 rounded-full hover:bg-[#E8D7FF] transition-colors"
+                    title="Refresh balance"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-[#6C2BD9]" />
+                  </button>
+                </div>
               </div>
-              {(deliveryAddress.trim() || serviceBooking) && (
-                <div className="mt-2 space-y-1">
-                  <p className={`text-xs ${isWalletInsufficient ? 'text-red-600' : 'text-[#6C2BD9]'}`}>
-                    {isWalletInsufficient
-                      ? 'Insufficient funds in wallet'
-                      : 'Wallet balance is sufficient for this payment'}
-                  </p>
-                  {isWalletInsufficient && (
-                    <p className="text-xs text-red-600/90">
-                      You need {formatNaira(walletShortfall)} more to complete this payment.
-                    </p>
+
+              {/* Sufficiency indicator */}
+              {(deliveryAddress.trim() || isServiceCheckout) && !walletLoading && (
+                <div className={`rounded-lg px-3 py-2 text-xs font-medium ${
+                  isWalletInsufficient
+                    ? 'bg-red-50 border border-red-200 text-red-700'
+                    : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                }`}>
+                  {isWalletInsufficient
+                    ? `Shortfall: ${formatNaira(walletShortfall)} — top up to continue`
+                    : `Balance sufficient ✓ — ${formatNaira(walletBalance - grandTotal)} will remain after payment`}
+                </div>
+              )}
+
+              {/* Inline top-up when insufficient */}
+              {isWalletInsufficient && (
+                <div className="space-y-2 border-t border-[#E8D7FF] pt-2">
+                  {!showTopUp ? (
+                    <button
+                      onClick={() => { setShowTopUp(true); setTopUpAmount(String(Math.ceil(walletShortfall / 100) * 100)) }}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#6C2BD9] text-white text-sm font-semibold py-2.5 hover:bg-[#5B21B6] transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add {formatNaira(Math.ceil(walletShortfall / 100) * 100)} to Wallet
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-[#5B21B6]">Quick top-up</p>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[500, 1000, 2000, 5000].map(amt => (
+                          <button
+                            key={amt}
+                            onClick={() => setTopUpAmount(String(amt))}
+                            className={`rounded-xl border py-2 text-xs font-semibold transition-colors ${
+                              topUpAmount === String(amt)
+                                ? 'bg-[#6C2BD9] text-white border-[#6C2BD9]'
+                                : 'border-[#E8D7FF] text-[#5B21B6] hover:bg-[#E8D7FF]'
+                            }`}
+                          >
+                            {amt >= 1000 ? `₦${amt / 1000}k` : `₦${amt}`}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#5B21B6] font-medium">₦</span>
+                          <input
+                            type="number" min="100" max="1000000"
+                            value={topUpAmount}
+                            onChange={e => setTopUpAmount(e.target.value)}
+                            className="w-full rounded-xl border border-[#E8D7FF] bg-white pl-7 pr-3 py-2 text-sm outline-none focus:border-[#6C2BD9]"
+                            placeholder="Amount"
+                          />
+                        </div>
+                        <button
+                          onClick={handleInlineTopUp}
+                          disabled={topUpLoading}
+                          className="rounded-xl bg-[#6C2BD9] text-white text-sm font-semibold px-4 py-2 hover:bg-[#5B21B6] disabled:opacity-60 transition-colors"
+                        >
+                          {topUpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                        </button>
+                        <button
+                          onClick={() => { setShowTopUp(false); setTopUpError('') }}
+                          className="rounded-xl border border-[#E8D7FF] text-[#5B21B6] text-sm px-3 py-2 hover:bg-[#E8D7FF] transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {topUpError && <p className="text-xs text-red-600">{topUpError}</p>}
+                    </div>
                   )}
                 </div>
               )}
