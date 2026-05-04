@@ -207,7 +207,7 @@ export default function MerchantMiniWebsitePage() {
 
     setFollowLoading(true)
     try {
-      const response = await fetch('/api/merchant/follow', {
+      const response = await fetch(`/api/merchant/follow?merchantId=${encodeURIComponent(merchantId)}&buyerId=${encodeURIComponent(user.userId)}`, {
         method: isFollowing ? 'DELETE' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ buyerId: user.userId, merchantId }),

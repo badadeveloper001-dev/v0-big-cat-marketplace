@@ -455,9 +455,9 @@ export function MerchantDashboard() {
       let nextTokenBalance = 0
       let merchantOrders: any[] = []
       let merchantProducts: any[] = []
-  let followerCount = 0
+      let followerCount = 0
 
-  if (user?.userId) {
+      if (user?.userId) {
         const [tokenResponse, walletResponse, ordersResponse, productsResponse, followResponse] = await Promise.all([
           fetch(`/api/merchant/tokens?merchantId=${encodeURIComponent(user.userId)}`, {
             cache: 'no-store',
@@ -481,7 +481,7 @@ export function MerchantDashboard() {
         const ordersResult = await ordersResponse.json()
         const productsResult = await productsResponse.json()
         const followResult = await followResponse.json()
-        followerCount = Number(followResult?.count ?? 0)
+        followerCount = Number(followResult?.data?.followerCount ?? 0)
 
         if (tokenResult.success) {
           nextTokenBalance = Number(tokenResult.balance || 0)

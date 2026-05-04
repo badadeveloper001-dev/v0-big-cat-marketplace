@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 import { followMerchant, getMerchantFollowerSummary, unfollowMerchant } from '@/lib/merchant-follow-actions'
 
+async function readFollowPayload(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  let body: any = null
+
+  try {
+    body = await request.json()
+  } catch {
+    body = null
+  }
+
+  const merchantId = String(body?.merchantId || searchParams.get('merchantId') || '').trim()
+  const buyerId = String(body?.buyerId || searchParams.get('buyerId') || '').trim()
+
+  return { merchantId, buyerId }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -24,9 +40,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const merchantId = String(body?.merchantId || '').trim()
-    const buyerId = String(body?.buyerId || '').trim()
+    const { merchantId, buyerId } = await readFollowPayload(request)
 
     if (!merchantId || !buyerId) {
       return NextResponse.json({ success: false, error: 'merchantId and buyerId are required' }, { status: 400 })
@@ -52,9 +66,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const body = await request.json()
-    const merchantId = String(body?.merchantId || '').trim()
-    const buyerId = String(body?.buyerId || '').trim()
+    const { merchantId, buyerId } = await readFollowPayload(request)
 
     if (!merchantId || !buyerId) {
       return NextResponse.json({ success: false, error: 'merchantId and buyerId are required' }, { status: 400 })

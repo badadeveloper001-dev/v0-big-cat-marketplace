@@ -54,7 +54,7 @@ export function MiniWebsiteProfile({ profile, isOwner = false, buyerId, onEdit }
     if (!merchantId) return
     setFollowLoading(true)
     try {
-      const response = await fetch('/api/merchant/follow', {
+      const response = await fetch(`/api/merchant/follow?merchantId=${encodeURIComponent(merchantId)}&buyerId=${encodeURIComponent(buyerId)}`, {
         method: isFollowing ? 'DELETE' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ buyerId, merchantId }),
