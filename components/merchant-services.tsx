@@ -61,7 +61,7 @@ export function MerchantServices({ merchantId }: { merchantId: string }) {
     setLoading(true)
     try {
       const [servicesResponse, bookingsResponse] = await Promise.all([
-        fetch(`/api/services?merchantId=${merchantId}`),
+        fetch(`/api/services?merchantId=${merchantId}&includePrivate=1`),
         fetch(`/api/service-bookings?merchantId=${merchantId}`),
       ])
 

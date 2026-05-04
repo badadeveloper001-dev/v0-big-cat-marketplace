@@ -44,6 +44,7 @@ export async function getMarketplaceServices(filters?: {
   category?: string
   state?: string
   city?: string
+  merchantId?: string
 }) {
   try {
     const supabase = await createClient()
@@ -57,6 +58,7 @@ export async function getMarketplaceServices(filters?: {
     if (filters?.category) query = query.eq('category', filters.category)
     if (filters?.state) query = query.ilike('service_state', `%${filters.state}%`)
     if (filters?.city) query = query.ilike('service_city', `%${filters.city}%`)
+    if (filters?.merchantId) query = query.eq('merchant_id', filters.merchantId)
 
     const { data, error } = await query
     if (error) throw error

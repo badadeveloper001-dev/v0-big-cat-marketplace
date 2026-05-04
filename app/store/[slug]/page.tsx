@@ -70,6 +70,7 @@ export default function MerchantMiniWebsitePage() {
   const params = useParams<{ slug: string }>()
   const [profile, setProfile] = useState<any | null>(null)
   const [products, setProducts] = useState<any[]>([])
+  const [storeItemType, setStoreItemType] = useState<'products' | 'services'>('products')
   const [loading, setLoading] = useState(true)
   const [addedProduct, setAddedProduct] = useState<any | null>(null)
   const [isFollowing, setIsFollowing] = useState(false)
@@ -109,7 +110,7 @@ export default function MerchantMiniWebsitePage() {
       }
   const cartCount = getItemCount()
   const cartTotal = getTotal()
-  const isServiceStore = profile?.merchant_type === 'services'
+  const isServiceStore = storeItemType === 'services'
   const marketplaceCheckoutPath = '/marketplace?view=cart'
   const marketplaceServicesPath = '/marketplace?view=services'
 
@@ -128,16 +129,43 @@ export default function MerchantMiniWebsitePage() {
            setProfile(profileResult.data)
 
            // Load products or services based on merchant_type
-           const merchantType = profileResult.data.merchant_type || 'products'
-           const itemsEndpoint = merchantType === 'services'
-             ? `/api/services?merchantId=${encodeURIComponent(merchantId)}`
-             : `/api/products/merchant?merchantId=${encodeURIComponent(merchantId)}`
+           const merchantType = profileResult.data.merchant_type === 'services' ? 'services' : 'products'
 
-           const itemsResponse = await fetch(itemsEndpoint, { cache: 'no-store' })
-           const itemsResult = await itemsResponse.json()
+           if (merchantType === 'services') {
+             const servicesResponse = await fetch(`/api/services?merchantId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' })
+             const servicesResult = await servicesResponse.json()
+             if (servicesResult.success && Array.isArray(servicesResult.data) && servicesResult.data.length > 0) {
+               setStoreItemType('services')
+               setProducts(servicesResult.data)
+             } else {
+               // Fallback for merchants with stale profile metadata.
+               const productResponse = await fetch(`/api/products/merchant?merchantId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' })
+               const productResult = await productResponse.json()
+               setStoreItemType('products')
+               setProducts(productResult.success && Array.isArray(productResult.data) ? productResult.data : [])
+             }
+           } else {
+             const productResponse = await fetch(`/api/products/merchant?merchantId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' })
+             const productResult = await productResponse.json()
+             const productRows = productResult.success && Array.isArray(productResult.data) ? productResult.data : []
 
-           if (itemsResult.success && Array.isArray(itemsResult.data)) {
-             setProducts(itemsResult.data)
+             if (productRows.length > 0) {
+               setStoreItemType('products')
+               setProducts(productRows)
+             } else {
+               // If products are empty, try services so service merchants still render correctly.
+               const servicesResponse = await fetch(`/api/services?merchantId=${encodeURIComponent(merchantId)}`, { cache: 'no-store' })
+               const servicesResult = await servicesResponse.json()
+               const serviceRows = servicesResult.success && Array.isArray(servicesResult.data) ? servicesResult.data : []
+
+               if (serviceRows.length > 0) {
+                 setStoreItemType('services')
+                 setProducts(serviceRows)
+               } else {
+                 setStoreItemType('products')
+                 setProducts([])
+               }
+             }
            }
          }
       } catch {
@@ -431,14 +459,14 @@ export default function MerchantMiniWebsitePage() {
 
         <div id="store-items">
           <div className="flex items-center justify-between mb-3">
-             <h2 className="text-xl font-bold text-foreground">Featured {profile?.merchant_type === 'services' ? 'services' : 'products'}</h2>
+             <h2 className="text-xl font-bold text-foreground">Featured {isServiceStore ? 'services' : 'products'}</h2>
             <span className="text-sm text-muted-foreground">{products.length} item{products.length !== 1 ? 's' : ''}</span>
           </div>
 
           {products.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-10 text-center">
               <Store className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-               <p className="text-sm text-muted-foreground">{profile?.merchant_type === 'services' ? 'Services will appear here as the merchant updates their storefront.' : 'Products will appear here as the merchant updates their storefront.'}</p>
+               <p className="text-sm text-muted-foreground">{isServiceStore ? 'Services will appear here as the merchant updates their storefront.' : 'Products will appear here as the merchant updates their storefront.'}</p>
             </div>
           ) : isServiceStore ? (
             <div className={gridClass}>

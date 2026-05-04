@@ -470,7 +470,7 @@ export function MerchantDashboard() {
           }),
           fetch(
             isServiceMerchant
-              ? `/api/services?merchantId=${encodeURIComponent(user.userId)}`
+              ? `/api/services?merchantId=${encodeURIComponent(user.userId)}&includePrivate=1`
               : `/api/products/merchant?merchantId=${encodeURIComponent(user.userId)}&includePrivate=1`,
             {
             cache: 'no-store',
@@ -680,7 +680,7 @@ export function MerchantDashboard() {
       if (user?.userId) {
         const response = await fetch(
           isServiceMerchant
-            ? `/api/services?merchantId=${encodeURIComponent(user.userId)}`
+            ? `/api/services?merchantId=${encodeURIComponent(user.userId)}&includePrivate=1`
             : `/api/products/merchant?merchantId=${user.userId}&includePrivate=1`,
         )
         const result = await response.json()

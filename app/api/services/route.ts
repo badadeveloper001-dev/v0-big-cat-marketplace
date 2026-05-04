@@ -14,12 +14,19 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const merchantId = searchParams.get('merchantId')
+    const includePrivate = searchParams.get('includePrivate') === '1'
 
     if (merchantId) {
-      const auth = await requireAuthenticatedUser(merchantId)
-      if (auth.response) return auth.response
+      if (includePrivate) {
+        const auth = await requireAuthenticatedUser(merchantId)
+        if (auth.response) return auth.response
 
-      const result = await getMerchantServices(merchantId)
+        const result = await getMerchantServices(merchantId)
+        return NextResponse.json(result)
+      }
+
+      // Public merchant storefront fetch: active services only.
+      const result = await getMarketplaceServices({ merchantId })
       return NextResponse.json(result)
     }
 
