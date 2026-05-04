@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getProductReviews, createReview, canUserReview } from "@/lib/review-actions"
 import { requireAuthenticatedUser } from "@/lib/supabase/request-auth"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const productId = params.id
+    const { id: productId } = await params
     if (!productId) {
       return NextResponse.json({ success: false, error: "Product ID required" }, { status: 400 })
     }
@@ -36,9 +36,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const productId = params.id
+    const { id: productId } = await params
     const { userId, rating, comment } = await request.json()
 
     if (!productId || !userId || !rating || !comment) {

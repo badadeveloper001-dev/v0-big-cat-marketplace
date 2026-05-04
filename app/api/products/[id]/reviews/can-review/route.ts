@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { canUserReview } from "@/lib/review-actions"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const productId = params.id
+    const { id: productId } = await params
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId") || ""
 

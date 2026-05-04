@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js"
+import { createHmac, timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { holdFundsInEscrow } from "@/lib/escrow-actions"
+import { dispatchNotification } from "@/lib/notifications"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -22,7 +24,27 @@ function isMissingColumnError(error: any) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const rawBody = await request.text()
+
+    // Verify webhook signature when secret is configured.
+    // Safe to skip now — will auto-enforce once KORA_WEBHOOK_SECRET is added to env.
+    const webhookSecret = process.env.KORA_WEBHOOK_SECRET
+    if (webhookSecret) {
+      const signature = request.headers.get("x-korapay-signature") || request.headers.get("x-webhook-signature") || ""
+      const expected = createHmac("sha256", webhookSecret).update(rawBody).digest("hex")
+      let signatureValid = false
+      try {
+        signatureValid = timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+      } catch {
+        signatureValid = false
+      }
+      if (!signatureValid) {
+        console.warn("[v0] Webhook signature mismatch — request rejected")
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
+      }
+    }
+
+    const body = JSON.parse(rawBody)
 
     console.log("[v0] Webhook received:", body)
 
@@ -108,10 +130,39 @@ export async function POST(request: NextRequest) {
 
     if (paymentStatus === "completed" && order?.[0]) {
       await holdFundsInEscrow(supabase, order[0], "palmpay")
-    }
 
-    // TODO: Send notifications to buyer and vendor
-    // TODO: Log payment event for analytics
+      // Fetch buyer and merchant IDs for notifications
+      const { data: orderDetails } = await supabase
+        .from("orders")
+        .select("id, buyer_id, merchant_id")
+        .eq("id", orderId)
+        .maybeSingle()
+
+      const buyerId = String(orderDetails?.buyer_id || order[0]?.buyer_id || "")
+      const merchantId = String(orderDetails?.merchant_id || order[0]?.merchant_id || "")
+
+      if (buyerId) {
+        await dispatchNotification({
+          userId: buyerId,
+          type: "order",
+          title: "Payment confirmed",
+          message: `Your payment for order ${orderId} was successful. Your order is now being processed.`,
+          eventKey: `checkout:payment:buyer:${orderId}:completed`,
+          metadata: { orderId, action: "track_package", actionPath: `/track/${orderId}` },
+        })
+      }
+
+      if (merchantId) {
+        await dispatchNotification({
+          userId: merchantId,
+          type: "order",
+          title: "New paid order",
+          message: `You have received a new paid order (${orderId}). Please prepare it for dispatch.`,
+          eventKey: `checkout:payment:merchant:${orderId}:completed`,
+          metadata: { orderId },
+        })
+      }
+    }
 
     return NextResponse.json(
       {
