@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { dispatchNotification } from '@/lib/notifications'
 
 function toLower(value: unknown) {
   return String(value || '').toLowerCase().trim()
@@ -197,6 +198,17 @@ export async function createServiceBooking(input: {
       note: 'Service booking created',
     })
 
+    // Notify merchant of new booking
+    const serviceTitle = String(service.title || 'a service')
+    await dispatchNotification({
+      userId: String(service.merchant_id),
+      type: 'order',
+      title: 'New service booking request',
+      message: `You have a new booking request for "${serviceTitle}".`,
+      eventKey: `service-booking-new:${data.id}`,
+      metadata: { bookingId: data.id, serviceId: service.id, buyerId: input.buyerId },
+    }).catch(() => null)
+
     return { success: true, data }
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to create booking' }
@@ -345,8 +357,101 @@ export async function updateServiceBookingStatus(input: {
       note: String(input.note || '').trim() || null,
     })
 
+    // Send notifications based on status change
+    const serviceName = String(data?.service_id || '')
+    const notifyUserId = input.actorType === 'merchant' ? String(booking.buyer_id) : String(booking.merchant_id)
+    const notifyMessages: Record<string, { title: string; message: string }> = {
+      accepted: { title: 'Booking accepted', message: 'Your service booking has been accepted by the provider.' },
+      scheduled: { title: 'Booking scheduled', message: 'Your service booking has been scheduled. The provider will be with you soon.' },
+      in_progress: { title: 'Service in progress', message: 'The service provider has started work on your booking.' },
+      completed: { title: 'Service completed — please confirm', message: 'Your service is complete. Please open your bookings and release the funds once you are satisfied.' },
+      cancelled: { title: 'Booking cancelled', message: 'A service booking has been cancelled.' },
+    }
+    if (notifyMessages[nextStatus]) {
+      await dispatchNotification({
+        userId: notifyUserId,
+        type: 'order',
+        title: notifyMessages[nextStatus].title,
+        message: notifyMessages[nextStatus].message,
+        eventKey: `service-booking-status:${input.bookingId}:${nextStatus}`,
+        metadata: { bookingId: input.bookingId, status: nextStatus },
+      }).catch(() => null)
+    }
+
     return { success: true, data }
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to update booking status' }
+  }
+}
+
+export async function updateServiceListing(
+  merchantId: string,
+  serviceId: string,
+  updates: {
+    title?: string
+    description?: string
+    category?: string
+    basePrice?: number
+    workingDays?: string[]
+    workingHours?: string
+    serviceCity?: string
+    serviceState?: string
+  },
+) {
+  try {
+    const supabase = await createClient()
+    const payload: any = {}
+    if (updates.title !== undefined) payload.title = String(updates.title).trim()
+    if (updates.description !== undefined) payload.description = String(updates.description).trim() || null
+    if (updates.category !== undefined) payload.category = String(updates.category).trim() || null
+    if (updates.basePrice !== undefined) payload.base_price = Number(updates.basePrice)
+    if (updates.workingDays !== undefined) payload.working_days = updates.workingDays
+    if (updates.workingHours !== undefined) payload.working_hours = String(updates.workingHours).trim() || null
+    if (updates.serviceCity !== undefined) payload.service_city = String(updates.serviceCity).trim() || null
+    if (updates.serviceState !== undefined) payload.service_state = String(updates.serviceState).trim() || null
+
+    const { data, error } = await (supabase.from('service_listings') as any)
+      .update(payload)
+      .eq('id', serviceId)
+      .eq('merchant_id', merchantId)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    return { success: true, data }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to update service' }
+  }
+}
+
+export async function toggleServiceActive(merchantId: string, serviceId: string, isActive: boolean) {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await (supabase.from('service_listings') as any)
+      .update({ is_active: isActive })
+      .eq('id', serviceId)
+      .eq('merchant_id', merchantId)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    return { success: true, data }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to toggle service' }
+  }
+}
+
+export async function deleteServiceListing(merchantId: string, serviceId: string) {
+  try {
+    const supabase = await createClient()
+    const { error } = await (supabase.from('service_listings') as any)
+      .delete()
+      .eq('id', serviceId)
+      .eq('merchant_id', merchantId)
+
+    if (error) throw error
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to delete service' }
   }
 }

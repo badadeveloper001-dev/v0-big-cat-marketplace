@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceListing, getMarketplaceServices, getMerchantServices } from '@/lib/service-actions'
+import {
+  createServiceListing,
+  deleteServiceListing,
+  getMarketplaceServices,
+  getMerchantServices,
+  toggleServiceActive,
+  updateServiceListing,
+} from '@/lib/service-actions'
 import { requireAuthenticatedUser } from '@/lib/supabase/request-auth'
 import { getUserSafetyStatus } from '@/lib/server-trust-safety'
 
@@ -82,5 +89,62 @@ export async function POST(request: NextRequest) {
       { success: false, error: 'Internal server error' },
       { status: 500 },
     )
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const merchantId = String(body?.merchantId || '')
+    const serviceId = String(body?.serviceId || '')
+
+    if (!merchantId || !serviceId) {
+      return NextResponse.json({ success: false, error: 'merchantId and serviceId are required' }, { status: 400 })
+    }
+
+    const auth = await requireAuthenticatedUser(merchantId)
+    if (auth.response) return auth.response
+
+    if (body?.toggleActive !== undefined) {
+      const result = await toggleServiceActive(merchantId, serviceId, Boolean(body.toggleActive))
+      return NextResponse.json(result)
+    }
+
+    const result = await updateServiceListing(merchantId, serviceId, {
+      title: body?.title,
+      description: body?.description,
+      category: body?.category,
+      basePrice: body?.basePrice !== undefined ? Number(body.basePrice) : undefined,
+      workingDays: Array.isArray(body?.workingDays) ? body.workingDays : undefined,
+      workingHours: body?.workingHours,
+      serviceCity: body?.serviceCity,
+      serviceState: body?.serviceState,
+    })
+
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error('Services PATCH API error:', error)
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const merchantId = String(body?.merchantId || '')
+    const serviceId = String(body?.serviceId || '')
+
+    if (!merchantId || !serviceId) {
+      return NextResponse.json({ success: false, error: 'merchantId and serviceId are required' }, { status: 400 })
+    }
+
+    const auth = await requireAuthenticatedUser(merchantId)
+    if (auth.response) return auth.response
+
+    const result = await deleteServiceListing(merchantId, serviceId)
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error('Services DELETE API error:', error)
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 })
   }
 }

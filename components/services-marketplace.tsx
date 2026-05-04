@@ -173,26 +173,42 @@ export function ServicesMarketplace({
       return
     }
 
-    // Store booking details in sessionStorage for checkout
-    const bookingDetails = {
-      serviceId: selectedService.id,
-      serviceTitle: selectedService.title,
-      merchantId: selectedService.merchant_id,
-      merchantName: selectedService.merchant_name,
-      basePrice: selectedService.base_price,
-      scheduledAt: scheduledAt || null,
-      serviceAddress: serviceAddress.trim(),
-      buyerNote: buyerNote.trim(),
-      bookingType: 'service',
-    }
-    
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('serviceBookingDetails', JSON.stringify(bookingDetails))
-    }
-    
-    // Redirect to checkout with service booking parameter
-    if (typeof window !== 'undefined') {
-      window.location.href = '/marketplace?checkout=service&serviceId=' + selectedService.id
+    setBookingLoading(true)
+    try {
+      const response = await fetch('/api/service-bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serviceId: selectedService.id,
+          buyerId,
+          scheduledAt: scheduledAt || null,
+          serviceAddress: serviceAddress.trim(),
+          buyerNote: buyerNote.trim(),
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!result.success) {
+        if (result.code === 'POLICY_USER_SUSPENDED') {
+          syncSafetyStateFromServer(buyerId, { strikes: Number(result.strikes || 0), suspended: true, remainingMs: Number(result.remainingMs || 0) })
+          setSuspended(true)
+        }
+        setError(result.error || 'Booking failed. Please try again.')
+        return
+      }
+
+      setSelectedService(null)
+      setServiceAddress('')
+      setBuyerNote('')
+      setScheduledAt('')
+      setError('')
+      await loadBookings()
+    } catch (err) {
+      console.error('Submit booking failed:', err)
+      setError('Unable to submit booking. Please try again.')
+    } finally {
+      setBookingLoading(false)
     }
   }
 
@@ -327,46 +343,42 @@ export function ServicesMarketplace({
             <p className="text-sm text-muted-foreground">No services available yet</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {services.map((service) => (
               <div key={service.id} className="rounded-2xl border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-foreground text-sm">{service.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{service.description || 'No description provided'}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {service.merchant_name || 'Merchant'} {service.service_city ? `• ${service.service_city}` : ''}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {Array.isArray(service.working_days) && service.working_days.length > 0
-                        ? `Available: ${service.working_days.join(', ')}`
-                        : 'Available: Working days not set'}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Hours: {service.working_hours || 'Working hours not set'}
-                    </p>
+                  <div className="flex-1">
+                    <div className="flex items-start gap-2 flex-wrap">
+                      <p className="font-semibold text-foreground text-sm">{service.title}</p>
+                      {service.category && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{service.category}</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{service.description || 'No description provided'}</p>
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">{service.merchant_name || 'Merchant'}{service.service_city ? ` • ${service.service_city}` : ''}{service.service_state ? `, ${service.service_state}` : ''}</p>
+                    {Array.isArray(service.working_days) && service.working_days.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-0.5">Available: {service.working_days.join(', ')}{service.working_hours ? ` • ${service.working_hours}` : ''}</p>
+                    )}
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <p className="text-sm font-bold text-foreground">{formatNaira(Number(service.base_price || 0))}</p>
+                    <p className="text-[10px] text-muted-foreground">starting from</p>
                   </div>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => {
-                      if (guardSuspendedAction()) return
-                      setSelectedService(service)
-                    }}
+                    onClick={() => { if (guardSuspendedAction()) return; setSelectedService(service) }}
                     disabled={suspended}
-                    className="w-full rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-medium"
+                    className="w-full rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-medium disabled:opacity-60"
                   >
                     Book Service
                   </button>
                   <button
                     onClick={() => startChatWithMerchant(service)}
                     disabled={suspended}
-                    className="w-full rounded-xl border border-border bg-background text-foreground px-3 py-2 text-sm font-medium"
+                    className="w-full rounded-xl border border-border bg-background text-foreground px-3 py-2 text-sm font-medium disabled:opacity-60"
                   >
-                    Chat Service Provider
+                    Chat Provider
                   </button>
                 </div>
               </div>
@@ -388,25 +400,27 @@ export function ServicesMarketplace({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold text-sm text-foreground">{booking.service?.title || 'Service booking'}</p>
-                    <p className="text-xs text-muted-foreground">Status: {String(booking.status || 'requested').replace('_', ' ')}</p>
-                    <p className="text-xs text-muted-foreground">Merchant: {booking.merchant_name || 'Merchant'}</p>
+                    <p className="text-xs text-muted-foreground">Provider: {booking.merchant_name || 'Merchant'}</p>
+                    {booking.service_address && <p className="text-xs text-muted-foreground">Address: {booking.service_address}</p>}
+                    {booking.scheduled_at && <p className="text-xs text-muted-foreground">Scheduled: {new Date(booking.scheduled_at).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })}</p>}
+                    {booking.buyer_note && <p className="text-xs text-muted-foreground italic">Note: "{booking.buyer_note}"</p>}
                   </div>
-                  <p className="text-sm font-bold text-foreground">{formatNaira(Number(booking.quoted_price || 0))}</p>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-foreground">{formatNaira(Number(booking.quoted_price || 0))}</p>
+                    <span className={`inline-flex mt-1 px-2 py-1 rounded-full text-[11px] font-medium ${
+                      booking.status === 'released' ? 'bg-primary/10 text-primary' :
+                      booking.status === 'completed' ? 'bg-amber-100 text-amber-700' :
+                      booking.status === 'cancelled' || booking.status === 'disputed' ? 'bg-destructive/10 text-destructive' :
+                      'bg-secondary text-foreground'
+                    }`}>
+                      {String(booking.status || 'requested').replace(/_/g, ' ')}
+                    </span>
+                  </div>
                 </div>
                 {booking.status === 'completed' && (
                   <div className="grid grid-cols-2 gap-2 mt-3">
-                    <button
-                      onClick={() => updateBooking(booking.id, 'released')}
-                      className="rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium"
-                    >
-                      Confirm + Release Funds
-                    </button>
-                    <button
-                      onClick={() => updateBooking(booking.id, 'disputed')}
-                      className="rounded-lg bg-destructive/10 text-destructive py-2 text-xs font-medium"
-                    >
-                      Report issue
-                    </button>
+                    <button onClick={() => updateBooking(booking.id, 'released')} className="rounded-lg bg-primary text-primary-foreground py-2 text-xs font-medium">Confirm & Release Funds</button>
+                    <button onClick={() => updateBooking(booking.id, 'disputed')} className="rounded-lg bg-destructive/10 text-destructive py-2 text-xs font-medium">Report Issue</button>
                   </div>
                 )}
               </div>
