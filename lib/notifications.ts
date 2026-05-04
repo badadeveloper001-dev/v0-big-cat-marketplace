@@ -362,7 +362,11 @@ function buildDefaultEmailHtml(title: string, message: string, metadata?: Record
 
   const orderId = String(metadata?.orderId || ctx?.order?.id || "").trim()
   const actionPath = String(metadata?.actionPath || "").trim()
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://v0-big-cat-marketplace.vercel.app").replace(/\/$/, "")
+  const appUrl = (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "https://v0-big-cat-marketplace.vercel.app"
+  ).replace(/\/$/, "")
   const trackingUrl = actionPath
     ? `${appUrl}${actionPath}`
     : orderId

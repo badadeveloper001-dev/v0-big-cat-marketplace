@@ -155,6 +155,11 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     }
   }
 
+  console.warn(
+    '[mailer] No email provider configured. ' +
+    'Set EMAIL_HOST + EMAIL_USER + EMAIL_PASS (SMTP) or RESEND_API_KEY (Resend) in your environment variables. ' +
+    `Email to ${input.to} with subject "${input.subject}" was NOT sent.`
+  )
   return {
     success: false,
     error: 'No email provider configured. Set EMAIL_HOST (SMTP) or RESEND_API_KEY.',
