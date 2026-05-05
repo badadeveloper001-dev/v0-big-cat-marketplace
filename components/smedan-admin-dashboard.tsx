@@ -187,7 +187,14 @@ export function SmedanAdminDashboard({ bypassAccessCheck = false, embedded = fal
       {} as Record<string, { state: string; total: number; approved: number; pending: number; totalSales: number; totalProfit: number }>,
     )
 
-    return Object.values(grouped)
+    return (Object.values(grouped) as Array<{
+      state: string
+      total: number
+      approved: number
+      pending: number
+      totalSales: number
+      totalProfit: number
+    }>)
       .map((entry) => ({
         ...entry,
         approvalRate: entry.total > 0 ? (entry.approved / entry.total) * 100 : 0,

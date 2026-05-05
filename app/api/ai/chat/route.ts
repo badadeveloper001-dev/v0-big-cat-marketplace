@@ -348,7 +348,7 @@ export async function POST(request: NextRequest) {
 
     // Feature #6: Smart Fallback if no results
     let reply = ''
-    if (result.products.length === 0 && result.vendors.length === 0 && result.services.length === 0) {
+    if (result.products.length === 0 && result.vendors.length === 0 && (result.services ?? []).length === 0) {
       reply = buildSmartFallbackSuggestion(message, searchTypeByIntent[intentType])
     } else {
       // Feature #3: Comparison Mode Reply
@@ -359,7 +359,7 @@ export async function POST(request: NextRequest) {
           query: message,
           products: result.products,
           vendors: result.vendors,
-          services: result.services,
+          services: result.services ?? [],
           userLocation,
           intentType,
           language: replyLanguage,
@@ -383,7 +383,7 @@ export async function POST(request: NextRequest) {
       query: message,
       location: userLocation,
       products: result.products,
-      services: result.services,
+      services: result.services ?? [],
       vendors: result.vendors,
     })
 
@@ -393,7 +393,7 @@ export async function POST(request: NextRequest) {
       data: {
         products: enrichedProducts,
         vendors: result.vendors,
-        services: result.services,
+        services: result.services ?? [],
       },
       structured,
       replyLanguage,

@@ -151,7 +151,7 @@ async function resolveMerchantKeys(_supabase: any, merchantIdOrEmail: string) {
 
   // Try to resolve email↔UUID using direct REST
   const isEmail = identifier.includes('@')
-  const param = isEmail ? { email: `eq.${identifier}` } : { id: `eq.${identifier}` }
+    const param: Record<string, string> = isEmail ? { email: `eq.${identifier}` } : { id: `eq.${identifier}` }
   const { data } = await dbFetch('auth_users', param, 'id,email')
   const row = Array.isArray(data) && data.length > 0 ? data[0] : null
   if (row?.id) keys.add(String(row.id))

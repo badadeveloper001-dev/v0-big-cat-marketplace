@@ -90,6 +90,7 @@ export function MerchantDashboard() {
   const [activeTab, setActiveTab] = useState("home")
     const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [currentInsight, setCurrentInsight] = useState(0)
+  const [aiMessage, setAiMessage] = useState("")
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showPaymentMethods, setShowPaymentMethods] = useState(false)

@@ -249,7 +249,7 @@ export function BuyerOrders({ onBack, onOpenCart }: BuyerOrdersProps) {
 
     const interval = window.setInterval(() => {
       fetchOrders(false)
-    }, 20000)
+    }, 60000)
 
     return () => window.clearInterval(interval)
   }, [user?.userId])

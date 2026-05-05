@@ -54,10 +54,11 @@ function pickNextAgent(agents: ActiveAgent[]) {
   })[0]
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   try {
     const requestIdFromPath = request.nextUrl.pathname.split('/').filter(Boolean).at(-2) || ''
-    const requestId = String(params?.id || requestIdFromPath || '').trim()
+    const requestId = String(resolvedParams?.id || requestIdFromPath || '').trim()
 
     if (!requestId) {
       return NextResponse.json({ success: false, error: 'Request id is required' }, { status: 400 })

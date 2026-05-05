@@ -1731,7 +1731,11 @@ export function buildSmartFallbackSuggestion(query: string, failedSearch: Search
     },
   }
 
-  return suggestions[failedSearch][lang as keyof (typeof suggestions[SearchType])['en']] || suggestions.products.en
+  const suggestionKey: 'products' | 'services' | 'vendors' =
+    failedSearch === 'services' || failedSearch === 'vendors' ? failedSearch : 'products'
+  const languageKey: 'en' | 'pcm' = lang === 'pcm' ? 'pcm' : 'en'
+
+  return suggestions[suggestionKey][languageKey] || suggestions.products.en
 }
 
 // #7: Inventory Alerts & Wishlist Helpers

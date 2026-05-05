@@ -56,8 +56,10 @@ type OrderEmailContext = {
     created_at?: string
     delivery_address?: string
     delivery_fee?: number
+    coupon_discount?: number
     grand_total?: number
     total_amount?: number
+    final_total?: number
   } | null
   items?: Array<{
     product_name?: string

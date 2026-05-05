@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
         quantity: Math.max(0, Number(item?.quantity || 0)),
         unitPrice: Math.max(0, Number(item?.unitPrice || 0)),
       }))
-      .filter((item) => item.merchantId && item.productId && item.quantity > 0)
+      .filter((item: PreviewItem) => item.merchantId && item.productId && item.quantity > 0)
 
     const grouped = normalizedItems.reduce<Record<string, PreviewItem[]>>((acc, item) => {
       if (!acc[item.merchantId]) acc[item.merchantId] = []

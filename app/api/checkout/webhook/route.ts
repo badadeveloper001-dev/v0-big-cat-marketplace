@@ -46,8 +46,6 @@ export async function POST(request: NextRequest) {
 
     const body = JSON.parse(rawBody)
 
-    console.log("[v0] Webhook received:", body)
-
     const { paymentReference, status, orderId } = body
 
     // Validate webhook signature

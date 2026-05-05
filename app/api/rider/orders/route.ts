@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const orderById = new Map(orders.map((o: any) => [String(o.id), o]))
 
     const enriched = assignments.map((assignment: any) => {
-      const order = orderById.get(String(assignment.order_id)) || {}
+      const order = orderById.get(String(assignment.order_id)) as any || {}
       return {
         order_id: assignment.order_id,
         logistics_status: assignment.logistics_status,

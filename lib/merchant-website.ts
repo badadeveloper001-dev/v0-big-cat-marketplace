@@ -120,7 +120,7 @@ export function normalizeWebsiteBannerConfig(value: unknown): WebsiteBannerConfi
     ? candidate.ctaText.trim().slice(0, 28)
     : preset.defaults.ctaText
 
-  const variantBCandidate = candidate.variantB || {}
+  const variantBCandidate: any = candidate.variantB || {}
   const variantB: WebsiteBannerVariantConfig = {
     badge: typeof variantBCandidate.badge === 'string' && variantBCandidate.badge.trim()
       ? variantBCandidate.badge.trim().slice(0, 40)

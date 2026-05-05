@@ -306,7 +306,7 @@ export async function getLogisticsOrders() {
         return ['order_packed', 'order_taken_for_delivery', 'in_transit', 'completed', 'delivered'].includes(status)
       })
       .map((order: any) => {
-        const assignment = assignmentByOrderId.get(String(order.id || '').trim()) || null
+        const assignment = (assignmentByOrderId.get(String(order.id || '').trim()) as any) || null
         const rider = assignment?.rider_id ? riderById.get(String(assignment.rider_id || '').trim()) || null : null
 
         const logisticsStatus = assignment?.logistics_status

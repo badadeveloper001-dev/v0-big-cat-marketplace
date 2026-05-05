@@ -18,7 +18,6 @@ export function ProductReviews({ productId, productName }: ProductReviewsProps) 
   const [loading, setLoading] = useState(true)
   const [canReview, setCanReview] = useState(false)
   const [hasReviewed, setHasReviewed] = useState(false)
-  const [orderId, setOrderId] = useState<string>()
   const [showReviewForm, setShowReviewForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [newRating, setNewRating] = useState(5)
@@ -35,19 +34,20 @@ export function ProductReviews({ productId, productName }: ProductReviewsProps) 
     setLoading(true)
     const result = await getProductReviews(productId)
     if (result.success) {
-      setReviews(result.reviews || [])
-      setAverageRating(result.averageRating || 0)
-      setTotalReviews(result.totalReviews || 0)
+      const rows = Array.isArray(result.data) ? result.data : []
+      setReviews(rows)
+      setTotalReviews(rows.length)
+      const avg = rows.length > 0 ? rows.reduce((sum: number, r: any) => sum + Number(r.rating || 0), 0) / rows.length : 0
+      setAverageRating(Math.round(avg * 10) / 10)
     }
     setLoading(false)
   }
 
   const checkCanReview = async () => {
     if (!user?.userId) return
-    const result = await canUserReview(user.userId, productId)
-    setCanReview(result.canReview)
-    setHasReviewed(result.hasReviewed)
-    setOrderId(result.orderId)
+    const result = await canUserReview(productId, user.userId)
+    setCanReview(Boolean(result.success && result.canReview))
+    setHasReviewed(Boolean(result.success && !result.canReview))
   }
 
   const handleSubmitReview = async (e: React.FormEvent) => {
@@ -55,13 +55,7 @@ export function ProductReviews({ productId, productName }: ProductReviewsProps) 
     if (!user?.userId || !newComment.trim()) return
 
     setSubmitting(true)
-    const result = await createReview({
-      productId,
-      userId: user.userId,
-      orderId,
-      rating: newRating,
-      comment: newComment.trim(),
-    })
+    const result = await createReview(productId, user.userId, newRating, newComment.trim())
 
     if (result.success) {
       setShowReviewForm(false)
@@ -216,14 +210,8 @@ export function ProductReviews({ productId, productName }: ProductReviewsProps) 
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-foreground">
-                      {review.user?.name || "Anonymous"}
+                      {review.user_name || "Anonymous"}
                     </span>
-                    {review.verified_purchase && (
-                      <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Verified Purchase
-                      </span>
-                    )}
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     {renderStars(review.rating)}

@@ -264,30 +264,17 @@ export async function loginWithGoogle(params: {
     }
 
     const supabaseUserId = authData.user.id
-    const insertPayload = role === 'merchant'
-      ? {
-          id: supabaseUserId,
-          email,
-          name,
-          business_name: name,
-          phone: null,
-          role,
-          password_hash: '',
-          google_id: googleId,
-          location: null,
-          token_balance: INITIAL_MERCHANT_TOKENS,
-        }
-      : {
-          id: supabaseUserId,
-          email,
-          name,
-          phone: null,
-          role,
-          password_hash: '',
-          google_id: googleId,
-          location: null,
-          token_balance: 0,
-        }
+    const insertPayload = {
+      id: supabaseUserId,
+      email,
+      name,
+      phone: null,
+      role,
+      password_hash: '',
+      google_id: googleId,
+      location: null,
+      token_balance: 0,
+    }
 
     const { data, error } = await insertAuthUserWithFallback(admin, insertPayload as any)
 

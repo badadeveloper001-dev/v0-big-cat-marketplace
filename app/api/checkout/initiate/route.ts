@@ -37,18 +37,6 @@ export async function POST(request: NextRequest) {
       appliedCoupon,
     } = body
 
-    console.log("[v0] Order initiation request:", {
-      productId,
-      productName,
-      vendorId,
-      vendorName,
-      quantity,
-      unitPrice,
-      totalAmount,
-      deliveryMethod,
-      appliedCoupon,
-    })
-
     const itemSubtotal = Math.max(0, Number(unitPrice || 0) * Number(quantity || 0))
     const appliedPromotion = await getBestPromotionDiscountForItems(String(vendorId), [
       {
@@ -151,8 +139,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
-
-    console.log("[v0] Order created successfully:", order)
 
     try {
       const requestedQty = Math.max(1, Number(quantity || 0))

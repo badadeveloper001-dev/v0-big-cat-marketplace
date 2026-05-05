@@ -209,13 +209,6 @@ export async function getBuyerOrders(buyerId: string) {
         .select('order_id, logistics_status, rider_id, assigned_at, completed_at, updated_at')
         .in('order_id', orderIds)
 
-      console.log(`[getBuyerOrders] Fetched ${orderIds.length} orders, assignments result:`, {
-        hasError: !!assignmentsResult.error,
-        errorMessage: assignmentsResult.error?.message,
-        count: Array.isArray(assignmentsResult.data) ? assignmentsResult.data.length : 0,
-        sample: assignmentsResult.data?.[0]
-      })
-
       if (assignmentsResult.error) {
         console.error(`[getBuyerOrders] Assignment query error:`, assignmentsResult.error)
       }
@@ -227,19 +220,10 @@ export async function getBuyerOrders(buyerId: string) {
           .map((row: any) => String(row?.rider_id || '').trim())
           .filter(Boolean)
 
-        console.log(`[getBuyerOrders] Found ${riderIds.length} rider IDs to fetch`)
-
         if (riderIds.length > 0) {
           const ridersResult = await (supabase.from('logistics_riders') as any)
             .select('id, name, phone, region')
             .in('id', riderIds)
-
-          console.log(`[getBuyerOrders] Fetched riders:`, {
-            hasError: !!ridersResult.error,
-            errorMessage: ridersResult.error?.message,
-            count: Array.isArray(ridersResult.data) ? ridersResult.data.length : 0,
-            sample: ridersResult.data?.[0]
-          })
 
           if (ridersResult.error) {
             console.error(`[getBuyerOrders] Riders query error:`, ridersResult.error)
@@ -256,10 +240,6 @@ export async function getBuyerOrders(buyerId: string) {
       const assignment = assignmentByOrderId.get(String(order.id || '').trim())
       const rider = assignment?.rider_id ? riderById.get(String(assignment.rider_id || '').trim()) : null
       
-      if (assignment && !rider && assignment.rider_id) {
-        console.log(`[getBuyerOrders] Order ${order.id}: Found assignment with rider_id ${assignment.rider_id}, but rider not found in riderById map. Keys in map:`, Array.from(riderById.keys()).slice(0, 3))
-      }
-      
       return {
         ...order,
         tracking_id: getTrackingId(String(order.id || '')),
@@ -271,7 +251,6 @@ export async function getBuyerOrders(buyerId: string) {
       }
     })
 
-    console.log(`[getBuyerOrders] Returning ${enriched.length} enriched orders`)
     return { success: true, data: enriched }
   } catch (error: any) {
     console.error(`[getBuyerOrders] Error:`, error)
@@ -567,7 +546,7 @@ export async function createOrder(
         metadata: {
           orderId: orderIdRef,
           trackingId: getTrackingId(orderIdRef),
-          orderItems: merchantItems.map((item) => ({
+          orderItems: merchantItems.map((item: any) => ({
             product_name: item.productName,
             quantity: item.quantity,
             unit_price: item.unitPrice,

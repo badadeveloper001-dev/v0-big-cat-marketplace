@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData()
+    const formData = await request.formData() as unknown as { get(key: string): File | null }
     const file = formData.get('file') as File
 
     if (!file) {
@@ -33,16 +33,14 @@ export async function POST(request: NextRequest) {
     const extension = file.name.split('.').pop() || 'jpg'
     const filename = `products/${timestamp}-${Math.random().toString(36).substring(7)}.${extension}`
 
-    // Upload to Vercel Blob - use private access since the store is configured as private
+    // Upload to Vercel Blob with public access so images are served directly from CDN
     const blob = await put(filename, file, {
-      access: 'private',
+      access: 'public',
       addRandomSuffix: true,
     })
 
-    // For private blobs, return the pathname which can be used with /api/file route
-    return NextResponse.json({ 
-      pathname: blob.pathname,
-      url: `/api/file?pathname=${encodeURIComponent(blob.pathname)}`
+    return NextResponse.json({
+      url: blob.url,
     })
   } catch (error: any) {
     console.error('Upload error:', error)

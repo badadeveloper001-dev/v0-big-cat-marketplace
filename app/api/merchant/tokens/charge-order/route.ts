@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}))
   const merchantIdsRaw = Array.isArray(body.merchantIds) ? body.merchantIds : []
-  const merchantIds = Array.from(new Set(merchantIdsRaw.map((id: unknown) => String(id || "").trim()).filter(Boolean)))
+  const merchantIds: string[] = Array.from(new Set(merchantIdsRaw.map((id: unknown) => String(id || "").trim()).filter(Boolean))) as string[]
 
   if (merchantIds.length === 0) {
     return NextResponse.json({ success: false, error: "merchantIds are required" }, { status: 400 })
